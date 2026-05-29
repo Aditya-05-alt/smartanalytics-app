@@ -1,0 +1,97 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { memo, useMemo } from 'react';
+
+const ICONS = {
+  overview: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3"  y="3"  width="7" height="7" rx="1.5" />
+      <rect x="14" y="3"  width="7" height="7" rx="1.5" />
+      <rect x="3"  y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  ),
+  health: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  ),
+  attribution: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 8v4l3 3" />
+    </svg>
+  ),
+  local: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+  admin: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M3 20a9 9 0 0 1 18 0" />
+    </svg>
+  ),
+  settings: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  ),
+};
+
+const ITEMS = [
+  { id: 'overview',    href: '/dashboard',             title: 'Overview' },
+  { id: 'health',      href: '/dashboard/health',      title: 'Portfolio Health', badge: true },
+  { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
+  { id: 'local',       href: '/dashboard/local',       title: 'Local Intel' },
+];
+
+function SideBarLink({ item, active }) {
+  return (
+    <Link
+      href={item.href}
+      className={`sb-ic ${active ? 'active' : ''}`}
+      title={item.title}
+      prefetch={false}
+    >
+      {ICONS[item.id]}
+      {item.badge && <div className="sb-badge" />}
+    </Link>
+  );
+}
+
+const MemoLink = memo(SideBarLink);
+
+export default function SideBar() {
+  const pathname = usePathname();
+  const activeId = useMemo(() => {
+    if (pathname === '/dashboard') return 'overview';
+    const seg = pathname.replace('/dashboard/', '').split('/')[0];
+    return seg || 'overview';
+  }, [pathname]);
+
+  return (
+    <aside className="sidebar">
+      {ITEMS.map((item) => (
+        <MemoLink key={item.id} item={item} active={activeId === item.id} />
+      ))}
+      <div className="sb-sep" />
+      <Link
+        href="/dashboard/admin"
+        className={`sb-ic ${activeId === 'admin' ? 'active' : ''}`}
+        title="Admin"
+        prefetch={false}
+      >
+        {ICONS.admin}
+      </Link>
+      <div className="sb-ic" style={{ marginTop: 'auto' }} title="Settings">
+        {ICONS.settings}
+      </div>
+    </aside>
+  );
+}

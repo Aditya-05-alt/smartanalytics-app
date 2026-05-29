@@ -1,0 +1,145 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import PageTabs from '@/components/dashboard/overview/PageTabs';
+import OverviewFilters from '@/components/dashboard/overview/OverviewFilters';
+import KpiRow from '@/components/dashboard/overview/KpiRow';
+import ChannelDonut from '@/components/dashboard/overview/ChannelDonut';
+import LocationDonut from '@/components/dashboard/overview/LocationDonut';
+import MakeBreakdown from '@/components/dashboard/MakeBreakdown';
+import ModelBreakdown from '@/components/dashboard/ModelBreakdown';
+import YearBreakdown from '@/components/dashboard/YearBreakdown';
+import ConditionBreakdown from '@/components/dashboard/ConditionBreakdown';
+import TopCampaigns from '@/components/dashboard/TopCampaigns';
+import CmpTable from '@/components/dashboard/overview/CmpTable';
+// import MakesTable from '@/components/dashboard/overview/MakesTable';
+// import ProximityBars from '@/components/dashboard/overview/ProximityBars';
+// import WarmLeads from '@/components/dashboard/overview/WarmLeads';
+import StatusBar from '@/components/dashboard/StatusBar';
+import {
+  OverviewProvider,
+  useOverview,
+} from '@/components/dashboard/overview/OverviewDataContext';
+
+const TAB_PAGE_TYPE = {
+  all: 'All',
+  vdp: 'VDP',
+  srp: 'SRP',
+  home: 'Homepage',
+  other: 'Other',
+};
+
+function OverviewBody({ comparing, onToggleCmp }) {
+  const { tab, setTab, error, clientKey, from, to } = useOverview();
+
+  return (
+    <>
+      <PageTabs
+        active={tab}
+        onChange={setTab}
+        comparing={comparing}
+        onToggleCmp={onToggleCmp}
+      />
+      <OverviewFilters />
+
+      <div className="content">
+        <KpiRow />
+
+        <div className="g2">
+          <ChannelDonut
+            clientId={clientKey}
+            from={from}
+            to={to}
+            pageType={TAB_PAGE_TYPE[tab] || 'All'}
+          />
+          <LocationDonut
+            clientId={clientKey}
+            from={from}
+            to={to}
+            pageType={TAB_PAGE_TYPE[tab] || 'All'}
+          />
+        </div>
+
+        {tab === 'vdp' && (
+          <>
+            <div className="dashboard-vdp-half-grid">
+              <div className="dashboard-half-row">
+                <YearBreakdown
+                  clientId={clientKey}
+                  from={from}
+                  to={to}
+                  limit={null}
+                />
+              </div>
+              <div className="dashboard-half-row">
+                <ConditionBreakdown
+                  clientId={clientKey}
+                  from={from}
+                  to={to}
+                  limit={null}
+                />
+              </div>
+            </div>
+            <div className="dashboard-full-row">
+              <MakeBreakdown
+                clientId={clientKey}
+                from={from}
+                to={to}
+                limit={null}
+              />
+            </div>
+            <div className="dashboard-full-row">
+              <ModelBreakdown
+                clientId={clientKey}
+                from={from}
+                to={to}
+                limit={null}
+              />
+            </div>
+          </>
+        )}
+
+        {tab !== 'vdp' && (
+          <div className="dashboard-full-row">
+            <TopCampaigns
+              clientId={clientKey}
+              from={from}
+              to={to}
+              limit={10}
+            />
+          </div>
+        )}
+
+        <CmpTable />
+
+        {/* Bottom row — re-enable when ready:
+        <div className="g3">
+          <MakesTable />
+          <ProximityBars />
+          <WarmLeads />
+        </div>
+        */}
+      </div>
+
+      <StatusBar
+        items={[
+          { label: error ? `GA4 error: ${error}` : 'GA4 — connected', color: error ? 'var(--red)' : 'var(--green)' },
+          { label: 'Digital Envoy — not connected', color: 'var(--t3)' },
+          { label: 'Scrape queue 0', color: 'var(--t3)' },
+        ]}
+        right="0 active clients"
+      />
+    </>
+  );
+}
+
+export default function OverviewPage() {
+  const [comparing, setComparing] = useState(false);
+  const toggleCmp = useCallback(() => setComparing((c) => !c), []);
+
+  return (
+    <OverviewProvider>
+      <OverviewBody comparing={comparing} onToggleCmp={toggleCmp} />
+    </OverviewProvider>
+  );
+}
