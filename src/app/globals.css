@@ -505,8 +505,745 @@ body {
 }
 .page-shell > .page-tabs,
 .page-shell > .filters,
-.page-shell > .statusbar {
+.page-shell > .statusbar,
+.page-shell > .admin-session-bar {
   flex-shrink: 0;
+}
+.page-shell > .admin-shell-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dash-layout--admin .page-shell {
+  width: 100%;
+}
+
+/* ── Admin superadmin session bar ── */
+.admin-session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 1.25rem;
+  background: var(--s2);
+  border-bottom: 1px solid var(--bd);
+}
+.admin-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.admin-session-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--acc2);
+  color: var(--acc);
+}
+.admin-session-user {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t);
+}
+.admin-session-signout {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t2);
+  background: var(--s3);
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.admin-session-signout:hover {
+  color: var(--t);
+  border-color: var(--bd2);
+}
+
+/* ── Admin shell (top nav + full-width content) ── */
+.admin-shell-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.admin-shell-main {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.admin-topnav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 1.25rem;
+  background: var(--s1);
+  border-bottom: 1px solid var(--bd);
+  flex-shrink: 0;
+}
+.admin-topnav-link {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t3);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color .15s, border-color .15s;
+}
+.admin-topnav-link:hover {
+  color: var(--t);
+}
+.admin-topnav-link.active {
+  color: var(--acc);
+  border-bottom-color: var(--acc);
+}
+
+/* ── GA4 Page Views matrix (admin) ── */
+.ga4-count-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.25rem 1.25rem;
+  overflow: hidden;
+}
+.ga4-count-toolbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem 1.25rem;
+  flex-shrink: 0;
+}
+.ga4-count-title {
+  margin: 0;
+  font-family: var(--font-syne), "Syne", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--t);
+  white-space: nowrap;
+}
+.ga4-count-search-wrap {
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+}
+.ga4-count-search {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--t);
+  background: var(--s2);
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  outline: none;
+}
+.ga4-count-search:focus {
+  border-color: var(--bd2);
+}
+.ga4-count-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ga4-count-page-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t2);
+  background: var(--s3);
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.ga4-count-page-btn:hover {
+  color: var(--t);
+  border-color: var(--bd2);
+}
+.ga4-count-page-btn.active {
+  background: var(--acc2);
+  color: var(--acc);
+  border-color: rgba(200, 232, 122, 0.35);
+}
+
+.admin-date-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 0.5rem;
+  background: var(--s2);
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.admin-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-date-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--t3);
+}
+.admin-date-input {
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--t);
+  background: var(--s1);
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  outline: none;
+}
+.admin-date-input:focus {
+  border-color: var(--bd2);
+}
+.admin-date-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.admin-date-preset {
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t2);
+  background: var(--s3);
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.admin-date-preset:hover {
+  color: var(--t);
+  border-color: var(--bd2);
+}
+
+.admin-page-simple {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ga4-count-meta {
+  margin: 0.5rem 0 0.65rem;
+  font-size: 11px;
+  color: var(--t3);
+  flex-shrink: 0;
+}
+.ga4-count-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  background: var(--s2);
+}
+.ga4-count-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ga4-count-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  background: var(--s3);
+  border-bottom: 1px solid var(--bd);
+  text-align: center;
+  white-space: nowrap;
+}
+.ga4-count-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  min-width: 200px;
+  max-width: 280px;
+  text-align: left !important;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.06);
+}
+.ga4-count-table thead .ga4-count-sticky-col {
+  z-index: 4;
+}
+.ga4-count-client {
+  font-weight: 600;
+  color: var(--t);
+  background: var(--s2);
+  border-bottom: 1px solid var(--bd);
+  padding: 7px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.ga4-count-cell {
+  padding: 7px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--bd);
+  color: var(--t);
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  background: var(--s2);
+}
+.ga4-count-table tbody tr:nth-child(even) .ga4-count-cell {
+  background: var(--s1);
+}
+.ga4-count-empty-row {
+  padding: 2rem;
+  text-align: center;
+  color: var(--t3);
+  font-size: 13px;
+}
+
+.ga4-count-filters-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+}
+.ga4-count-dealer-field {
+  min-width: 220px;
+}
+.ga4-count-select {
+  width: 100%;
+  min-width: 200px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--t);
+  background: var(--s1);
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  outline: none;
+}
+.ga4-count-select:focus {
+  border-color: var(--bd2);
+}
+.ga4-count-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ga4-count-export-btn,
+.ga4-count-retry-btn {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t);
+  background: var(--s3);
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.ga4-count-export-btn:hover:not(:disabled),
+.ga4-count-retry-btn:hover {
+  border-color: var(--bd2);
+  background: var(--acc2);
+  color: var(--acc);
+}
+.ga4-count-export-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ga4-count-error-text {
+  color: var(--red);
+}
+.ga4-count-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 0.65rem;
+  background: var(--rd);
+  border: 1px solid rgba(220, 80, 80, 0.35);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--red);
+  flex-shrink: 0;
+}
+.ga4-count-skeleton {
+  flex: 1;
+  min-height: 120px;
+  padding: 12px;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  background: var(--s2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ga4-count-skeleton-row {
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--s3) 0%,
+    var(--s2) 50%,
+    var(--s3) 100%
+  );
+  background-size: 200% 100%;
+  animation: ga4-skeleton-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ga4-skeleton-pulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.ga4-count-dash {
+  color: var(--t3);
+}
+.ga4-count-total-col {
+  font-weight: 700;
+  background: var(--s3) !important;
+  border-left: 1px solid var(--bd);
+  min-width: 88px;
+}
+.ga4-count-table--pivot thead .ga4-count-total-col {
+  z-index: 2;
+}
+.ga4-count-foot-row .ga4-count-sticky-col,
+.ga4-count-foot-label {
+  background: var(--s3) !important;
+  font-weight: 700;
+  color: var(--t);
+  z-index: 4;
+}
+.ga4-count-foot-cell {
+  font-weight: 700;
+  background: var(--s3) !important;
+}
+.ga4-count-table tfoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+/* ── Admin data pipeline ── */
+.pipeline-page {
+  overflow: auto;
+}
+.pipeline-dealer-pick {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.pipeline-dealer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
+}
+.pipeline-card {
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  background: var(--s2);
+  padding: 1rem 1.15rem 1.15rem;
+}
+.pipeline-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 0.75rem;
+}
+.pipeline-card-title {
+  margin: 0;
+  font-family: var(--font-syne), "Syne", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--t);
+}
+.pipeline-card-sub {
+  margin: 0.15rem 0 0;
+  font-size: 12px;
+  color: var(--t2);
+}
+.pipeline-card-meta {
+  margin: 0.25rem 0 0;
+  font-size: 11px;
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+}
+.pipeline-card-dates {
+  margin-bottom: 0.85rem;
+}
+.pipeline-card-warn {
+  margin: 0 0 0.75rem;
+  font-size: 12px;
+  color: var(--yellow);
+}
+.pipeline-card-error {
+  margin: 0.5rem 0 0;
+  font-size: 12px;
+  color: var(--red);
+}
+.pipeline-card-msg {
+  margin: 0.5rem 0 0;
+  font-size: 12px;
+  color: var(--green);
+}
+.pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+.pipeline-step {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  background: var(--s1);
+}
+.pipeline-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t);
+}
+.pipeline-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--acc2);
+  color: var(--acc);
+  font-size: 11px;
+  font-weight: 700;
+}
+.pipeline-step-desc {
+  margin: 0.35rem 0 0;
+  font-size: 11px;
+  color: var(--t3);
+  line-height: 1.45;
+}
+.pipeline-step-meta {
+  margin: 0.35rem 0 0;
+  font-size: 11px;
+  color: var(--t2);
+  font-variant-numeric: tabular-nums;
+}
+.pipeline-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0.55rem;
+}
+.pipeline-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pipeline-badge--ok {
+  background: var(--gd);
+  color: var(--green);
+}
+.pipeline-badge--pending {
+  background: var(--s3);
+  color: var(--t3);
+}
+.pipeline-tables {
+  margin-top: 0.5rem;
+}
+.pipeline-tables-title {
+  margin: 0 0 0.65rem;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--t3);
+}
+.pipeline-mini-wrap {
+  margin-bottom: 0.85rem;
+}
+.pipeline-mini-title {
+  margin: 0 0 0.35rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t2);
+}
+.pipeline-mini-scroll {
+  max-height: 120px;
+}
+.pipeline-mini-scroll--hoot {
+  max-height: 200px;
+}
+.pipeline-hoot-hint {
+  margin: 0 0 0.35rem;
+}
+.pipeline-hoot-th-date {
+  display: block;
+  font-weight: 700;
+}
+.pipeline-hoot-th-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--t3);
+}
+.pipeline-hoot-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+}
+.pipeline-hoot-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+.pipeline-hoot-label {
+  color: var(--t3);
+  font-size: 10px;
+}
+.pipeline-hoot-val {
+  font-weight: 600;
+  color: var(--t1);
+}
+.pipeline-hoot-ratio {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--bd);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--acc);
+  text-align: center;
+}
+.ga4-count-cell--hoot {
+  vertical-align: top;
+  min-width: 7rem;
+}
+.pipeline-sync-log-summary {
+  cursor: pointer;
+  user-select: none;
+}
+.pipeline-sync-log-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--green);
+  font-weight: 600;
+}
+.pipeline-sync-log-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pipeline-sync-pulse 1s ease-in-out infinite;
+}
+@keyframes pipeline-sync-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pipeline-sync-log .pipeline-log-pre {
+  max-height: 220px;
+}
+.pipeline-step--locked {
+  opacity: 0.72;
+}
+.pipeline-result {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: var(--s1);
+}
+.pipeline-result-title {
+  margin: 0 0 0.4rem;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--t3);
+}
+.pipeline-result-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 11px;
+  color: var(--t2);
+  line-height: 1.5;
+}
+.pipeline-log-details {
+  margin-top: 0.5rem;
+  font-size: 11px;
+  color: var(--t3);
+}
+.pipeline-log-pre {
+  margin: 0.35rem 0 0;
+  padding: 0.5rem;
+  max-height: 160px;
+  overflow: auto;
+  font-size: 10px;
+  line-height: 1.4;
+  background: var(--s2);
+  border-radius: 6px;
+  color: var(--t2);
+}
+
+@media (max-width: 900px) {
+  .ga4-count-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .ga4-count-search-wrap {
+    max-width: none;
+  }
+  .ga4-count-pager {
+    justify-content: flex-start;
+  }
+  .admin-date-presets {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 /* ── PAGE TABS ── */

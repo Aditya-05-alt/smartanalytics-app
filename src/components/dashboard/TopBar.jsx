@@ -10,11 +10,12 @@ import { signOutAction } from '@/lib/auth/actions';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
 const NAV = [
-  { id: 'overview',    href: '/dashboard',              label: 'Overview' },
-  { id: 'health',      href: '/dashboard/health',       label: 'Portfolio Health' },
-  { id: 'attribution', href: '/dashboard/attribution',  label: 'Attribution' },
-  { id: 'local',       href: '/dashboard/local',        label: 'Local Intel' },
-  { id: 'admin',       href: '/dashboard/admin',        label: 'Admin' },
+  // { id: 'overview',    href: '/dashboard',              label: 'Overview' },
+  // { id: 'health',      href: '/dashboard/health',       label: 'Portfolio Health' },
+  // { id: 'attribution', href: '/dashboard/attribution',  label: 'Attribution' },
+  // { id: 'local',       href: '/dashboard/local',        label: 'Local Intel' },
+  // { id: 'reports',     href: '/reports/date-wise-views', label: 'Date-wise Views' },
+  { id: 'admin', href: '/dashboard/admin/pipeline', label: 'Admin' },
 ];
 
 const PAGE_SIZE = 5;
@@ -144,16 +145,21 @@ function ClientPicker() {
 
 export default function TopBar() {
   const pathname = usePathname();
+  const hideDealerPicker =
+    pathname?.startsWith('/dashboard/admin') || pathname?.startsWith('/reports');
 
   const activeId = useMemo(() => {
-    if (pathname === '/dashboard') return 'overview';
-    const seg = pathname.replace('/dashboard/', '').split('/')[0];
-    return seg || 'overview';
+    if (pathname.startsWith('/dashboard/admin')) return 'admin';
+    // if (pathname === '/dashboard') return 'overview';
+    // if (pathname.startsWith('/reports')) return 'reports';
+    // const seg = pathname.replace('/dashboard/', '').split('/')[0];
+    // return seg || 'overview';
+    return 'admin';
   }, [pathname]);
 
   return (
     <header className="topbar">
-      <Link href="/dashboard" className="logo" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <Link href="/dashboard/admin/pipeline" className="logo" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div
           style={{
             width: 26, height: 26, background: 'var(--acc)',
@@ -173,9 +179,12 @@ export default function TopBar() {
         </span>
       </Link>
 
-      <div className="tb-div" />
-
-      <ClientPicker />
+      {!hideDealerPicker && (
+        <>
+          <div className="tb-div" />
+          <ClientPicker />
+        </>
+      )}
 
       <nav className="topbar-right" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
         {NAV.map((n) => (

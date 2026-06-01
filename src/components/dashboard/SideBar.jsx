@@ -71,6 +71,7 @@ export default function SideBar() {
   const pathname = usePathname();
   const activeId = useMemo(() => {
     if (pathname === '/dashboard') return 'overview';
+    if (pathname.startsWith('/dashboard/admin')) return 'admin';
     const seg = pathname.replace('/dashboard/', '').split('/')[0];
     return seg || 'overview';
   }, [pathname]);

@@ -1,0 +1,90 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { fetchPipelineDealers } from '@/lib/api/adminPipeline';
+import DealerPipelineCard from '@/components/dashboard/admin/DealerPipelineCard';
+
+export default function PipelinePanel() {
+  const [dealers, setDealers] = useState([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const list = await fetchPipelineDealers();
+        if (!cancelled) {
+          setDealers(list);
+          const first = list.find((d) => d.ga4CustomerId);
+          if (first) setSelectedId(String(first.id));
+        }
+      } catch (e) {
+        if (!cancelled) setError(e?.message || 'Failed to load dealers.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedDealer = useMemo(
+    () => dealers.find((d) => String(d.id) === String(selectedId)) || null,
+    [dealers, selectedId]
+  );
+
+  return (
+    <div className="ga4-count-page pipeline-page">
+      <header className="ga4-count-toolbar">
+        <h1 className="ga4-count-title">Data Pipeline</h1>
+        <div className="ga4-count-filters-row pipeline-dealer-pick">
+          <label className="admin-date-field ga4-count-dealer-field">
+            <span className="admin-date-label">Dealer</span>
+            <select
+              className="ga4-count-select"
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              disabled={loading || dealers.length === 0}
+            >
+              <option value="">Select dealer…</option>
+              {dealers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.ga4CustomerId ? '' : ' (no GA4 ID)'}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </header>
+
+      <p className="ga4-count-meta">
+        {loading && 'Loading smart_hoot_config…'}
+        {!loading && error && <span className="ga4-count-error-text">{error}</span>}
+        {!loading && !error && selectedDealer && (
+          <>
+            One dealer at a time · smart_ga4_config → smart_ga4_config.client_id ={' '}
+            ga4_customer_id
+          </>
+        )}
+      </p>
+
+      {loading && (
+        <div className="ga4-count-skeleton">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="ga4-count-skeleton-row" />
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && selectedDealer && (
+        <DealerPipelineCard key={selectedDealer.id} dealer={selectedDealer} />
+      )}
+    </div>
+  );
+}

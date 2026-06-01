@@ -287,3 +287,29 @@ export async function fetchLocationBreakdown({
 
   return rpcRows;
 }
+
+/** Active dealers from smart_hoot_config (same source as ClientContext). */
+export async function fetchActiveDealers() {
+  const supabase = createClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+
+  const { data, error } = await supabase
+    .from('smart_hoot_config')
+    .select(
+      'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, is_active'
+    )
+    .eq('is_active', true)
+    .order('customer_name', { ascending: true });
+
+  if (error) throw new Error(error.message || 'Failed to load dealers.');
+
+  return (data || [])
+    .filter((r) => r && r.customer_name)
+    .map((row) => ({
+      id: row.id,
+      name: row.customer_name || 'Unnamed dealer',
+      ga4CustomerId: row.ga4_customer_id || null,
+      hootId: row.hoot_id || null,
+      websitePlatform: row.website_platform || null,
+    }));
+}
