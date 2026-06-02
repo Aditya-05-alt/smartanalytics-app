@@ -3,11 +3,15 @@
 -- 1) Index (run once; CONCURRENTLY avoids long locks):
 -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ga4_page_data_date_client
 --   ON public.smart_ga4_page_data (report_date, client_id);
+--
+-- Remove legacy 3-arg overload (causes PostgREST "Could not choose the best candidate").
+DROP FUNCTION IF EXISTS public.build_date_wise_ga4_data(date, date, text);
 
 CREATE OR REPLACE FUNCTION public.build_date_wise_ga4_data(
   p_date_from date DEFAULT NULL,
   p_date_to   date DEFAULT NULL,
-  p_client_id text DEFAULT NULL
+  p_client_id text DEFAULT NULL,
+  p_vdp_only  boolean DEFAULT false
 )
 RETURNS TABLE (
   report_date    date,
@@ -34,6 +38,7 @@ AS $$
         p_client_id IS NULL
         OR p.client_id::text = trim(p_client_id)
       )
+      AND (NOT COALESCE(p_vdp_only, false) OR p.vdp_conditions IS TRUE)
     GROUP BY p.report_date, p.client_id
   ),
   hoot AS (
@@ -55,5 +60,5 @@ AS $$
   ORDER BY d.report_date, d.account_name;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.build_date_wise_ga4_data(date, date, text)
+GRANT EXECUTE ON FUNCTION public.build_date_wise_ga4_data(date, date, text, boolean)
   TO anon, authenticated, service_role;

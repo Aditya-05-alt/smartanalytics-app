@@ -6,6 +6,111 @@ const FINAL_TABLE = 'smart_final_data';
 const FETCH_SIZE = 1000;
 const DAY_CONCURRENCY = 6;
 
+const GA4_DATE_WISE_RPC = 'build_date_wise_ga4_data';
+const FINAL_DATE_WISE_RPC = 'build_date_wise_final_data';
+const HOOT_MATCH_RPC = 'build_date_wise_hoot_match';
+
+function dayKey(reportDate) {
+  return String(reportDate).split('T')[0];
+}
+
+/**
+ * Same aggregation as Date-wise Views (/api/reports/date-wise-views):
+ * SUM(views) GROUP BY report_date in Postgres — not row-by-row pagination.
+ */
+async function sumGa4PageViewsViaRpc(supabase, clientId, days, { vdpOnly = false } = {}) {
+  if (!clientId || !days?.length) return {};
+
+  const from = days[0];
+  const to = days[days.length - 1];
+  // Always pass p_vdp_only so PostgREST picks the 4-arg function (not the legacy 3-arg overload).
+  const { data, error } = await supabase.rpc(GA4_DATE_WISE_RPC, {
+    p_date_from: from,
+    p_date_to: to,
+    p_client_id: clientId,
+    p_vdp_only: vdpOnly === true,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (
+      vdpOnly &&
+      (/p_vdp_only|schema cache|arguments/i.test(msg) ||
+        /could not choose the best candidate/i.test(msg))
+    ) {
+      return null;
+    }
+    if (/could not choose the best candidate/i.test(msg)) {
+      throw new Error(
+        `${msg} Run in Supabase SQL: DROP FUNCTION IF EXISTS public.build_date_wise_ga4_data(date, date, text);`
+      );
+    }
+    throw new Error(error.message);
+  }
+
+  const daily = {};
+  for (const row of data || []) {
+    const day = dayKey(row.report_date);
+    const views = Number(row.views) || 0;
+    if (views > 0) daily[day] = views;
+  }
+  return daily;
+}
+
+async function sumFinalViewsViaRpc(supabase, clientId, days) {
+  if (!clientId || !days?.length) return null;
+
+  const { data, error } = await supabase.rpc(FINAL_DATE_WISE_RPC, {
+    p_date_from: days[0],
+    p_date_to: days[days.length - 1],
+    p_client_id: clientId,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (/function.*does not exist|schema cache|Could not find/i.test(msg)) {
+      return null;
+    }
+    throw new Error(error.message);
+  }
+
+  const daily = {};
+  for (const row of data || []) {
+    const day = dayKey(row.report_date);
+    const views = Number(row.views) || 0;
+    if (views > 0) daily[day] = views;
+  }
+  return daily;
+}
+
+async function sumHootMatchViaRpc(supabase, clientId, days) {
+  if (!clientId || !days?.length) return null;
+
+  const { data, error } = await supabase.rpc(HOOT_MATCH_RPC, {
+    p_date_from: days[0],
+    p_date_to: days[days.length - 1],
+    p_client_id: clientId,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (/function.*does not exist|schema cache|Could not find/i.test(msg)) {
+      return null;
+    }
+    throw new Error(error.message);
+  }
+
+  const daily = {};
+  for (const row of data || []) {
+    const matched = Number(row.matched) || 0;
+    const nonMatched = Number(row.non_matched) || 0;
+    if (matched > 0 || nonMatched > 0) {
+      daily[dayKey(row.report_date)] = { matched, nonMatched };
+    }
+  }
+  return daily;
+}
+
 async function mapPool(items, limit, fn) {
   const results = new Array(items.length);
   let next = 0;
@@ -24,7 +129,8 @@ async function mapPool(items, limit, fn) {
 }
 
 /**
- * Paginate and sum views for one report_date.
+ * Paginate and sum views for one report_date (fallback when RPC not deployed).
+ * Order by page_location for stable pages past 1000 rows/day.
  */
 async function sumViewsForSingleDay(supabase, clientId, day, table, opts = {}) {
   const vdpOnly = opts.vdpOnly === true;
@@ -37,7 +143,7 @@ async function sumViewsForSingleDay(supabase, clientId, day, table, opts = {}) {
       .select('views')
       .eq('client_id', clientId)
       .eq('report_date', day)
-      .order('page_path', { ascending: true })
+      .order('page_location', { ascending: true, nullsFirst: false })
       .range(offset, offset + FETCH_SIZE - 1);
 
     if (vdpOnly && table === PAGE_TABLE) {
@@ -77,11 +183,16 @@ async function sumViewsByDays(supabase, clientId, days, table, opts = {}) {
 
 /** All page views from smart_ga4_page_data for each report_date in range. */
 export async function sumPageTableViewsByDate(supabase, clientId, days, opts = {}) {
+  const vdpOnly = opts.vdpOnly === true;
+  const viaRpc = await sumGa4PageViewsViaRpc(supabase, clientId, days, { vdpOnly });
+  if (viaRpc != null) return viaRpc;
   return sumViewsByDays(supabase, clientId, days, PAGE_TABLE, opts);
 }
 
 /** VDP views from smart_final_data for each report_date in range. */
 export async function sumFinalTableViewsByDate(supabase, clientId, days) {
+  const viaRpc = await sumFinalViewsViaRpc(supabase, clientId, days);
+  if (viaRpc != null) return viaRpc;
   return sumViewsByDays(supabase, clientId, days, FINAL_TABLE, {});
 }
 
@@ -101,7 +212,7 @@ async function sumHootMatchForSingleDay(supabase, clientId, day, table) {
       .select('views, vdp_conditions, ga4_page_type')
       .eq('client_id', clientId)
       .eq('report_date', day)
-      .order('page_path', { ascending: true })
+      .order('page_location', { ascending: true, nullsFirst: false })
       .range(offset, offset + FETCH_SIZE - 1);
 
     if (error) throw new Error(error.message);
@@ -125,6 +236,16 @@ async function sumHootMatchForSingleDay(supabase, clientId, day, table) {
 export async function sumHootUrlMatchByDate(supabase, clientId, days) {
   const daily = {};
   if (!clientId || !days?.length) return daily;
+
+  const viaRpc = await sumHootMatchViaRpc(supabase, clientId, days);
+  if (viaRpc != null) {
+    for (const day of days) {
+      const v = viaRpc[day];
+      if (v && (v.matched > 0 || v.nonMatched > 0)) daily[day] = v;
+    }
+    const hasAny = Object.keys(daily).length > 0;
+    if (hasAny) return daily;
+  }
 
   await mapPool(days, DAY_CONCURRENCY, async (day) => {
     let { matched, nonMatched } = await sumHootMatchForSingleDay(

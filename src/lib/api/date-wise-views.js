@@ -24,6 +24,7 @@ async function rpcOneDay(supabase, day, clientId, onCancelCheck) {
     p_date_from: day,
     p_date_to: day,
     p_client_id: clientId,
+    p_vdp_only: false,
   });
 
   if (error) throw error;
