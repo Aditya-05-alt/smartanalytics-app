@@ -16,19 +16,32 @@ export default function FilterDropdown({
   onChange,
   defaultAll = 'All',
   className = '',
+  disabled = false,
 }) {
   const { open, toggle, close, ref } = useDropdown();
 
   const current = options.find((o) => o.value === value) || options[0];
   const isAll = current.value === defaultAll || current.label?.startsWith?.('All') || current.label === 'Used + New';
 
+  const handleToggle = () => {
+    if (disabled) return;
+    toggle();
+  };
+
   return (
     <div ref={ref} style={{ position: 'relative' }} className={className}>
-      <div className={`fc ${!isAll ? 'on' : ''}`} onClick={toggle} role="button" tabIndex={0}>
+      <div
+        className={`fc ${!isAll ? 'on' : ''} ${disabled ? 'fc--disabled' : ''}`}
+        onClick={handleToggle}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        title={disabled ? 'Coming soon' : undefined}
+      >
         <span>{current.label}</span>
         <span className="arr">▾</span>
       </div>
-      {open && (
+      {open && !disabled && (
         <div className="dm animate-fade-in">
           {options.map((o) => {
             const sel = o.value === value;

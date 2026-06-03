@@ -1,8 +1,12 @@
 import { createClient } from '@/lib/supabase/client';
-import { dayCountInclusive, enumerateDatesInclusive } from '@/lib/ga4/dateRange';
+import {
+  chunkDateRangesInclusive,
+  dayCountInclusive,
+} from '@/lib/ga4/dateRange';
 
 const MAX_DAYS_CLIENT = 31;
-const DAY_CONCURRENCY = 3;
+const RANGE_CHUNK_DAYS = 5;
+const RANGE_CONCURRENCY = 2;
 
 function normalizeRow(r) {
   return {
@@ -17,12 +21,12 @@ function isTimeoutError(error) {
   return error?.code === '57014' || /timeout/i.test(msg);
 }
 
-async function rpcOneDay(supabase, day, clientId, onCancelCheck) {
+async function rpcDateRange(supabase, rangeFrom, rangeTo, clientId, onCancelCheck) {
   if (onCancelCheck?.()) return null;
 
   const { data, error } = await supabase.rpc('build_date_wise_ga4_data', {
-    p_date_from: day,
-    p_date_to: day,
+    p_date_from: rangeFrom,
+    p_date_to: rangeTo,
     p_client_id: clientId,
     p_vdp_only: false,
   });
@@ -31,7 +35,7 @@ async function rpcOneDay(supabase, day, clientId, onCancelCheck) {
   return (data || []).map(normalizeRow);
 }
 
-/** Fetch one day at a time to stay under Postgres statement_timeout. */
+/** Fetch in 5-day RPC windows (fewer round trips than one day at a time). */
 export async function fetchDateWiseViewsChunked({
   from,
   to,
@@ -42,31 +46,40 @@ export async function fetchDateWiseViewsChunked({
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
-  const days = enumerateDatesInclusive(from, to);
-  if (days.length === 0) return [];
-  if (days.length > MAX_DAYS_CLIENT) {
+  const ranges = chunkDateRangesInclusive(from, to, RANGE_CHUNK_DAYS);
+  if (ranges.length === 0) return [];
+
+  const dayCount = dayCountInclusive(from, to);
+  if (dayCount > MAX_DAYS_CLIENT) {
     throw new Error(
-      `Date range is ${days.length} days. Please use at most ${MAX_DAYS_CLIENT} days (try 10d preset).`
+      `Date range is ${dayCount} days. Please use at most ${MAX_DAYS_CLIENT} days (try 10d preset).`
     );
   }
 
   const merged = [];
   let completed = 0;
 
-  for (let i = 0; i < days.length; i += DAY_CONCURRENCY) {
+  for (let i = 0; i < ranges.length; i += RANGE_CONCURRENCY) {
     if (onCancelCheck?.()) return null;
 
-    const batch = days.slice(i, i + DAY_CONCURRENCY);
-    onProgress?.({ completed, total: days.length, label: batch[0] });
+    const batch = ranges.slice(i, i + RANGE_CONCURRENCY);
+    const label = batch.map((r) => `${r.from}→${r.to}`).join(', ');
+    onProgress?.({ completed, total: ranges.length, label, daysTotal: dayCount });
 
     const results = await Promise.all(
-      batch.map(async (day) => {
+      batch.map(async (range) => {
         try {
-          return await rpcOneDay(supabase, day, clientId, onCancelCheck);
+          return await rpcDateRange(
+            supabase,
+            range.from,
+            range.to,
+            clientId,
+            onCancelCheck
+          );
         } catch (err) {
           if (isTimeoutError(err)) {
             throw new Error(
-              `Timed out loading ${day}. Try a shorter range or add the database index in supabase/rpc/build_date_wise_ga4_data.sql.`
+              `Timed out loading ${range.from} → ${range.to}. Try a shorter range or add the database index in supabase/rpc/build_date_wise_ga4_data.sql.`
             );
           }
           throw err;
@@ -78,13 +91,13 @@ export async function fetchDateWiseViewsChunked({
       if (part?.length) merged.push(...part);
     }
     completed += batch.length;
-    onProgress?.({ completed, total: days.length });
+    onProgress?.({ completed, total: ranges.length, daysTotal: dayCount });
   }
 
   return merged;
 }
 
-/** Prefer server route (service role, chunked); fallback to client day-chunks. */
+/** Prefer server route (service role, 5-day chunks); fallback to client chunks. */
 export async function fetchDateWiseViews({
   from,
   to,

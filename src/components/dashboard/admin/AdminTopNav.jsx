@@ -4,11 +4,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const LINKS = [
-  // { href: '/dashboard/admin', label: 'Providers' },
   { href: '/dashboard/admin/pipeline', label: 'Pipeline' },
-  // { href: '/dashboard/admin/ga4-daily', label: 'GA4 Page Views' },
-  { href: '/reports/date-wise-views', label: 'Date-wise Views' },
+  { href: '/dashboard/admin/date-wise-views', label: 'Date-wise Views' },
+  { href: '/dashboard/admin/vdp-logics', label: 'Vdp - Logics' },
 ];
+
+function isActive(pathname, href) {
+  if (href === '/dashboard/admin/pipeline') {
+    return (
+      pathname === href ||
+      (pathname.startsWith('/dashboard/admin') &&
+        !pathname.startsWith('/dashboard/admin/date-wise-views') &&
+        !pathname.startsWith('/dashboard/admin/vdp-logics') &&
+        pathname !== '/dashboard/admin')
+    );
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function AdminTopNav() {
   const pathname = usePathname();
@@ -16,10 +28,7 @@ export default function AdminTopNav() {
   return (
     <nav className="admin-topnav" aria-label="Admin sections">
       {LINKS.map((link) => {
-        const active =
-          link.href === '/reports/date-wise-views'
-            ? pathname.startsWith('/reports')
-            : pathname.startsWith(link.href);
+        const active = isActive(pathname, link.href);
         return (
           <Link
             key={link.href}

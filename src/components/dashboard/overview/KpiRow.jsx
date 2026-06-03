@@ -16,15 +16,6 @@ function fmt(n) {
   return Number(n || 0).toLocaleString();
 }
 
-function pickTickIndices(n, desired = 8) {
-  if (n <= 0) return new Set();
-  if (n <= desired) return new Set(Array.from({ length: n }, (_, i) => i));
-  const step = (n - 1) / (desired - 1);
-  const set = new Set();
-  for (let i = 0; i < desired; i += 1) set.add(Math.round(i * step));
-  return set;
-}
-
 function dayLabel(iso) {
   if (!iso) return '';
   const d = new Date(`${iso}T00:00:00`);
@@ -59,6 +50,10 @@ function buildYTicks(max) {
 
 function toLinePoints(data, max, width = 1000, height = 220) {
   if (!data.length) return '';
+  if (data.length === 1) {
+    const y = height - (data[0].value / max) * height;
+    return `${(width / 2).toFixed(2)},${y.toFixed(2)}`;
+  }
   return data
     .map((row, i) => {
       const x = (i / Math.max(data.length - 1, 1)) * width;
@@ -74,22 +69,22 @@ function toAreaPath(data, max, width = 1000, height = 220) {
   return `M0,${height} L${points.split(' ').join(' L')} L${width},${height} Z`;
 }
 
-function buildDisplaySeries(dateList, series, limit = 12) {
-  if (!Array.isArray(series) || series.length <= limit) {
-    return series.map((value, index) => ({
-      date: dateList[index],
-      value: Number(value) || 0,
-    }));
-  }
-  const keep = pickTickIndices(series.length, limit);
-  return series
-    .map((value, index) => ({
-      date: dateList[index],
-      value: Number(value) || 0,
-      index,
-    }))
-    .filter((row) => keep.has(row.index));
+function dayLabelShort(iso) {
+  if (!iso) return '';
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso.slice(5);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/** Full daily series — one bar/point per date in range. */
+function buildDisplaySeries(dateList, series) {
+  return (series || []).map((value, index) => ({
+    date: dateList[index],
+    value: Number(value) || 0,
+  }));
+}
+
+const DENSE_CHART_DAY_THRESHOLD = 16;
 
 export default function KpiRow() {
   const { tab, totals, loading, seriesByTab, dateList } = useOverview();
@@ -99,9 +94,11 @@ export default function KpiRow() {
   const viewsDisplay = loading && !views ? '…' : fmt(views);
   const series = useMemo(() => seriesByTab?.[tab] || [], [seriesByTab, tab]);
   const displaySeries = useMemo(
-    () => buildDisplaySeries(dateList, series, 12),
+    () => buildDisplaySeries(dateList, series),
     [dateList, series]
   );
+  const isDenseChart = displaySeries.length >= DENSE_CHART_DAY_THRESHOLD;
+  const isSingleDay = displaySeries.length === 1;
   const max = useMemo(() => {
     const mx = displaySeries.length ? Math.max(...displaySeries.map((d) => d.value)) : 0;
     return mx > 0 ? mx : 1;
@@ -150,25 +147,64 @@ export default function KpiRow() {
             ))}
           </div>
 
-          <div className="kpi-inline-plot">
+          <div className={`kpi-inline-plot ${isDenseChart ? 'kpi-inline-plot--dense' : ''}`}>
             {chartMode === 'bar' ? (
-              <div className="kpi-inline-bars">
-                {displaySeries.map((item, index) => {
-                  const h = Math.max(2, Math.round((item.value / max) * 220));
-                  return (
-                    <div key={`${item.date || index}`} className="kpi-inline-col">
-                      <div
-                        className="kpi-inline-bar"
-                        style={{ height: h, background: barColors[index % barColors.length] }}
-                      >
-                        <div className="kpi-inline-tip">{fmt(item.value)}</div>
+              <div
+                className={[
+                  'kpi-inline-bar-wrap',
+                  isDenseChart ? 'kpi-inline-bar-wrap--dense' : '',
+                  isSingleDay ? 'kpi-inline-bar-wrap--single' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                style={
+                  isDenseChart && !isSingleDay
+                    ? { minWidth: `${Math.max(displaySeries.length * 34, 100)}px` }
+                    : undefined
+                }
+              >
+                <div
+                  className={[
+                    'kpi-inline-bars',
+                    isDenseChart ? 'kpi-inline-bars--dense' : '',
+                    isSingleDay ? 'kpi-inline-bars--single' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {displaySeries.map((item, index) => {
+                    const h = Math.max(2, Math.round((item.value / max) * 200));
+                    return (
+                      <div key={`${item.date || index}`} className="kpi-inline-col">
+                        <div
+                          className="kpi-inline-bar"
+                          style={{ height: h, background: barColors[index % barColors.length] }}
+                        >
+                          <div className="kpi-inline-tip">{fmt(item.value)}</div>
+                        </div>
                       </div>
-                      <div className="kpi-inline-date" title={dayLabel(item.date)}>
-                        {dayLabel(item.date)}
-                      </div>
+                    );
+                  })}
+                </div>
+                <div
+                  className={[
+                    'kpi-inline-bar-dates',
+                    isDenseChart ? 'kpi-inline-bar-dates--dense' : '',
+                    isSingleDay ? 'kpi-inline-bar-dates--single' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {displaySeries.map((item, index) => (
+                    <div
+                      key={`date-${item.date || index}`}
+                      className="kpi-inline-date"
+                      title={dayLabel(item.date)}
+                    >
+                      {isDenseChart ? dayLabelShort(item.date) : dayLabel(item.date)}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="kpi-inline-line">
@@ -196,12 +232,24 @@ export default function KpiRow() {
                   />
                 </svg>
                 <div
-                  className="kpi-inline-line-dates"
-                  style={{ gridTemplateColumns: `repeat(${Math.max(displaySeries.length, 1)}, minmax(0, 1fr))` }}
+                  className={[
+                    'kpi-inline-line-dates',
+                    isDenseChart ? 'kpi-inline-line-dates--dense' : '',
+                    isSingleDay ? 'kpi-inline-line-dates--single' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  style={
+                    isSingleDay
+                      ? undefined
+                      : {
+                          gridTemplateColumns: `repeat(${Math.max(displaySeries.length, 1)}, minmax(0, 1fr))`,
+                        }
+                  }
                 >
                   {displaySeries.map((item, index) => (
                     <div key={`${item.date || index}`} className="kpi-inline-date" title={dayLabel(item.date)}>
-                      {dayLabel(item.date)}
+                      {isDenseChart ? dayLabelShort(item.date) : dayLabel(item.date)}
                     </div>
                   ))}
                   </div>

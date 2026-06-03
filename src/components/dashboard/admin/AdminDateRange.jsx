@@ -5,12 +5,15 @@ function toDateInputValue(iso) {
   return String(iso).slice(0, 10);
 }
 
+const DEFAULT_PRESETS = [10, 30];
+
 export default function AdminDateRange({
   from,
   to,
   onFromChange,
   onToChange,
   onApplyLastDays,
+  presets = DEFAULT_PRESETS,
 }) {
   return (
     <div className="admin-date-range">
@@ -35,12 +38,16 @@ export default function AdminDateRange({
         />
       </label>
       <div className="admin-date-presets" role="group" aria-label="Quick ranges">
-        <button type="button" className="admin-date-preset" onClick={() => onApplyLastDays(10)}>
-          10d
-        </button>
-        <button type="button" className="admin-date-preset" onClick={() => onApplyLastDays(30)}>
-          30d
-        </button>
+        {presets.map((days) => (
+          <button
+            key={days}
+            type="button"
+            className="admin-date-preset"
+            onClick={() => onApplyLastDays(days)}
+          >
+            {days}d
+          </button>
+        ))}
       </div>
     </div>
   );

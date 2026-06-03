@@ -8,7 +8,9 @@ import { useOverview } from './OverviewDataContext';
 
 export default function OverviewFilters() {
   const { config } = useClient();
-  const { dateRange, setDateRange } = useOverview();
+  const { dateRange, setDateRange, tab } = useOverview();
+  const showVdpFilters = tab === 'vdp';
+  const filtersDisabled = true;
 
   const [typeV, setTypeV]   = useState('All');
   const [classV, setClassV] = useState('All');
@@ -60,18 +62,63 @@ export default function OverviewFilters() {
 
   return (
     <div className="filters">
-      <span className="f-label">Filter</span>
-      <FilterDropdown options={typeOpts} value={typeV} onChange={setTypeV} />
-      {config.showClass && (
-        <FilterDropdown options={classOpts} value={classV} onChange={setClassV} />
+      {showVdpFilters && (
+        <>
+          <span className="f-label">Filter</span>
+          <FilterDropdown
+            options={typeOpts}
+            value={typeV}
+            onChange={setTypeV}
+            disabled={filtersDisabled}
+          />
+          {config.showClass && (
+            <FilterDropdown
+              options={classOpts}
+              value={classV}
+              onChange={setClassV}
+              disabled={filtersDisabled}
+            />
+          )}
+          <FilterDropdown
+            options={condOpts}
+            value={condV}
+            onChange={setCondV}
+            defaultAll="Used + New"
+            disabled={filtersDisabled}
+          />
+          <FilterDropdown
+            options={makeOpts}
+            value={makeV}
+            onChange={setMakeV}
+            disabled={filtersDisabled}
+          />
+          {config.showLoc && (
+            <FilterDropdown
+              options={locOpts}
+              value={locV}
+              onChange={setLocV}
+              disabled={filtersDisabled}
+            />
+          )}
+          <FilterDropdown
+            options={chanOpts}
+            value={chanV}
+            onChange={setChanV}
+            disabled={filtersDisabled}
+          />
+          <FilterDropdown
+            options={radOpts}
+            value={radV}
+            onChange={setRadV}
+            disabled={filtersDisabled}
+          />
+          {filtersDisabled && (
+            <span className="f-wip-msg" role="status">
+              Disabled — under progress
+            </span>
+          )}
+        </>
       )}
-      <FilterDropdown options={condOpts} value={condV} onChange={setCondV} defaultAll="Used + New" />
-      <FilterDropdown options={makeOpts} value={makeV} onChange={setMakeV} />
-      {config.showLoc && (
-        <FilterDropdown options={locOpts} value={locV} onChange={setLocV} />
-      )}
-      <FilterDropdown options={chanOpts} value={chanV} onChange={setChanV} />
-      <FilterDropdown options={radOpts} value={radV} onChange={setRadV} />
       <div className="f-right">
         <CalendarRangePicker value={dateRange} onChange={setDateRange} />
       </div>

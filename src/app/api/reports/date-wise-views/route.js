@@ -2,11 +2,17 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { isValidSuperadminSession, SUPERADMIN_COOKIE } from '@/lib/auth/superadmin';
-import { enumerateDatesInclusive } from '@/lib/ga4/dateRange';
+import {
+  chunkDateRangesInclusive,
+  dayCountInclusive,
+  enumerateDatesInclusive,
+} from '@/lib/ga4/dateRange';
 import { createServiceRoleClient } from '@/lib/supabase/serviceRole';
 
 const MAX_DAYS = 31;
-const DAY_CONCURRENCY = 4;
+/** One RPC per 5-day window (faster than 1 call per day). */
+const RANGE_CHUNK_DAYS = 5;
+const RANGE_CONCURRENCY = 3;
 
 async function isAuthorized() {
   const jar = await cookies();
@@ -41,10 +47,10 @@ function normalizeRow(r) {
   };
 }
 
-async function rpcOneDay(supabase, day, clientId) {
+async function rpcDateRange(supabase, rangeFrom, rangeTo, clientId) {
   const { data, error } = await supabase.rpc('build_date_wise_ga4_data', {
-    p_date_from: day,
-    p_date_to: day,
+    p_date_from: rangeFrom,
+    p_date_to: rangeTo,
     p_client_id: clientId,
     p_vdp_only: false,
   });
@@ -66,13 +72,15 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Missing from or to' }, { status: 400 });
   }
 
-  const days = enumerateDatesInclusive(from, to);
-  if (days.length > MAX_DAYS) {
+  const dayCount = dayCountInclusive(from, to);
+  if (dayCount > MAX_DAYS) {
     return NextResponse.json(
-      { error: `Date range is ${days.length} days. Maximum is ${MAX_DAYS}.` },
+      { error: `Date range is ${dayCount} days. Maximum is ${MAX_DAYS}.` },
       { status: 400 }
     );
   }
+
+  const ranges = chunkDateRangesInclusive(from, to, RANGE_CHUNK_DAYS);
 
   const supabase = createServiceRoleClient();
   if (!supabase) {
@@ -88,17 +96,23 @@ export async function GET(request) {
   try {
     const merged = [];
 
-    for (let i = 0; i < days.length; i += DAY_CONCURRENCY) {
-      const batch = days.slice(i, i + DAY_CONCURRENCY);
+    for (let i = 0; i < ranges.length; i += RANGE_CONCURRENCY) {
+      const batch = ranges.slice(i, i + RANGE_CONCURRENCY);
       const parts = await Promise.all(
-        batch.map((day) => rpcOneDay(supabase, day, clientId))
+        batch.map((r) => rpcDateRange(supabase, r.from, r.to, clientId))
       );
       for (const part of parts) merged.push(...part);
     }
 
     return NextResponse.json({
       rows: merged,
-      meta: { days: days.length, rowCount: merged.length, source: 'chunked-rpc' },
+      meta: {
+        days: enumerateDatesInclusive(from, to).length,
+        rowCount: merged.length,
+        source: 'chunked-rpc-5d',
+        rangeChunks: ranges.length,
+        chunkDays: RANGE_CHUNK_DAYS,
+      },
     });
   } catch (err) {
     const message = err?.message || 'Failed to load date-wise views';

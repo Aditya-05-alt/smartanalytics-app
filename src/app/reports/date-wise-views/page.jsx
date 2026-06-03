@@ -1,9 +1,6 @@
-import DateWiseViewsPanel from '@/components/reports/DateWiseViewsPanel';
+import { redirect } from 'next/navigation';
 
-export const metadata = {
-  title: 'Date-wise Views · SmartAnalytics',
-};
-
-export default function DateWiseViewsPage() {
-  return <DateWiseViewsPanel />;
+/** Keep old URL; admin layout lives under /dashboard/admin. */
+export default function DateWiseViewsRedirect() {
+  redirect('/dashboard/admin/date-wise-views');
 }

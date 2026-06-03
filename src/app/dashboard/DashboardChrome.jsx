@@ -7,21 +7,14 @@ import SideBar from '@/components/dashboard/SideBar';
 
 export default function DashboardChrome({ children }) {
   const pathname = usePathname();
-  const isAdmin =
-    pathname?.startsWith('/dashboard/admin') || pathname?.startsWith('/reports');
+  const isAdminRoute = pathname?.startsWith('/dashboard/admin');
 
   return (
     <ClientProvider>
       <div className="dash-root">
         <TopBar />
-        <div
-          className={`dash-layout ${
-            pathname?.startsWith('/dashboard/admin') ? 'dash-layout--admin' : ''
-          } ${pathname?.startsWith('/reports') ? 'dash-layout--reports' : ''}`}
-        >
-          {!pathname?.startsWith('/dashboard/admin') && !pathname?.startsWith('/reports') && (
-            <SideBar />
-          )}
+        <div className={`dash-layout ${isAdminRoute ? 'dash-layout--admin' : ''}`}>
+          {!isAdminRoute && <SideBar />}
           <main className="page-shell">{children}</main>
         </div>
       </div>

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminDateRange from '@/components/dashboard/admin/AdminDateRange';
 import { fetchDateWiseViews } from '@/lib/api/date-wise-views';
 import { getDefaultGa4DateRange } from '@/lib/ga4/dateRange';
+
+const DATE_WISE_DEFAULT_DAYS = 5;
 import {
   buildDateWiseCsv,
   dealersForFilter,
@@ -15,20 +17,22 @@ function todayISO() {
 }
 
 function normalizeRange(from, to) {
-  if (!from || !to) return { from: '2026-05-20', to: todayISO() };
+  if (!from || !to) return getDefaultGa4DateRange(DATE_WISE_DEFAULT_DAYS);
   if (from <= to) return { from, to };
   return { from: to, to: from };
 }
 
 export default function DateWiseViewsPanel({
   title = 'Date-wise Dealer Views',
-  defaultFrom = '2026-05-20',
-  defaultTo = null,
+  defaultDayCount = DATE_WISE_DEFAULT_DAYS,
 }) {
-  const initialTo = defaultTo || todayISO();
+  const initialRange = useMemo(
+    () => getDefaultGa4DateRange(defaultDayCount),
+    [defaultDayCount]
+  );
 
-  const [dateFrom, setDateFrom] = useState(defaultFrom);
-  const [dateTo, setDateTo] = useState(initialTo);
+  const [dateFrom, setDateFrom] = useState(initialRange.from);
+  const [dateTo, setDateTo] = useState(initialRange.to);
   const [dealerFilter, setDealerFilter] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -103,7 +107,7 @@ export default function DateWiseViewsPanel({
   };
 
   return (
-    <div className="ga4-count-page">
+    <div className="ga4-count-page pipeline-page">
       <header className="ga4-count-toolbar">
         <h1 className="ga4-count-title">{title}</h1>
         <div className="ga4-count-filters-row">
@@ -142,12 +146,13 @@ export default function DateWiseViewsPanel({
         onFromChange={setDateFrom}
         onToChange={setDateTo}
         onApplyLastDays={applyLastDays}
+        presets={[5, 10, 30]}
       />
 
       <p className="ga4-count-meta">
         {loading &&
           (progress?.total
-            ? `Loading day ${progress.completed} of ${progress.total}…`
+            ? `Loading ${progress.completed} of ${progress.total} batch${progress.total === 1 ? '' : 'es'} (5 days each)${progress.label ? ` · ${progress.label}` : ''}…`
             : 'Loading date-wise views…')}
         {!loading && error && (
           <span className="ga4-count-error-text">{error}</span>

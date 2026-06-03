@@ -45,20 +45,31 @@ function OverviewBody({ comparing, onToggleCmp }) {
       <div className="content">
         <KpiRow />
 
-        <div className="g2">
-          <ChannelDonut
-            clientId={clientKey}
-            from={from}
-            to={to}
-            pageType={TAB_PAGE_TYPE[tab] || 'All'}
-          />
-          <LocationDonut
-            clientId={clientKey}
-            from={from}
-            to={to}
-            pageType={TAB_PAGE_TYPE[tab] || 'All'}
-          />
-        </div>
+        {tab === 'vdp' ? (
+          <div className="g2">
+            <ChannelDonut
+              clientId={clientKey}
+              from={from}
+              to={to}
+              pageType={TAB_PAGE_TYPE[tab]}
+            />
+            <LocationDonut
+              clientId={clientKey}
+              from={from}
+              to={to}
+              pageType={TAB_PAGE_TYPE[tab]}
+            />
+          </div>
+        ) : (
+          <div className="dashboard-full-row">
+            <ChannelDonut
+              clientId={clientKey}
+              from={from}
+              to={to}
+              pageType={TAB_PAGE_TYPE[tab] || 'All'}
+            />
+          </div>
+        )}
 
         {tab === 'vdp' && (
           <>

@@ -49,3 +49,15 @@ export function enumerateDatesInclusive(fromIso, toIso) {
 export function dayCountInclusive(fromIso, toIso) {
   return enumerateDatesInclusive(fromIso, toIso).length;
 }
+
+/** Split inclusive range into { from, to } chunks (e.g. 5 days per RPC). */
+export function chunkDateRangesInclusive(fromIso, toIso, chunkSize = 5) {
+  const days = enumerateDatesInclusive(fromIso, toIso);
+  if (!days.length || chunkSize < 1) return [];
+  const ranges = [];
+  for (let i = 0; i < days.length; i += chunkSize) {
+    const slice = days.slice(i, i + chunkSize);
+    ranges.push({ from: slice[0], to: slice[slice.length - 1] });
+  }
+  return ranges;
+}

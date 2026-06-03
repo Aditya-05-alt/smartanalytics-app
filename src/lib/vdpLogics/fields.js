@@ -1,0 +1,171 @@
+export const TABLE = 'smart_vdp_logic';
+
+export const CSV_HEADERS = [
+  'dealer_name',
+  'dealer_id',
+  'website_url',
+  'cms',
+  'data_source',
+  'hoot_link',
+  'scrap_link',
+  'vdp_logic',
+  'srp_logic',
+  'home_page_logic',
+  'others',
+];
+
+/** One sample row for CSV template / documentation. */
+export const EXAMPLE_ROW = {
+  dealer_name: 'Example Dealer',
+  dealer_id: '123456789',
+  website_url: 'https://www.example-dealer.com',
+  cms: 'DealerOn',
+  data_source: 'GA4',
+  hoot_link: 'https://hoot.example/inventory',
+  scrap_link: 'https://scrap.example/vdp',
+  vdp_logic: '/inventory/.*vdp.*',
+  srp_logic: '/inventory/?$',
+  home_page_logic: '^/$',
+  others: 'Optional notes',
+};
+
+const FORM_FIELDS = [
+  { key: 'dealerName', db: 'dealer_name', label: 'Dealer name', requiredFlag: true },
+  { key: 'dealerId', db: 'dealer_id', label: 'Dealer ID' },
+  { key: 'websiteUrl', db: 'website_url', label: 'Website URL' },
+  { key: 'cms', db: 'cms', label: 'CMS' },
+  { key: 'dataSource', db: 'data_source', label: 'Data source' },
+  { key: 'hootLink', db: 'hoot_link', label: 'Hoot link' },
+  { key: 'scrapLink', db: 'scrap_link', label: 'Scrap link' },
+  { key: 'vdpLogic', db: 'vdp_logic', label: 'VDP logic', wide: true },
+  { key: 'srpLogic', db: 'srp_logic', label: 'SRP logic', wide: true },
+  { key: 'homePageLogic', db: 'home_page_logic', label: 'Home page logic', wide: true },
+  { key: 'others', db: 'others', label: 'Others', wide: true },
+];
+
+export { FORM_FIELDS };
+
+export function emptyFormState() {
+  return Object.fromEntries(FORM_FIELDS.map((f) => [f.key, '']));
+}
+
+export function rowToFormState(row) {
+  const state = emptyFormState();
+  if (!row) return state;
+  for (const f of FORM_FIELDS) {
+    state[f.key] = row[f.key] ?? '';
+  }
+  return state;
+}
+
+export function normalizeRow(row) {
+  return {
+    id: row.id,
+    dealerName: row.dealer_name ?? null,
+    dealerId: row.dealer_id ?? null,
+    websiteUrl: row.website_url ?? null,
+    cms: row.cms ?? null,
+    dataSource: row.data_source ?? null,
+    hootLink: row.hoot_link ?? null,
+    scrapLink: row.scrap_link ?? null,
+    vdpLogic: row.vdp_logic ?? null,
+    srpLogic: row.srp_logic ?? null,
+    homePageLogic: row.home_page_logic ?? null,
+    others: row.others ?? null,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+export function bodyToDbRecord(body) {
+  const record = {};
+  for (const f of FORM_FIELDS) {
+    const v = body?.[f.key];
+    if (v === undefined) continue;
+    const s = v == null ? null : String(v).trim();
+    record[f.db] = s === '' ? null : s;
+  }
+  if (!record.dealer_name) {
+    throw new Error('Dealer name is required.');
+  }
+  return record;
+}
+
+export function csvRowToDbRecord(obj) {
+  const body = {};
+  for (const f of FORM_FIELDS) {
+    const raw = obj[f.db] ?? obj[f.key];
+    if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+      body[f.key] = String(raw).trim();
+    }
+  }
+  return bodyToDbRecord(body);
+}
+
+function escapeCsvCell(value) {
+  const s = value == null ? '' : String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+export function buildExampleCsv() {
+  const header = CSV_HEADERS.join(',');
+  const row = CSV_HEADERS.map((h) => escapeCsvCell(EXAMPLE_ROW[h] ?? '')).join(',');
+  return `${header}\n${row}\n`;
+}
+
+/** Minimal RFC-style CSV parser (quoted fields, commas). */
+export function parseCsv(text) {
+  const lines = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  if (lines.length < 2) {
+    throw new Error('CSV must include a header row and at least one data row.');
+  }
+
+  const parseLine = (line) => {
+    const out = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') {
+            cur += '"';
+            i += 1;
+          } else inQuotes = false;
+        } else cur += ch;
+      } else if (ch === '"') inQuotes = true;
+      else if (ch === ',') {
+        out.push(cur.trim());
+        cur = '';
+      } else cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+  };
+
+  const headerCells = parseLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, '_'));
+  const missing = ['dealer_name'].filter((h) => !headerCells.includes(h));
+  if (missing.length) {
+    throw new Error(`CSV header must include: ${missing.join(', ')}`);
+  }
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i += 1) {
+    const cells = parseLine(lines[i]);
+    if (cells.every((c) => !c)) continue;
+    const obj = {};
+    headerCells.forEach((h, idx) => {
+      if (CSV_HEADERS.includes(h)) obj[h] = cells[idx] ?? '';
+    });
+    rows.push(obj);
+  }
+
+  if (!rows.length) throw new Error('No data rows found in CSV.');
+  return rows;
+}
