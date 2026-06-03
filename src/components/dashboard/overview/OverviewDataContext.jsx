@@ -17,7 +17,7 @@ import { useClient } from '../ClientContext';
 const OverviewDataContext = createContext(null);
 
 const TAB_IDS = ['all', 'vdp', 'srp', 'home', 'other'];
-const DEFAULT_RANGE = '30d';
+const DEFAULT_RANGE = 'current_month';
 
 function pad(n) {
   return String(n).padStart(2, '0');
