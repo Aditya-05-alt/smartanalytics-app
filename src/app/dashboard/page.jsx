@@ -96,7 +96,6 @@ function OverviewBody({ comparing, onToggleCmp }) {
                 clientId={clientKey}
                 from={from}
                 to={to}
-                limit={null}
               />
             </div>
             <div className="dashboard-full-row">
@@ -104,22 +103,14 @@ function OverviewBody({ comparing, onToggleCmp }) {
                 clientId={clientKey}
                 from={from}
                 to={to}
-                limit={null}
               />
             </div>
           </>
         )}
 
-        {tab !== 'vdp' && (
-          <div className="dashboard-full-row">
-            <TopCampaigns
-              clientId={clientKey}
-              from={from}
-              to={to}
-              limit={10}
-            />
-          </div>
-        )}
+        <div className="dashboard-full-row">
+          <TopCampaigns clientId={clientKey} from={from} to={to} />
+        </div>
 
         <CmpTable />
 

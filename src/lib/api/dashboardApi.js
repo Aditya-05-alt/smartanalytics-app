@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
+import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
+import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
 import { aggregateLocationBuckets } from '@/lib/api/locationBreakdownAggregate';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 
@@ -42,19 +44,13 @@ export async function fetchChannelBreakdown({
   pageTypeFilter = 'VDP',
   onCancelCheck,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
-
-  const data = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown', {
+  return fetchChannelBreakdownBundle({
     clientId,
     from,
     to,
-    extraParams: { p_page_type: pageTypeFilter },
+    pageTypeFilter,
     onCancelCheck,
   });
-
-  if (onCancelCheck?.()) return null;
-  return mergeChannelBreakdownRows(data);
 }
 
 export async function fetchMakeBreakdown({
@@ -152,88 +148,26 @@ export async function fetchConditionBreakdown({
   return data || [];
 }
 
-/** Top campaigns by views from smart_ga4_page_data (not available on VDP tab). */
+/** All campaigns by views from smart_ga4_page_data (merged across date chunks). */
 export async function fetchTopCampaigns({
   clientId,
   from,
   to,
   pageTypeFilter = 'ALL',
-  limit = 10,
   onCancelCheck,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
-
-  const data = await rpcByDateChunks(supabase, 'get_top_campaigns', {
+  return fetchTopCampaignsBundle({
     clientId,
     from,
     to,
-    extraParams: {
-      p_page_type: pageTypeFilter,
-      p_limit: limit,
-    },
+    pageTypeFilter,
     onCancelCheck,
   });
-
-  if (onCancelCheck?.()) return null;
-  return mergeTopCampaignRows(data, limit);
 }
 
 function toDateOnly(value) {
   if (!value) return value;
   return String(value).slice(0, 10);
-}
-
-function mergeChannelBreakdownRows(rows) {
-  const byBucket = new Map();
-  for (const row of rows || []) {
-    const bucket = String(row.channel_bucket ?? 'Other');
-    const prev = byBucket.get(bucket) || {
-      channel_bucket: bucket,
-      views: 0,
-    };
-    prev.views += Number(row.views) || 0;
-    byBucket.set(bucket, prev);
-  }
-  const total = [...byBucket.values()].reduce((sum, r) => sum + r.views, 0);
-  return [...byBucket.values()].map((r) => ({
-    ...r,
-    pct: total > 0 ? (r.views / total) * 100 : 0,
-  }));
-}
-
-function mergeTopCampaignRows(rows, limit = 10) {
-  const byKey = new Map();
-  for (const row of rows || []) {
-    const campaign = String(row.campaign ?? '(not set)');
-    const source = String(row.source ?? '');
-    const medium = String(row.medium ?? '');
-    const key = `${campaign}|${source}|${medium}`;
-    const prev = byKey.get(key) || {
-      campaign,
-      source,
-      medium,
-      channel: String(row.channel ?? ''),
-      views: 0,
-      sessions: 0,
-      total_users: 0,
-      new_users: 0,
-    };
-    prev.views += Number(row.views) || 0;
-    prev.sessions += Number(row.sessions) || 0;
-    prev.total_users += Number(row.total_users) || 0;
-    prev.new_users += Number(row.new_users) || 0;
-    byKey.set(key, prev);
-  }
-  const totalViews = [...byKey.values()].reduce((sum, r) => sum + r.views, 0);
-  return [...byKey.values()]
-    .sort((a, b) => b.views - a.views)
-    .slice(0, limit)
-    .map((row, index) => ({
-      ...row,
-      rank: index + 1,
-      pct: totalViews > 0 ? (row.views / totalViews) * 100 : 0,
-    }));
 }
 
 function normalizeLocationRows(data) {

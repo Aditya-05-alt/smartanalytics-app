@@ -44,6 +44,8 @@ export default function BreakdownDonut({
   title,
   badge,
   data = [],
+  /** Donut slices only (defaults to `data`). List always uses `data`. */
+  chartData,
   centerValue,
   centerLabel = '',
   totalLabel = 'Total',
@@ -59,17 +61,20 @@ export default function BreakdownDonut({
   emptyMessage = null,
   skeletonRows = 5,
   pctDecimals = 2,
+  listScrollable = false,
 }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
 
-  const pctTotal = data.reduce((a, s) => a + (Number(s.pct) || 0), 0);
-  const sliceTotal = data.reduce((a, s) => a + (Number(s.value) || 0), 0);
+  const listSeries = data;
+  const donutSeries = chartData ?? data;
+  const sliceTotal = listSeries.reduce((a, s) => a + (Number(s.value) || 0), 0);
+  const donutTotal = donutSeries.reduce((a, s) => a + (Number(s.value) || 0), 0);
   const grandTotal =
     totalViews !== undefined && totalViews !== null
       ? Number(totalViews) || 0
       : sliceTotal;
-  const isEmpty = pctTotal <= 0 && grandTotal <= 0;
+  const isEmpty = donutTotal <= 0 && grandTotal <= 0;
 
   const center =
     centerValue !== undefined
@@ -129,8 +134,9 @@ export default function BreakdownDonut({
                 strokeWidth={stroke}
               />
               {!isEmpty &&
-                data.map((s) => {
-                  const dash = ((Number(s.pct) || 0) / pctTotal) * circ;
+                donutSeries.map((s) => {
+                  const dash =
+                    (Number(s.value) / Math.max(donutTotal, 1)) * circ;
                   if (dash <= 0) return null;
                   const node = (
                     <circle
@@ -191,27 +197,37 @@ export default function BreakdownDonut({
             </div>
           </div>
 
-          {/* ── Breakdown ── */}
-          <div className="donut-lg-list">
-            {data.map((s) => (
-              <div key={s.name} className="donut-lg-row">
-                <div
-                  className="donut-lg-swatch"
-                  style={{ background: s.color }}
-                />
-                <span className="donut-lg-name" title={s.fullName || s.name}>
-                  {s.name}
-                </span>
-                <span className="donut-lg-value">
-                  {(Number(s.value) || 0).toLocaleString()}
-                </span>
-                <span className="donut-lg-pct">
-                  {(Number(s.pct) || 0).toFixed(pctDecimals)}%
-                </span>
-              </div>
-            ))}
+          {/* ── Breakdown (rows scroll; total stays fixed when listScrollable) ── */}
+          <div
+            className={`donut-lg-list-col${listScrollable ? ' donut-lg-list-col--scroll' : ''}`}
+          >
+            <div
+              className={
+                listScrollable
+                  ? 'donut-lg-list-rows donut-lg-list--scroll'
+                  : 'donut-lg-list-rows'
+              }
+            >
+              {listSeries.map((s) => (
+                <div key={s.name} className="donut-lg-row">
+                  <div
+                    className="donut-lg-swatch"
+                    style={{ background: s.color }}
+                  />
+                  <span className="donut-lg-name" title={s.fullName || s.name}>
+                    {s.name}
+                  </span>
+                  <span className="donut-lg-value">
+                    {(Number(s.value) || 0).toLocaleString()}
+                  </span>
+                  <span className="donut-lg-pct">
+                    {(Number(s.pct) || 0).toFixed(pctDecimals)}%
+                  </span>
+                </div>
+              ))}
+            </div>
 
-            <div className="donut-lg-total">
+            <div className="donut-lg-total donut-lg-total--fixed">
               <span style={{ flex: 1 }}>{totalLabel}</span>
               <span style={{ fontWeight: 700, color: 'var(--t)' }}>
                 {grandTotal.toLocaleString()}

@@ -1,19 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { fetchChannelBreakdown } from '@/lib/api/dashboardApi';
+import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
+import {
+  getChannelBreakdownCache,
+  hasChannelBreakdownCache,
+} from '@/lib/data/channelBreakdownCache';
+import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
+import { channelRowsToDonutData } from '@/lib/ga4/channelDisplay';
 import { useOverview } from './OverviewDataContext';
 import BreakdownDonut from './BreakdownDonut';
 
-const BUCKET_COLORS = {
-  Organic: '#34d399',
-  'Paid Search': '#60a5fa',
-  Direct: '#a3e635',
-  'Paid Social': '#fb923c',
-  Other: '#9ca3af',
-};
-
-const BUCKET_ORDER = ['Organic', 'Paid Search', 'Direct', 'Paid Social', 'Other'];
+const ALL_PAGE_TYPE_FILTERS = ['ALL', 'VDP', 'SRP', 'Home', 'Other'];
 
 /** Top tab id (OverviewDataContext) → RPC p_page_type */
 const TAB_TO_FILTER = {
@@ -41,19 +39,6 @@ const PAGE_TYPE_TO_TAB = {
   Other: 'other',
 };
 
-function rowsToDonutData(rows) {
-  const byBucket = new Map(rows.map((r) => [r.channel_bucket, r]));
-  return BUCKET_ORDER.map((bucket) => {
-    const row = byBucket.get(bucket) || { channel_bucket: bucket, views: 0, pct: 0 };
-    return {
-      name: bucket,
-      color: BUCKET_COLORS[bucket],
-      value: Number(row.views) || 0,
-      pct: Number(row.pct) || 0,
-    };
-  });
-}
-
 function resolveTabId(pageTypeProp, tabFromContext) {
   if (pageTypeProp && PAGE_TYPE_TO_TAB[pageTypeProp]) {
     return PAGE_TYPE_TO_TAB[pageTypeProp];
@@ -74,7 +59,6 @@ export default function ChannelDonut({
 }) {
   const {
     tab,
-    totals,
     clientKey,
     from: ctxFrom,
     to: ctxTo,
@@ -89,10 +73,67 @@ export default function ChannelDonut({
   const from = fromProp ?? ctxFrom;
   const to = toProp ?? ctxTo;
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [chartTopN, setChartTopN] = useState(null);
+  const [rows, setRows] = useState(() =>
+    clientId && from && to
+      ? getChannelBreakdownCache(clientId, from, to, pageTypeFilter) || []
+      : []
+  );
+  const [loading, setLoading] = useState(
+    () =>
+      Boolean(
+        clientId &&
+          from &&
+          to &&
+          !hasChannelBreakdownCache(clientId, from, to, pageTypeFilter)
+      )
+  );
   const [error, setError] = useState(null);
 
+  // Prefetch all tab filters in the background so tab switches hit cache.
+  useEffect(() => {
+    if (!clientId || !from || !to) return undefined;
+
+    let cancelled = false;
+
+    const pending = ALL_PAGE_TYPE_FILTERS.filter(
+      (filter) => !hasChannelBreakdownCache(clientId, from, to, filter)
+    );
+
+    const PREFETCH_CONCURRENCY = 2;
+    let next = 0;
+
+    async function worker() {
+      while (next < pending.length) {
+        if (cancelled) return;
+        const filter = pending[next];
+        next += 1;
+        try {
+          await fetchChannelBreakdownBundle({
+            clientId,
+            from,
+            to,
+            pageTypeFilter: filter,
+            onCancelCheck: () => cancelled,
+          });
+        } catch {
+          /* prefetch failures are non-fatal */
+        }
+      }
+    }
+
+    Promise.all(
+      Array.from({ length: Math.min(PREFETCH_CONCURRENCY, pending.length) }, () =>
+        worker()
+      )
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, from, to]);
+
+  // Active tab: cache-first, then fetch if needed.
   useEffect(() => {
     if (!clientId || !from || !to) {
       setRows([]);
@@ -100,11 +141,19 @@ export default function ChannelDonut({
       return undefined;
     }
 
+    const cached = getChannelBreakdownCache(clientId, from, to, pageTypeFilter);
+    if (cached) {
+      setRows(cached);
+      setLoading(false);
+      setError(null);
+      return undefined;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    fetchChannelBreakdown({
+    fetchChannelBreakdownBundle({
       clientId,
       from,
       to,
@@ -129,35 +178,47 @@ export default function ChannelDonut({
     };
   }, [clientId, from, to, pageTypeFilter]);
 
-  const data = useMemo(() => rowsToDonutData(rows), [rows]);
+  const allData = useMemo(() => channelRowsToDonutData(rows), [rows]);
 
-  const sliceTotal = useMemo(
-    () => data.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
-    [data]
+  const displayData = useMemo(() => {
+    if (chartTopN == null) return allData;
+    return allData.slice(0, chartTopN);
+  }, [allData, chartTopN]);
+
+  const displayedTotal = useMemo(
+    () => displayData.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
+    [displayData]
   );
 
-  // VDP channel RPC may return empty buckets; total still shows mapped VDP views.
-  const displayTotal =
-    tabId === 'vdp' ? Number(totals?.vdp) || 0 : sliceTotal;
-
   const centerDisplay =
-    displayTotal > 0
+    displayedTotal > 0
       ? new Intl.NumberFormat('en', {
           notation: 'compact',
           maximumFractionDigits: 1,
-        }).format(displayTotal)
+        }).format(displayedTotal)
       : '0';
 
   return (
     <BreakdownDonut
       title="Channel Breakdown"
-      data={data}
+      data={displayData}
+      headerExtra={
+        <div className="make-breakdown-head-controls">
+          <ChartTopNSelect
+            value={chartTopN}
+            onChange={setChartTopN}
+            ariaLabel="Channel chart limit"
+          />
+        </div>
+      }
       centerLabel={centerLabel}
       centerValue={centerDisplay}
-      totalViews={displayTotal}
+      totalViews={displayedTotal}
       totalLabel="Total"
       loading={loading || (!clientId && overviewLoading)}
       error={error}
+      skeletonRows={8}
+      listScrollable
     />
   );
 }

@@ -69,11 +69,14 @@ function toAreaPath(data, max, width = 1000, height = 220) {
   return `M0,${height} L${points.split(' ').join(' L')} L${width},${height} Z`;
 }
 
+/** Dense chart axis: `May-01` (month name + hyphen + 2-digit day). */
 function dayLabelShort(iso) {
   if (!iso) return '';
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso.slice(5);
-  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${month}-${day}`;
 }
 
 /** Full daily series — one bar/point per date in range. */

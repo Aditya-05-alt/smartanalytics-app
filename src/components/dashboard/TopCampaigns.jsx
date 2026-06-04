@@ -1,18 +1,24 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { Panel, PanelBody, PanelHeader } from './Panel';
-import { fetchTopCampaigns } from '@/lib/api/dashboardApi';
+import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
+import {
+  getTopCampaignsCache,
+  hasTopCampaignsCache,
+} from '@/lib/data/topCampaignsCache';
 import { useOverview } from './overview/OverviewDataContext';
 
 const TAB_TO_CAMPAIGN_FILTER = {
   all: 'ALL',
+  vdp: 'VDP',
   srp: 'SRP',
   home: 'Home',
   other: 'Other',
 };
 
-const CAMPAIGN_ENABLED_TABS = new Set(['all', 'srp', 'home', 'other']);
+const ALL_PAGE_TYPE_FILTERS = ['ALL', 'VDP', 'SRP', 'Home', 'Other'];
 
 const CAMPAIGN_COLORS = [
   '#4f86f7',
@@ -34,7 +40,7 @@ function colorForRank(rank) {
 
 function normalizeRows(data) {
   const list = Array.isArray(data) ? data : data ? [data] : [];
-  return list.map((row) => ({
+  return list.map((row, index) => ({
     campaign: String(row.campaign ?? '(not set)'),
     source: String(row.source ?? ''),
     medium: String(row.medium ?? ''),
@@ -44,7 +50,7 @@ function normalizeRows(data) {
     total_users: Number(row.total_users ?? 0) || 0,
     new_users: Number(row.new_users ?? 0) || 0,
     pct: Number(row.pct ?? 0) || 0,
-    rank: Number(row.rank ?? 999) || 999,
+    rank: Number(row.rank ?? index + 1) || index + 1,
   }));
 }
 
@@ -52,23 +58,34 @@ export default function TopCampaigns({
   clientId: clientIdProp,
   from: fromProp,
   to: toProp,
-  limit = 10,
 }) {
   const { tab, clientKey, from: ctxFrom, to: ctxTo } = useOverview();
   const clientId = clientIdProp ?? clientKey;
   const from = fromProp ?? ctxFrom;
   const to = toProp ?? ctxTo;
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const enabled = CAMPAIGN_ENABLED_TABS.has(tab);
   const pageTypeFilter = TAB_TO_CAMPAIGN_FILTER[tab] || 'ALL';
+  const [chartTopN, setChartTopN] = useState(null);
+  const [rows, setRows] = useState(() =>
+    clientId && from && to
+      ? normalizeRows(getTopCampaignsCache(clientId, from, to, pageTypeFilter) || [])
+      : []
+  );
+  const [loading, setLoading] = useState(
+    () =>
+      Boolean(
+        clientId &&
+          from &&
+          to &&
+          !hasTopCampaignsCache(clientId, from, to, pageTypeFilter)
+      )
+  );
+  const [error, setError] = useState(null);
 
   const tabLabel = useMemo(() => {
     const labels = {
       all: 'All Pages',
+      vdp: 'VDP',
       srp: 'SRP',
       home: 'Homepage',
       other: 'Other',
@@ -77,14 +94,55 @@ export default function TopCampaigns({
   }, [tab]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!clientId || !from || !to) return undefined;
+
+    let cancelled = false;
+    const pending = ALL_PAGE_TYPE_FILTERS.filter(
+      (f) => !hasTopCampaignsCache(clientId, from, to, f)
+    );
+    let next = 0;
+    const concurrency = 2;
+
+    async function worker() {
+      while (next < pending.length) {
+        if (cancelled) return;
+        const filter = pending[next];
+        next += 1;
+        try {
+          await fetchTopCampaignsBundle({
+            clientId,
+            from,
+            to,
+            pageTypeFilter: filter,
+            onCancelCheck: () => cancelled,
+          });
+        } catch {
+          /* prefetch */
+        }
+      }
+    }
+
+    Promise.all(
+      Array.from({ length: Math.min(concurrency, pending.length) }, () => worker())
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, from, to]);
+
+  useEffect(() => {
+    if (!clientId || !from || !to) {
       setRows([]);
-      setError(null);
       setLoading(false);
       return undefined;
     }
-    if (!clientId || !from || !to) {
+
+    const cached = getTopCampaignsCache(clientId, from, to, pageTypeFilter);
+    if (cached) {
+      setRows(normalizeRows(cached));
       setLoading(false);
+      setError(null);
       return undefined;
     }
 
@@ -92,22 +150,20 @@ export default function TopCampaigns({
     setLoading(true);
     setError(null);
 
-    fetchTopCampaigns({
+    fetchTopCampaignsBundle({
       clientId,
       from,
       to,
       pageTypeFilter,
-      limit,
       onCancelCheck: () => cancelled,
     })
       .then((data) => {
-        if (cancelled) return;
-        if (data === undefined) return;
+        if (cancelled || data === undefined) return;
         setRows(normalizeRows(data));
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(e?.message || 'Failed to load top campaigns.');
+        setError(e?.message || 'Failed to load campaigns.');
         setRows([]);
       })
       .finally(() => {
@@ -117,29 +173,46 @@ export default function TopCampaigns({
     return () => {
       cancelled = true;
     };
-  }, [enabled, clientId, from, to, pageTypeFilter, limit, tab]);
+  }, [clientId, from, to, pageTypeFilter, tab]);
 
-  const total = useMemo(
-    () => rows.reduce((sum, row) => sum + row.views, 0),
-    [rows]
+  const allRows = rows;
+  const displayRows = useMemo(() => {
+    if (chartTopN == null) return allRows;
+    return allRows.slice(0, chartTopN);
+  }, [allRows, chartTopN]);
+
+  const displayTotal = useMemo(
+    () => displayRows.reduce((sum, row) => sum + row.views, 0),
+    [displayRows]
   );
 
   const chartData = useMemo(
     () =>
-      rows.map((row) => ({
+      displayRows.map((row) => ({
         ...row,
         color: colorForRank(row.rank),
       })),
-    [rows]
+    [displayRows]
   );
-
-  if (!enabled) {
-    return null;
-  }
 
   return (
     <Panel className="make-breakdown-panel top-campaigns-panel">
-      <PanelHeader title="Top Campaigns" subtitle={`Top ${limit} by ${tabLabel} Views`} />
+      <PanelHeader
+        title="Campaign Breakdown"
+        subtitle={
+          chartTopN == null
+            ? `${tabLabel} · ${allRows.length} campaign(s)`
+            : `${tabLabel} · Top ${chartTopN} of ${allRows.length} campaign(s)`
+        }
+      >
+        <div className="make-breakdown-head-controls">
+          <ChartTopNSelect
+            value={chartTopN}
+            onChange={setChartTopN}
+            ariaLabel="Campaign chart limit"
+          />
+        </div>
+      </PanelHeader>
 
       <PanelBody>
         {loading && (
@@ -156,15 +229,15 @@ export default function TopCampaigns({
           </div>
         )}
 
-        {!loading && !error && rows.length === 0 && (
+        {!loading && !error && allRows.length === 0 && (
           <div className="make-breakdown-empty">No campaign data for this period.</div>
         )}
 
-        {!loading && !error && rows.length > 0 && (
+        {!loading && !error && allRows.length > 0 && (
           <div className="make-breakdown-content">
             <div className="make-breakdown-split">
               <div className="make-breakdown-chart-col">
-                <CampaignPieChart data={chartData} total={total} />
+                <CampaignPieChart data={chartData} total={displayTotal} />
               </div>
               <div className="make-breakdown-table-side">
                 <div className="make-breakdown-table-header">
@@ -172,9 +245,9 @@ export default function TopCampaigns({
                   <span>Views</span>
                 </div>
                 <div className="make-breakdown-table-scroll">
-                  {rows.map((row, index) => (
+                  {displayRows.map((row, index) => (
                     <div
-                      key={`${row.rank}-${row.campaign}-${index}`}
+                      key={`${row.rank}-${row.campaign}-${row.source}-${index}`}
                       className="make-breakdown-data-row"
                     >
                       <div className="make-breakdown-make-cell" title={row.campaign}>
@@ -186,6 +259,9 @@ export default function TopCampaigns({
                       </div>
                       <span className="make-breakdown-views-cell">
                         {row.views.toLocaleString()}
+                        <span className="make-breakdown-pct-inline">
+                          {row.pct.toFixed(2)}%
+                        </span>
                       </span>
                     </div>
                   ))}
@@ -193,7 +269,7 @@ export default function TopCampaigns({
                 <div className="make-breakdown-total">
                   <span>TOTAL</span>
                   <span className="make-breakdown-total-value">
-                    {total.toLocaleString()}
+                    {displayTotal.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -251,7 +327,7 @@ function CampaignPieChart({ data, total }) {
       </svg>
       <div className="make-breakdown-center">
         <div className="make-breakdown-center-value">{total.toLocaleString()}</div>
-        <div className="make-breakdown-center-label">Views</div>
+        <div className="make-breakdown-center-label">Chart views</div>
       </div>
     </div>
   );

@@ -1082,6 +1082,56 @@ body {
   background: var(--s3);
   color: var(--t3);
 }
+
+.daily-sync-page .daily-sync-filters {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.daily-sync-search {
+  min-width: 200px;
+}
+.daily-sync-meta code {
+  font-size: 0.9em;
+  color: var(--t2);
+}
+.daily-sync-summary {
+  margin-top: -0.25rem;
+}
+.daily-sync-table th:not(.ga4-count-sticky-col),
+.daily-sync-table td.daily-sync-cell {
+  text-align: center;
+  min-width: 140px;
+}
+.daily-sync-dealer-name {
+  display: block;
+  font-weight: 600;
+}
+.daily-sync-client-id {
+  display: block;
+  font-size: 10px;
+  color: var(--t3);
+  font-weight: 500;
+  margin-top: 2px;
+}
+.daily-sync-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: default;
+}
+.daily-sync-badge--ok {
+  background: var(--gd);
+  color: var(--green);
+}
+.daily-sync-badge--no {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
 .pipeline-tables {
   margin-top: 0.5rem;
 }
@@ -2684,6 +2734,36 @@ body {
   padding: .25rem 0;
   min-width: 0;
 }
+.donut-lg-list-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.donut-lg-list-col--scroll {
+  align-self: stretch;
+  max-height: 240px;
+}
+.donut-lg-list-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+}
+.donut-lg-list--scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+  max-height: 200px;
+}
+.donut-lg-total--fixed {
+  flex-shrink: 0;
+  margin-top: 0;
+  background: var(--s2);
+}
+
 .donut-lg-list {
   flex: 1;
   display: flex;
@@ -2889,13 +2969,19 @@ body {
 .make-breakdown-head-controls .chart-mode {
   margin-left: 0;
 }
-.make-breakdown-select {
+.make-breakdown-select,
+.breakdown-top-select {
   font-size: 11px;
   color: var(--t2);
   background: var(--s3);
   border: 1px solid var(--bd);
   border-radius: 6px;
   padding: 3px 8px;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  min-width: 72px;
 }
 .make-breakdown-disabled,
 .make-breakdown-empty {
@@ -3006,6 +3092,12 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.make-breakdown-pct-inline {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--t3);
 }
 .make-breakdown-views-cell {
   flex-shrink: 0;

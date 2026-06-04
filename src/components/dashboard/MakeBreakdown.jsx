@@ -49,7 +49,9 @@ export default function MakeBreakdown({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [topN, setTopN] = useState(limit);
+  const [topN, setTopN] = useState(
+    limit === 5 ? 5 : limit === 10 ? 10 : null
+  );
   const [chartMode, setChartMode] = useState('pie');
 
   // VDP top tab only (id is lowercase `vdp` from PageTabs)
@@ -150,8 +152,8 @@ export default function MakeBreakdown({
             aria-label="Make breakdown limit"
           >
             <option value="all">All makes</option>
-            <option value="5">Top 5</option>
-            <option value="10">Top 10</option>
+            <option value={5}>Top 5</option>
+            <option value={10}>Top 10</option>
           </select>
         </div>
       </PanelHeader>

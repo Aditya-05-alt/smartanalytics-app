@@ -55,7 +55,9 @@ export default function ModelBreakdown({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [topN, setTopN] = useState(limit);
+  const [topN, setTopN] = useState(
+    limit === 5 ? 5 : limit === 10 ? 10 : null
+  );
   const [chartMode, setChartMode] = useState('pie');
 
   const enabled = tab === 'vdp';
@@ -157,8 +159,8 @@ export default function ModelBreakdown({
             aria-label="Model breakdown limit"
           >
             <option value="all">All models</option>
-            <option value="5">Top 5</option>
-            <option value="10">Top 10</option>
+            <option value={5}>Top 5</option>
+            <option value={10}>Top 10</option>
           </select>
         </div>
       </PanelHeader>
