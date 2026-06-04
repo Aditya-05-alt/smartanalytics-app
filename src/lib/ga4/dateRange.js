@@ -1,5 +1,13 @@
+/** Local calendar YYYY-MM-DD (avoids UTC shift from toISOString). */
+export function toCalendarISO(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function toDateOnly(d) {
-  return d.toISOString().slice(0, 10);
+  return toCalendarISO(d);
 }
 
 /** Date column headers between from and to (inclusive), newest first. */

@@ -7,25 +7,19 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { fetchOverviewRows, fetchUserTotals } from '@/lib/api/dashboardApi';
+import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
 import {
   getOverviewCache,
   setOverviewCache,
 } from '@/lib/data/overviewCache';
+import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
+import { enumerateDatesInclusive, toCalendarISO } from '@/lib/ga4/dateRange';
 import { useClient } from '../ClientContext';
 
 const OverviewDataContext = createContext(null);
 
 const TAB_IDS = ['all', 'vdp', 'srp', 'home', 'other'];
 const DEFAULT_RANGE = 'current_month';
-
-function pad(n) {
-  return String(n).padStart(2, '0');
-}
-
-function iso(d) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 function daysAgo(base, n) {
   const d = new Date(base);
@@ -106,7 +100,7 @@ function resolveRange(value) {
       }
   }
 
-  return { from: iso(from), to: iso(to) };
+  return { from: toCalendarISO(from), to: toCalendarISO(to) };
 }
 
 /** Normalize `ga4_page_type` from Supabase to our tab id.
@@ -121,19 +115,26 @@ function pageTypeToTab(raw) {
   return 'other';
 }
 
-/** Build a list of every ISO date from `from` to `to`, inclusive. */
-function enumerateDates(fromISO, toISO) {
-  const out = [];
-  if (!fromISO || !toISO) return out;
-  const start = new Date(`${fromISO}T00:00:00`);
-  const end = new Date(`${toISO}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return out;
-  const cur = new Date(start);
-  while (cur <= end) {
-    out.push(iso(cur));
-    cur.setDate(cur.getDate() + 1);
+/** Drop trailing chart days with no views on any tab (e.g. today before pipeline runs). */
+function chartDateListAndSeries(dateList, seriesByTab) {
+  if (!dateList.length) return { dateList, seriesByTab };
+
+  let end = dateList.length;
+  while (end > 1) {
+    const idx = end - 1;
+    const hasViews = TAB_IDS.some((key) => (seriesByTab[key]?.[idx] || 0) > 0);
+    if (hasViews) break;
+    end -= 1;
   }
-  return out;
+
+  if (end === dateList.length) return { dateList, seriesByTab };
+
+  const trimmedDates = dateList.slice(0, end);
+  const trimmedSeries = {};
+  for (const key of TAB_IDS) {
+    trimmedSeries[key] = (seriesByTab[key] || []).slice(0, end);
+  }
+  return { dateList: trimmedDates, seriesByTab: trimmedSeries };
 }
 
 export function OverviewProvider({ children }) {
@@ -174,27 +175,19 @@ export function OverviewProvider({ children }) {
 
     (async () => {
       try {
-        const [overviewRows, totalsRows] = await Promise.all([
-          fetchOverviewRows({
-            clientId: clientKey,
-            from,
-            to,
-            onCancelCheck: () => cancelled,
-          }),
-          fetchUserTotals({
-            clientId: clientKey,
-            from,
-            to,
-            onCancelCheck: () => cancelled,
-          }),
-        ]);
-        if (cancelled || !overviewRows || !totalsRows) return;
+        const bundle = await fetchOverviewBundle({
+          clientId: clientKey,
+          from,
+          to,
+          onCancelCheck: () => cancelled,
+        });
+        if (cancelled || !bundle) return;
 
-        setRows(overviewRows);
-        setUserTotalsRows(totalsRows);
+        setRows(bundle.rows || []);
+        setUserTotalsRows(bundle.userTotalsRows || []);
         setOverviewCache(clientKey, from, to, {
-          rows: overviewRows,
-          userTotalsRows: totalsRows,
+          rows: bundle.rows || [],
+          userTotalsRows: bundle.userTotalsRows || [],
         });
       } catch (fetchError) {
         if (cancelled) return;
@@ -223,7 +216,8 @@ export function OverviewProvider({ children }) {
     for (const r of rows) {
       const views = Number(r.views) || 0;
       const visitors = Number(r.total_users) || 0;
-      const date = r.report_date;
+      const date = normalizeReportDate(r.report_date);
+      if (!date) continue;
       const rawType = r.ga4_page_type ?? '(null)';
       const tabKey = pageTypeToTab(r.ga4_page_type);
 
@@ -270,15 +264,23 @@ export function OverviewProvider({ children }) {
   }, [rows, userTotalsRows]);
 
   // ── derived: continuous daily series (zero-fills missing days) ──
-  const dateList = useMemo(() => enumerateDates(from, to), [from, to]);
+  const fullDateList = useMemo(
+    () => enumerateDatesInclusive(from, to),
+    [from, to]
+  );
 
-  const seriesByTab = useMemo(() => {
+  const seriesByTabRaw = useMemo(() => {
     const out = {};
     for (const key of TAB_IDS) {
-      out[key] = dateList.map((d) => derived.daily[key]?.[d] || 0);
+      out[key] = fullDateList.map((d) => derived.daily[key]?.[d] || 0);
     }
     return out;
-  }, [derived, dateList]);
+  }, [derived, fullDateList]);
+
+  const { dateList, seriesByTab } = useMemo(
+    () => chartDateListAndSeries(fullDateList, seriesByTabRaw),
+    [fullDateList, seriesByTabRaw]
+  );
 
   const rowCount = rows.length;
 

@@ -58,7 +58,7 @@ export default function BreakdownDonut({
   disabledSubtext = '',
   emptyMessage = null,
   skeletonRows = 5,
-  pctDecimals,
+  pctDecimals = 2,
 }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
@@ -206,10 +206,7 @@ export default function BreakdownDonut({
                   {(Number(s.value) || 0).toLocaleString()}
                 </span>
                 <span className="donut-lg-pct">
-                  {pctDecimals != null
-                    ? (Number(s.pct) || 0).toFixed(pctDecimals)
-                    : Number(s.pct) || 0}
-                  %
+                  {(Number(s.pct) || 0).toFixed(pctDecimals)}%
                 </span>
               </div>
             ))}

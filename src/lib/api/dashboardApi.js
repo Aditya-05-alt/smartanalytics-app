@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { aggregateLocationBuckets } from '@/lib/api/locationBreakdownAggregate';
+import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 
 const FINAL_DATA_TABLE = 'smart_final_data';
 const LOCATION_PAGE_SIZE = 5000;
@@ -15,31 +16,23 @@ const LOCATION_PAGE_SIZE = 5000;
 export async function fetchOverviewRows({ clientId, from, to, onCancelCheck }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
-  if (onCancelCheck?.()) return null;
-
-  const { data, error } = await supabase.rpc('get_ga4_overview', {
-    p_client_id: clientId,
-    p_from: from,
-    p_to: to,
+  return rpcByDateChunks(supabase, 'get_ga4_overview', {
+    clientId,
+    from,
+    to,
+    onCancelCheck,
   });
-
-  if (error) throw new Error(error.message || 'Failed to fetch overview data.');
-  return data || [];
 }
 
 export async function fetchUserTotals({ clientId, from, to, onCancelCheck }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
-  if (onCancelCheck?.()) return null;
-
-  const { data, error } = await supabase.rpc('get_ga4_user_totals', {
-    p_client_id: clientId,
-    p_from: from,
-    p_to: to,
+  return rpcByDateChunks(supabase, 'get_ga4_user_totals', {
+    clientId,
+    from,
+    to,
+    onCancelCheck,
   });
-
-  if (error) throw new Error(error.message || 'Failed to fetch user totals.');
-  return data || [];
 }
 
 export async function fetchChannelBreakdown({
@@ -51,17 +44,17 @@ export async function fetchChannelBreakdown({
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
-  if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('get_ga4_channel_breakdown', {
-    p_client_id: clientId,
-    p_from: from,
-    p_to: to,
-    p_page_type: pageTypeFilter,
+  const data = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown', {
+    clientId,
+    from,
+    to,
+    extraParams: { p_page_type: pageTypeFilter },
+    onCancelCheck,
   });
 
-  if (error) throw new Error(error.message || 'Failed to fetch channel breakdown.');
-  return data || [];
+  if (onCancelCheck?.()) return null;
+  return mergeChannelBreakdownRows(data);
 }
 
 export async function fetchMakeBreakdown({
@@ -170,23 +163,77 @@ export async function fetchTopCampaigns({
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
-  if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('get_top_campaigns', {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_page_type: pageTypeFilter,
-    p_limit: limit,
+  const data = await rpcByDateChunks(supabase, 'get_top_campaigns', {
+    clientId,
+    from,
+    to,
+    extraParams: {
+      p_page_type: pageTypeFilter,
+      p_limit: limit,
+    },
+    onCancelCheck,
   });
 
-  if (error) throw new Error(error.message || 'Failed to fetch top campaigns.');
-  return data || [];
+  if (onCancelCheck?.()) return null;
+  return mergeTopCampaignRows(data, limit);
 }
 
 function toDateOnly(value) {
   if (!value) return value;
   return String(value).slice(0, 10);
+}
+
+function mergeChannelBreakdownRows(rows) {
+  const byBucket = new Map();
+  for (const row of rows || []) {
+    const bucket = String(row.channel_bucket ?? 'Other');
+    const prev = byBucket.get(bucket) || {
+      channel_bucket: bucket,
+      views: 0,
+    };
+    prev.views += Number(row.views) || 0;
+    byBucket.set(bucket, prev);
+  }
+  const total = [...byBucket.values()].reduce((sum, r) => sum + r.views, 0);
+  return [...byBucket.values()].map((r) => ({
+    ...r,
+    pct: total > 0 ? (r.views / total) * 100 : 0,
+  }));
+}
+
+function mergeTopCampaignRows(rows, limit = 10) {
+  const byKey = new Map();
+  for (const row of rows || []) {
+    const campaign = String(row.campaign ?? '(not set)');
+    const source = String(row.source ?? '');
+    const medium = String(row.medium ?? '');
+    const key = `${campaign}|${source}|${medium}`;
+    const prev = byKey.get(key) || {
+      campaign,
+      source,
+      medium,
+      channel: String(row.channel ?? ''),
+      views: 0,
+      sessions: 0,
+      total_users: 0,
+      new_users: 0,
+    };
+    prev.views += Number(row.views) || 0;
+    prev.sessions += Number(row.sessions) || 0;
+    prev.total_users += Number(row.total_users) || 0;
+    prev.new_users += Number(row.new_users) || 0;
+    byKey.set(key, prev);
+  }
+  const totalViews = [...byKey.values()].reduce((sum, r) => sum + r.views, 0);
+  return [...byKey.values()]
+    .sort((a, b) => b.views - a.views)
+    .slice(0, limit)
+    .map((row, index) => ({
+      ...row,
+      rank: index + 1,
+      pct: totalViews > 0 ? (row.views / totalViews) * 100 : 0,
+    }));
 }
 
 function normalizeLocationRows(data) {
