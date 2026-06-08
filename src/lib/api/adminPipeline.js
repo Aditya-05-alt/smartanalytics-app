@@ -29,12 +29,12 @@ export async function runPipelinePageSync({ clientId, from, to }) {
 }
 
 /** Step 2 — apply_vdp_filtration RPC */
-export async function runPipelineFiltration({ clientId }) {
+export async function runPipelineFiltration({ clientId, from, to }) {
   const res = await fetch('/api/admin/pipeline/filtration', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId }),
+    body: JSON.stringify({ clientId, from, to }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || 'Filtration failed.');

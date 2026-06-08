@@ -1,18 +1,17 @@
 import { createClient } from '@/lib/supabase/client';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeTopCampaignRows } from '@/lib/ga4/topCampaignsMerge';
+import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
 import {
   getTopCampaignsCache,
   setTopCampaignsCache,
 } from '@/lib/data/topCampaignsCache';
 import {
+  vdpFiltersActive,
   vdpRpcExtraParams,
   vdpFilterCacheSuffix,
   appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
-
-const CLIENT_CHUNK_DAYS = 14;
-const CLIENT_CHUNK_CONCURRENCY = 3;
 
 async function fetchViaApi({
   clientId,
@@ -60,6 +59,11 @@ async function fetchViaClient({
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
+  const invActive = vdpFiltersActive(vdpFilters, tab);
+  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
+    invFilters: invActive,
+  });
+
   const raw = await rpcByDateChunks(supabase, 'get_top_campaigns', {
     clientId,
     from,
@@ -69,8 +73,8 @@ async function fetchViaClient({
       p_limit: null,
       ...vdpRpcExtraParams(vdpFilters, tab),
     },
-    chunkDays: CLIENT_CHUNK_DAYS,
-    concurrency: CLIENT_CHUNK_CONCURRENCY,
+    chunkDays,
+    concurrency,
     onCancelCheck,
   });
 

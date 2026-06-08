@@ -1,18 +1,17 @@
 import { createClient } from '@/lib/supabase/client';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
+import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
 import {
   getChannelBreakdownCache,
   setChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
 import {
+  vdpFiltersActive,
   vdpRpcExtraParams,
   vdpFilterCacheSuffix,
   appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
-
-const CLIENT_CHUNK_DAYS = 14;
-const CLIENT_CHUNK_CONCURRENCY = 3;
 
 async function fetchViaApi({
   clientId,
@@ -60,6 +59,11 @@ async function fetchViaClient({
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
+  const invActive = vdpFiltersActive(vdpFilters, tab);
+  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
+    invFilters: invActive,
+  });
+
   const raw = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown', {
     clientId,
     from,
@@ -68,8 +72,8 @@ async function fetchViaClient({
       p_page_type: pageTypeFilter,
       ...vdpRpcExtraParams(vdpFilters, tab),
     },
-    chunkDays: CLIENT_CHUNK_DAYS,
-    concurrency: CLIENT_CHUNK_CONCURRENCY,
+    chunkDays,
+    concurrency,
     onCancelCheck,
   });
 

@@ -1,4 +1,4 @@
-import { chunkDateRangesInclusive } from '@/lib/ga4/dateRange';
+import { chunkDateRangesInclusive, enumerateDatesInclusive } from '@/lib/ga4/dateRange';
 
 export const RPC_CHUNK_DAYS = 5;
 export const RPC_CHUNK_CONCURRENCY = 3;
@@ -15,6 +15,39 @@ function rpcParams(clientId, from, to, extra = {}) {
     p_to: String(to).slice(0, 10),
     ...extra,
   };
+}
+
+async function runRpcRange(supabase, rpcName, clientId, range, extraParams) {
+  const { data, error } = await supabase.rpc(
+    rpcName,
+    rpcParams(clientId, range.from, range.to, extraParams)
+  );
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * On timeout, bisect the date window and retry (handles variable load per dealer).
+ */
+async function runRpcRangeResilient(supabase, rpcName, clientId, range, extraParams) {
+  try {
+    return await runRpcRange(supabase, rpcName, clientId, range, extraParams);
+  } catch (error) {
+    if (!isStatementTimeoutError(error)) throw error;
+
+    const days = enumerateDatesInclusive(range.from, range.to);
+    if (days.length <= 1) throw error;
+
+    const mid = Math.ceil(days.length / 2);
+    const left = { from: days[0], to: days[mid - 1] };
+    const right = { from: days[mid], to: days[days.length - 1] };
+
+    const [leftRows, rightRows] = await Promise.all([
+      runRpcRangeResilient(supabase, rpcName, clientId, left, extraParams),
+      runRpcRangeResilient(supabase, rpcName, clientId, right, extraParams),
+    ]);
+    return [...leftRows, ...rightRows];
+  }
 }
 
 /**
@@ -40,9 +73,7 @@ export async function rpcByDateChunks(
   if (!ranges.length) return [];
 
   if (ranges.length === 1) {
-    const { data, error } = await supabase.rpc(rpcName, rpcParams(clientId, from, to, extraParams));
-    if (error) throw error;
-    return data || [];
+    return runRpcRangeResilient(supabase, rpcName, clientId, ranges[0], extraParams);
   }
 
   const merged = [];
@@ -51,11 +82,10 @@ export async function rpcByDateChunks(
     const batch = ranges.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map((range) =>
-        supabase.rpc(rpcName, rpcParams(clientId, range.from, range.to, extraParams))
+        runRpcRangeResilient(supabase, rpcName, clientId, range, extraParams)
       )
     );
-    for (const { data, error } of results) {
-      if (error) throw error;
+    for (const data of results) {
       if (data?.length) merged.push(...data);
     }
   }

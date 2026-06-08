@@ -2,13 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
+import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
-export const maxDuration = 60;
-
-/** Fewer round-trips — each chunk returns only ~5 bucket rows. */
-const CHANNEL_CHUNK_DAYS = 14;
-const CHANNEL_CHUNK_CONCURRENCY = 4;
+export const maxDuration = 120;
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -17,6 +14,14 @@ export async function GET(request) {
   const to = searchParams.get('to')?.slice(0, 10);
   const pageType = searchParams.get('pageType')?.trim() || 'ALL';
   const inv = parseInvRpcFromSearchParams(searchParams);
+  const invFilters = Boolean(
+    inv.p_years?.length ||
+      inv.p_makes?.length ||
+      inv.p_models?.length ||
+      inv.p_types?.length ||
+      inv.p_locations?.length ||
+      (inv.p_condition && inv.p_condition !== 'BOTH')
+  );
 
   if (!clientId || !from || !to) {
     return NextResponse.json({ error: 'Missing clientId, from, or to' }, { status: 400 });
@@ -35,6 +40,8 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, { invFilters });
+
   try {
     const raw = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown', {
       clientId,
@@ -44,8 +51,8 @@ export async function GET(request) {
         p_page_type: pageType,
         ...inv,
       },
-      chunkDays: CHANNEL_CHUNK_DAYS,
-      concurrency: CHANNEL_CHUNK_CONCURRENCY,
+      chunkDays,
+      concurrency,
     });
 
     const rows = mergeChannelBreakdownRows(raw);
@@ -54,7 +61,7 @@ export async function GET(request) {
       rows,
       meta: {
         source: 'chunked-rpc',
-        chunkDays: CHANNEL_CHUNK_DAYS,
+        chunkDays,
         pageType,
       },
     });

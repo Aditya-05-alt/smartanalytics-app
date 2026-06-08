@@ -2,8 +2,8 @@
  * Session cache for channel breakdown by client + range + page type tab.
  */
 
-const MAX_ENTRIES = 24;
-const STALE_MS = 5 * 60 * 1000;
+const MAX_ENTRIES = 32;
+const STALE_MS = 10 * 60 * 1000;
 const store = new Map();
 
 export function channelCacheKey(clientId, from, to, pageTypeFilter, suffix = '') {

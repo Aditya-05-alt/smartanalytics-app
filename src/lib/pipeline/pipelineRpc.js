@@ -1,12 +1,25 @@
 import { daysBackForFinalSync } from '@/lib/pipeline/dates';
 
-/** Step 2 — apply_vdp_filtration(p_client_id) */
-export async function runVdpFiltration(supabase, clientId) {
+/** Step 2 — apply_vdp_filtration(p_client_id, p_days_back) */
+export async function runVdpFiltration(
+  supabase,
+  clientId,
+  { from, to, daysBack } = {}
+) {
+  const p_days_back =
+    daysBack ?? (from && to ? daysBackForFinalSync(from, to) : null);
+
   const { data, error } = await supabase.rpc('apply_vdp_filtration', {
     p_client_id: clientId,
+    p_days_back,
   });
 
-  if (error) throw new Error(error.message || 'apply_vdp_filtration failed');
+  if (error) {
+    const hint = /could not choose the best candidate/i.test(error.message || '')
+      ? ' Run supabase/rpc/apply_vdp_filtration.sql in Supabase to drop the legacy 1-arg overload.'
+      : '';
+    throw new Error((error.message || 'apply_vdp_filtration failed') + hint);
+  }
 
   const processed = (data || []).map((row) => ({
     accountName: row.out_account_name ?? row.account_name ?? 'Unknown',
@@ -17,7 +30,7 @@ export async function runVdpFiltration(supabase, clientId) {
   const totalRowsUpdated = processed.reduce((s, r) => s + r.rowsUpdated, 0);
 
   const log = [
-    `apply_vdp_filtration(p_client_id=${clientId})`,
+    `apply_vdp_filtration(p_client_id=${clientId}, p_days_back=${p_days_back ?? 'ALL'})`,
     `Rows updated: ${totalRowsUpdated.toLocaleString()}`,
     ...processed.map(
       (r) =>
@@ -28,6 +41,7 @@ export async function runVdpFiltration(supabase, clientId) {
   return {
     success: true,
     clientId,
+    daysBack: p_days_back,
     totalRowsUpdated,
     processed,
     log,

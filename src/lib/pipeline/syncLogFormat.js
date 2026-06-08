@@ -151,8 +151,10 @@ export function formatStep1DayByDayLog(from, to, result) {
 }
 
 export function formatStep2Log(clientId, result) {
+  const daysBack =
+    result?.daysBack != null ? ` · p_days_back=${result.daysBack}` : '';
   const lines = [
-    logLine(`Step 2 — apply_vdp_filtration · client ${clientId}`),
+    logLine(`Step 2 — apply_vdp_filtration · client ${clientId}${daysBack}`),
     '',
     '── Result ──',
   ];

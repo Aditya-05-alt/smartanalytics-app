@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
+import { shouldPrefetchBreakdownTabs } from '@/lib/api/rpcChunkPlan';
 import {
   getChannelBreakdownCache,
   hasChannelBreakdownCache,
@@ -105,17 +106,23 @@ export default function ChannelDonut({
   );
   const [error, setError] = useState(null);
 
-  // Prefetch all tab filters in the background so tab switches hit cache.
+  // Prefetch other tab filters only for short ranges (long ranges load active tab only).
   useEffect(() => {
-    if (!clientId || !from || !to) return undefined;
+    if (!clientId || !from || !to || !shouldPrefetchBreakdownTabs(from, to)) {
+      return undefined;
+    }
 
     let cancelled = false;
 
     const pending = ALL_PAGE_TYPE_FILTERS.filter(
-      (filter) => !hasChannelBreakdownCache(clientId, from, to, filter)
+      (filter) =>
+        filter !== pageTypeFilter &&
+        !hasChannelBreakdownCache(clientId, from, to, filter, filterCacheSuffix)
     );
 
-    const PREFETCH_CONCURRENCY = 2;
+    if (!pending.length) return undefined;
+
+    const PREFETCH_CONCURRENCY = 1;
     let next = 0;
 
     async function worker() {
@@ -148,7 +155,7 @@ export default function ChannelDonut({
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, vdpFilters, tab]);
+  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
 
   // Active tab: cache-first, then fetch if needed.
   useEffect(() => {

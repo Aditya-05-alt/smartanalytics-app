@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { Panel, PanelBody, PanelHeader } from './Panel';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
+import { shouldPrefetchBreakdownTabs } from '@/lib/api/rpcChunkPlan';
 import {
   getTopCampaignsCache,
   hasTopCampaignsCache,
@@ -110,14 +111,21 @@ export default function TopCampaigns({
   }, [tab]);
 
   useEffect(() => {
-    if (!clientId || !from || !to) return undefined;
+    if (!clientId || !from || !to || !shouldPrefetchBreakdownTabs(from, to)) {
+      return undefined;
+    }
 
     let cancelled = false;
     const pending = ALL_PAGE_TYPE_FILTERS.filter(
-      (f) => !hasTopCampaignsCache(clientId, from, to, f)
+      (f) =>
+        f !== pageTypeFilter &&
+        !hasTopCampaignsCache(clientId, from, to, f, filterCacheSuffix)
     );
+
+    if (!pending.length) return undefined;
+
     let next = 0;
-    const concurrency = 2;
+    const concurrency = 1;
 
     async function worker() {
       while (next < pending.length) {
@@ -147,7 +155,7 @@ export default function TopCampaigns({
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, vdpFilters, tab]);
+  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
 
   useEffect(() => {
     if (!clientId || !from || !to) {

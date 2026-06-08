@@ -43,9 +43,58 @@ AS $$
       COALESCE(array_length(p_locations, 1), 0) > 0
     ) AS active
   ),
+  pages AS (
+    SELECT p.channel, p.views, p.client_id, p.report_date, p.page_path
+    FROM smart_ga4_page_data p
+    WHERE p.client_id = p_client_id
+      AND p.report_date BETWEEN p_from AND p_to
+      AND (
+        (UPPER(p_page_type) = 'ALL')                                                          OR
+        (UPPER(p_page_type) = 'VDP'   AND UPPER(COALESCE(p.ga4_page_type,'')) LIKE 'VDP%')    OR
+        (UPPER(p_page_type) = 'SRP'   AND UPPER(COALESCE(p.ga4_page_type,'')) = 'SRP')        OR
+        (UPPER(p_page_type) = 'HOME'  AND LOWER(COALESCE(p.ga4_page_type,'')) = 'home page')  OR
+        (UPPER(p_page_type) = 'OTHER' AND UPPER(COALESCE(p.ga4_page_type,'')) NOT LIKE 'VDP%'
+                                      AND UPPER(COALESCE(p.ga4_page_type,'')) <> 'SRP'
+                                      AND LOWER(COALESCE(p.ga4_page_type,'')) <> 'home page')
+      )
+      AND (COALESCE(array_length(p_channels, 1), 0) = 0 OR p.channel = ANY(p_channels))
+  ),
+  combined AS (
+    SELECT p.channel, p.views
+    FROM pages p
+    CROSS JOIN inv_filter_active a
+    WHERE NOT a.active
+
+    UNION ALL
+
+    SELECT p.channel, p.views
+    FROM pages p
+    INNER JOIN smart_final_data s
+      ON s.client_id   = p.client_id
+     AND s.report_date = p.report_date
+     AND s.page_path   = p.page_path
+    CROSS JOIN inv_filter_active a
+    WHERE a.active
+      AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
+      AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
+      AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
+      AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
+      AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
+      AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
+      AND (
+        COALESCE(array_length(p_classes, 1), 0) = 0 OR
+        (
+          ('Class A'  = ANY(p_classes) AND s.inv_type ILIKE '%class a%') OR
+          ('Class B'  = ANY(p_classes) AND s.inv_type ILIKE '%class b%') OR
+          ('Class C'  = ANY(p_classes) AND s.inv_type ILIKE '%class c%') OR
+          ('Towable'  = ANY(p_classes) AND (s.inv_type ILIKE '%travel trailer%' OR s.inv_type ILIKE '%fifth wheel%'
+                                            OR s.inv_type ILIKE '%toy hauler%' OR s.inv_type ILIKE '%pop-up%'))
+        )
+      )
+  ),
   filtered AS (
     SELECT
-      CASE lower(trim(COALESCE(p.channel, '')))
+      CASE lower(trim(COALESCE(channel, '')))
         WHEN 'organic_search'  THEN 'Organic Search'
         WHEN 'paid_search'     THEN 'Paid Search'
         WHEN 'direct'          THEN 'Direct'
@@ -63,48 +112,10 @@ AS $$
         WHEN 'cross-network'   THEN 'Cross-network'
         WHEN 'unassigned'      THEN 'Unassigned'
         WHEN ''                THEN '(not set)'
-        ELSE initcap(replace(replace(lower(trim(p.channel)), '_', ' '), '-', ' '))
+        ELSE initcap(replace(replace(lower(trim(channel)), '_', ' '), '-', ' '))
       END AS channel_bucket,
-      p.views
-    FROM smart_ga4_page_data p
-    LEFT JOIN smart_final_data s
-      ON s.client_id   = p.client_id
-     AND s.report_date = p.report_date
-     AND s.page_path   = p.page_path
-    CROSS JOIN inv_filter_active a
-    WHERE p.client_id   = p_client_id
-      AND p.report_date BETWEEN p_from AND p_to
-      AND (
-        (UPPER(p_page_type) = 'ALL')                                                          OR
-        (UPPER(p_page_type) = 'VDP'   AND UPPER(COALESCE(p.ga4_page_type,'')) LIKE 'VDP%')    OR
-        (UPPER(p_page_type) = 'SRP'   AND UPPER(COALESCE(p.ga4_page_type,'')) = 'SRP')        OR
-        (UPPER(p_page_type) = 'HOME'  AND LOWER(COALESCE(p.ga4_page_type,'')) = 'home page')  OR
-        (UPPER(p_page_type) = 'OTHER' AND UPPER(COALESCE(p.ga4_page_type,'')) NOT LIKE 'VDP%'
-                                      AND UPPER(COALESCE(p.ga4_page_type,'')) <> 'SRP'
-                                      AND LOWER(COALESCE(p.ga4_page_type,'')) <> 'home page')
-      )
-      AND (COALESCE(array_length(p_channels, 1), 0) = 0 OR p.channel = ANY(p_channels))
-      AND (
-        NOT a.active OR (
-          s.id IS NOT NULL
-          AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
-          AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
-          AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
-          AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
-          AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
-          AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
-          AND (
-            COALESCE(array_length(p_classes, 1), 0) = 0 OR
-            (
-              ('Class A'  = ANY(p_classes) AND s.inv_type ILIKE '%class a%') OR
-              ('Class B'  = ANY(p_classes) AND s.inv_type ILIKE '%class b%') OR
-              ('Class C'  = ANY(p_classes) AND s.inv_type ILIKE '%class c%') OR
-              ('Towable'  = ANY(p_classes) AND (s.inv_type ILIKE '%travel trailer%' OR s.inv_type ILIKE '%fifth wheel%'
-                                                OR s.inv_type ILIKE '%toy hauler%' OR s.inv_type ILIKE '%pop-up%'))
-            )
-          )
-        )
-      )
+      views
+    FROM combined
   ),
   agg AS (
     SELECT channel_bucket, SUM(views)::bigint AS views

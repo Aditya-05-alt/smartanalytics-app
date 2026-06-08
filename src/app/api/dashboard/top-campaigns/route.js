@@ -2,12 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeTopCampaignRows } from '@/lib/ga4/topCampaignsMerge';
+import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
-export const maxDuration = 60;
-
-const CAMPAIGN_CHUNK_DAYS = 14;
-const CAMPAIGN_CHUNK_CONCURRENCY = 4;
+export const maxDuration = 120;
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -16,6 +14,14 @@ export async function GET(request) {
   const to = searchParams.get('to')?.slice(0, 10);
   const pageType = searchParams.get('pageType')?.trim() || 'ALL';
   const inv = parseInvRpcFromSearchParams(searchParams);
+  const invFilters = Boolean(
+    inv.p_years?.length ||
+      inv.p_makes?.length ||
+      inv.p_models?.length ||
+      inv.p_types?.length ||
+      inv.p_locations?.length ||
+      (inv.p_condition && inv.p_condition !== 'BOTH')
+  );
 
   if (!clientId || !from || !to) {
     return NextResponse.json({ error: 'Missing clientId, from, or to' }, { status: 400 });
@@ -34,6 +40,8 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, { invFilters });
+
   try {
     const raw = await rpcByDateChunks(supabase, 'get_top_campaigns', {
       clientId,
@@ -44,15 +52,15 @@ export async function GET(request) {
         p_limit: null,
         ...inv,
       },
-      chunkDays: CAMPAIGN_CHUNK_DAYS,
-      concurrency: CAMPAIGN_CHUNK_CONCURRENCY,
+      chunkDays,
+      concurrency,
     });
 
     const rows = mergeTopCampaignRows(raw);
 
     return NextResponse.json({
       rows,
-      meta: { source: 'chunked-rpc', chunkDays: CAMPAIGN_CHUNK_DAYS, pageType },
+      meta: { source: 'chunked-rpc', chunkDays, pageType },
     });
   } catch (err) {
     const message = err?.message || 'Failed to load top campaigns';

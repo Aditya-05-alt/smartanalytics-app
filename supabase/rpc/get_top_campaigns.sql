@@ -44,19 +44,30 @@ AS $$
       UPPER(COALESCE(p_condition, 'BOTH')) <> 'BOTH'
     ) AS active
   ),
-  page_base AS (
-    SELECT *
-    FROM smart_ga4_page_data
-    WHERE client_id = p_client_id
-      AND report_date BETWEEN p_from AND p_to
+  pages AS (
+    SELECT
+      p.session_campaign,
+      p.source,
+      p.medium,
+      p.channel,
+      p.views,
+      p.sessions,
+      p.total_users,
+      p.new_users,
+      p.client_id,
+      p.report_date,
+      p.page_path
+    FROM smart_ga4_page_data p
+    WHERE p.client_id = p_client_id
+      AND p.report_date BETWEEN p_from AND p_to
       AND (
         (UPPER(p_page_type) = 'ALL')
-        OR (UPPER(p_page_type) = 'VDP'   AND UPPER(COALESCE(ga4_page_type, '')) LIKE 'VDP%')
-        OR (UPPER(p_page_type) = 'SRP'   AND UPPER(COALESCE(ga4_page_type, '')) = 'SRP')
-        OR (UPPER(p_page_type) = 'HOME'  AND LOWER(COALESCE(ga4_page_type, '')) = 'home page')
-        OR (UPPER(p_page_type) = 'OTHER' AND UPPER(COALESCE(ga4_page_type, '')) NOT LIKE 'VDP%'
-                                       AND UPPER(COALESCE(ga4_page_type, '')) <> 'SRP'
-                                       AND LOWER(COALESCE(ga4_page_type, '')) <> 'home page')
+        OR (UPPER(p_page_type) = 'VDP'   AND UPPER(COALESCE(p.ga4_page_type, '')) LIKE 'VDP%')
+        OR (UPPER(p_page_type) = 'SRP'   AND UPPER(COALESCE(p.ga4_page_type, '')) = 'SRP')
+        OR (UPPER(p_page_type) = 'HOME'  AND LOWER(COALESCE(p.ga4_page_type, '')) = 'home page')
+        OR (UPPER(p_page_type) = 'OTHER' AND UPPER(COALESCE(p.ga4_page_type, '')) NOT LIKE 'VDP%'
+                                       AND UPPER(COALESCE(p.ga4_page_type, '')) <> 'SRP'
+                                       AND LOWER(COALESCE(p.ga4_page_type, '')) <> 'home page')
       )
   ),
   filtered AS (
@@ -69,22 +80,34 @@ AS $$
       p.sessions,
       p.total_users,
       p.new_users
-    FROM page_base p
+    FROM pages p
     CROSS JOIN inv_filter_active a
     WHERE NOT a.active
-       OR EXISTS (
-         SELECT 1
-         FROM smart_final_data s
-         WHERE s.client_id = p.client_id
-           AND s.report_date = p.report_date
-           AND s.page_path = p.page_path
-           AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
-           AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
-           AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
-           AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
-           AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
-           AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
-       )
+
+    UNION ALL
+
+    SELECT
+      COALESCE(NULLIF(TRIM(p.session_campaign), ''), '(not set)') AS campaign,
+      COALESCE(NULLIF(TRIM(p.source), ''), '(direct)') AS source,
+      COALESCE(NULLIF(TRIM(p.medium), ''), '(none)') AS medium,
+      COALESCE(NULLIF(TRIM(p.channel), ''), '(other)') AS channel,
+      p.views,
+      p.sessions,
+      p.total_users,
+      p.new_users
+    FROM pages p
+    INNER JOIN smart_final_data s
+      ON s.client_id   = p.client_id
+     AND s.report_date = p.report_date
+     AND s.page_path   = p.page_path
+    CROSS JOIN inv_filter_active a
+    WHERE a.active
+      AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
+      AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
+      AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
+      AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
+      AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
+      AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
   ),
   agg AS (
     SELECT

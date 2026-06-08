@@ -280,7 +280,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
       logLine('Running apply_vdp_filtration…'),
     ]);
     try {
-      const res = await runPipelineFiltration({ clientId });
+      const res = await runPipelineFiltration({ clientId, from, to });
       setStep2Result(res);
       if ((res.totalRowsUpdated ?? 0) > 0) setFiltrationDone(true);
       setStepLog(2, formatStep2Log(clientId, res));
