@@ -2,13 +2,20 @@
 -- Run in Supabase SQL editor.
 
 DROP FUNCTION IF EXISTS public.get_top_campaigns(text, date, date, text, integer);
+DROP FUNCTION IF EXISTS public.get_top_campaigns(text, date, date, text, integer, integer[]);
 
 CREATE OR REPLACE FUNCTION public.get_top_campaigns(
   p_client_id text,
   p_from      date,
   p_to        date,
   p_page_type text DEFAULT 'ALL',
-  p_limit     integer DEFAULT NULL
+  p_limit     integer DEFAULT NULL,
+  p_types     text[] DEFAULT NULL,
+  p_makes     text[] DEFAULT NULL,
+  p_models    text[] DEFAULT NULL,
+  p_locations text[] DEFAULT NULL,
+  p_years     integer[] DEFAULT NULL,
+  p_condition text DEFAULT 'BOTH'
 )
 RETURNS TABLE (
   campaign    text,
@@ -27,16 +34,18 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  WITH filtered AS (
-    SELECT
-      COALESCE(NULLIF(TRIM(session_campaign), ''), '(not set)') AS campaign,
-      COALESCE(NULLIF(TRIM(source), ''), '(direct)') AS source,
-      COALESCE(NULLIF(TRIM(medium), ''), '(none)') AS medium,
-      COALESCE(NULLIF(TRIM(channel), ''), '(other)') AS channel,
-      views,
-      sessions,
-      total_users,
-      new_users
+  WITH inv_filter_active AS (
+    SELECT (
+      COALESCE(array_length(p_types, 1), 0)     > 0 OR
+      COALESCE(array_length(p_makes, 1), 0)     > 0 OR
+      COALESCE(array_length(p_models, 1), 0)    > 0 OR
+      COALESCE(array_length(p_locations, 1), 0) > 0 OR
+      COALESCE(array_length(p_years, 1), 0)     > 0 OR
+      UPPER(COALESCE(p_condition, 'BOTH')) <> 'BOTH'
+    ) AS active
+  ),
+  page_base AS (
+    SELECT *
     FROM smart_ga4_page_data
     WHERE client_id = p_client_id
       AND report_date BETWEEN p_from AND p_to
@@ -49,6 +58,33 @@ AS $$
                                        AND UPPER(COALESCE(ga4_page_type, '')) <> 'SRP'
                                        AND LOWER(COALESCE(ga4_page_type, '')) <> 'home page')
       )
+  ),
+  filtered AS (
+    SELECT
+      COALESCE(NULLIF(TRIM(p.session_campaign), ''), '(not set)') AS campaign,
+      COALESCE(NULLIF(TRIM(p.source), ''), '(direct)') AS source,
+      COALESCE(NULLIF(TRIM(p.medium), ''), '(none)') AS medium,
+      COALESCE(NULLIF(TRIM(p.channel), ''), '(other)') AS channel,
+      p.views,
+      p.sessions,
+      p.total_users,
+      p.new_users
+    FROM page_base p
+    CROSS JOIN inv_filter_active a
+    WHERE NOT a.active
+       OR EXISTS (
+         SELECT 1
+         FROM smart_final_data s
+         WHERE s.client_id = p.client_id
+           AND s.report_date = p.report_date
+           AND s.page_path = p.page_path
+           AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
+           AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
+           AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
+           AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
+           AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
+           AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
+       )
   ),
   agg AS (
     SELECT
@@ -93,5 +129,6 @@ AS $$
   ORDER BY t.rn;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_top_campaigns(text, date, date, text, integer)
-  TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_top_campaigns(
+  text, date, date, text, integer, text[], text[], text[], text[], integer[], text
+) TO authenticated, service_role;

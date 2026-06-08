@@ -4,6 +4,10 @@
 -- DROP legacy overloads if PostgREST reports ambiguity:
 -- DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(text, date, date, text);
 
+DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
+  text, date, date, text, text[], text[], text, text[], integer[], text[], text[]
+);
+
 CREATE OR REPLACE FUNCTION public.get_ga4_channel_breakdown(
   p_client_id   text,
   p_from        date,
@@ -13,6 +17,7 @@ CREATE OR REPLACE FUNCTION public.get_ga4_channel_breakdown(
   p_classes     text[] DEFAULT NULL,
   p_condition   text DEFAULT 'BOTH',
   p_makes       text[] DEFAULT NULL,
+  p_models      text[] DEFAULT NULL,
   p_years       integer[] DEFAULT NULL,
   p_locations   text[] DEFAULT NULL,
   p_channels    text[] DEFAULT NULL
@@ -33,6 +38,7 @@ AS $$
       COALESCE(array_length(p_classes, 1), 0)   > 0 OR
       UPPER(COALESCE(p_condition, 'BOTH')) <> 'BOTH' OR
       COALESCE(array_length(p_makes, 1), 0)     > 0 OR
+      COALESCE(array_length(p_models, 1), 0)    > 0 OR
       COALESCE(array_length(p_years, 1), 0)     > 0 OR
       COALESCE(array_length(p_locations, 1), 0) > 0
     ) AS active
@@ -83,6 +89,7 @@ AS $$
           s.id IS NOT NULL
           AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
           AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
+          AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
           AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
           AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
           AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
@@ -118,5 +125,5 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text, text[], integer[], text[], text[]
+  text, date, date, text, text[], text[], text, text[], text[], integer[], text[], text[]
 ) TO authenticated, service_role;

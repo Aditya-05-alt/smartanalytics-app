@@ -1,19 +1,12 @@
-import { Syne, DM_Sans } from 'next/font/google';
+import { Roboto } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider, NO_FLASH_SCRIPT } from '@/components/ui/ThemeProvider';
 
-const syne = Syne({
+const roboto = Roboto({
   subsets: ['latin'],
-  weight: ['400', '600', '700', '800'],
+  weight: ['300', '400', '500', '700', '900'],
   display: 'swap',
-  variable: '--font-syne',
-});
-
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '700'],
-  display: 'swap',
-  variable: '--font-dm-sans',
+  variable: '--font-roboto',
 });
 
 export const metadata = {
@@ -36,7 +29,7 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       data-theme="light"
-      className={`${syne.variable} ${dmSans.variable}`}
+      className={roboto.variable}
       suppressHydrationWarning
     >
       <head>

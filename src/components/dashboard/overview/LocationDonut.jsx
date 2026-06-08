@@ -54,6 +54,7 @@ export default function LocationDonut({
 }) {
   const {
     tab,
+    vdpFilters,
     clientKey,
     from: ctxFrom,
     to: ctxTo,
@@ -96,6 +97,8 @@ export default function LocationDonut({
       clientId,
       from,
       to,
+      vdpFilters,
+      tab,
       onCancelCheck: () => cancelled,
     })
       .then((data) => {
@@ -116,7 +119,7 @@ export default function LocationDonut({
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, pageType, enabled]);
+  }, [clientId, from, to, pageType, enabled, vdpFilters, tab]);
 
   const data = useMemo(() => rpcRowsToDisplay(rows), [rows]);
 

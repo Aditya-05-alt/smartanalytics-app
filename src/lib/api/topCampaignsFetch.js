@@ -5,11 +5,24 @@ import {
   getTopCampaignsCache,
   setTopCampaignsCache,
 } from '@/lib/data/topCampaignsCache';
+import {
+  vdpRpcExtraParams,
+  vdpFilterCacheSuffix,
+  appendVdpFiltersToSearchParams,
+} from '@/lib/vdp/vdpFilterParams';
 
 const CLIENT_CHUNK_DAYS = 14;
 const CLIENT_CHUNK_CONCURRENCY = 3;
 
-async function fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck }) {
+async function fetchViaApi({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  vdpFilters,
+  tab,
+  onCancelCheck,
+}) {
   if (typeof window === 'undefined') return null;
   if (onCancelCheck?.()) return null;
 
@@ -19,6 +32,8 @@ async function fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck }
     to,
     pageType: pageTypeFilter,
   });
+  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
+
   const res = await fetch(`/api/dashboard/top-campaigns?${qs}`, {
     credentials: 'same-origin',
   });
@@ -33,7 +48,15 @@ async function fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck }
   return json.rows || [];
 }
 
-async function fetchViaClient({ clientId, from, to, pageTypeFilter, onCancelCheck }) {
+async function fetchViaClient({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  vdpFilters,
+  tab,
+  onCancelCheck,
+}) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
@@ -41,7 +64,11 @@ async function fetchViaClient({ clientId, from, to, pageTypeFilter, onCancelChec
     clientId,
     from,
     to,
-    extraParams: { p_page_type: pageTypeFilter, p_limit: null },
+    extraParams: {
+      p_page_type: pageTypeFilter,
+      p_limit: null,
+      ...vdpRpcExtraParams(vdpFilters, tab),
+    },
     chunkDays: CLIENT_CHUNK_DAYS,
     concurrency: CLIENT_CHUNK_CONCURRENCY,
     onCancelCheck,
@@ -51,48 +78,62 @@ async function fetchViaClient({ clientId, from, to, pageTypeFilter, onCancelChec
   return mergeTopCampaignRows(raw);
 }
 
-/** All campaigns for range — server API + cache (no per-chunk limit). */
 export async function fetchTopCampaignsBundle({
   clientId,
   from,
   to,
   pageTypeFilter = 'ALL',
+  vdpFilters,
+  tab = 'all',
   onCancelCheck,
   skipCache = false,
 }) {
   if (!clientId || !from || !to) return [];
 
-  if (!skipCache) {
-    const cached = getTopCampaignsCache(clientId, from, to, pageTypeFilter);
-    if (cached) return cached;
-  }
+  const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
 
-  let rows;
-  try {
-    rows = await fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck });
-    if (rows == null) {
-      rows = await fetchViaClient({
-        clientId,
-        from,
-        to,
-        pageTypeFilter,
-        onCancelCheck,
-      });
-    }
-  } catch (err) {
-    if (onCancelCheck?.()) return null;
-    rows = await fetchViaClient({
+  if (!skipCache) {
+    const cached = getTopCampaignsCache(
       clientId,
       from,
       to,
       pageTypeFilter,
-      onCancelCheck,
-    });
+      cacheSuffix
+    );
+    if (cached) return cached;
+  }
+
+  const fetchOpts = {
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    onCancelCheck,
+  };
+
+  let rows;
+  try {
+    rows = await fetchViaApi(fetchOpts);
+    if (rows == null) {
+      rows = await fetchViaClient(fetchOpts);
+    }
+  } catch (err) {
+    if (onCancelCheck?.()) return null;
+    rows = await fetchViaClient(fetchOpts);
     if (rows == null) throw err;
   }
 
   if (onCancelCheck?.()) return null;
   const result = rows || [];
-  setTopCampaignsCache(clientId, from, to, pageTypeFilter, result);
+  setTopCampaignsCache(
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    result,
+    cacheSuffix
+  );
   return result;
 }

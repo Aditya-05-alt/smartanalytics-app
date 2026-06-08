@@ -97,7 +97,7 @@ html {
 
 * { -webkit-tap-highlight-color: transparent; }
 
-html { font-size: 14px; }
+html { font-size: 14px; font-family: var(--font-roboto), "Roboto", system-ui, -apple-system, sans-serif; }
 
 html, body {
   background: var(--bg);
@@ -107,7 +107,7 @@ html, body {
 }
 
 body {
-  font-family: var(--font-dm-sans), "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family: inherit;
   /* Promote body to its own GPU layer to keep transforms cheap */
   transform: translateZ(0);
 }
@@ -630,7 +630,7 @@ body {
 }
 .ga4-count-title {
   margin: 0;
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 1.35rem;
   font-weight: 700;
   color: var(--t);
@@ -980,7 +980,7 @@ body {
 }
 .pipeline-card-title {
   margin: 0;
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--t);
@@ -2323,7 +2323,7 @@ body {
   flex-shrink: 0;
 }
 .ph-t {
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 700;
   color: var(--t);
@@ -2602,7 +2602,7 @@ body {
   margin-bottom: .5rem;
 }
 .kpi-v {
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 24px;
   font-weight: 700;
   color: var(--t);
@@ -2798,7 +2798,7 @@ body {
   text-overflow: ellipsis;
 }
 .donut-lg-value {
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 700;
   color: var(--t);
@@ -2826,7 +2826,7 @@ body {
   font-weight: 700;
 }
 .donut-lg-total > :last-child {
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 15px;
   letter-spacing: 0;
   text-transform: none;
@@ -3125,7 +3125,7 @@ body {
   min-width: 80px;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 14px;
 }
 .make-breakdown-bars {
@@ -3207,7 +3207,7 @@ body {
   pointer-events: none;
 }
 .make-breakdown-center-value {
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 22px;
   font-weight: 700;
   color: var(--t);
@@ -3292,7 +3292,7 @@ body {
   justify-content: center;
 }
 .dc-v {
-  font-family: var(--font-syne), "Syne", sans-serif;
+  font-family: inherit;
   font-size: 17px;
   font-weight: 700;
   color: var(--t);
@@ -3363,12 +3363,12 @@ body {
   align-items: flex-start;
   gap: 8px;
 }
-.lc-zip { font-family: var(--font-syne), "Syne", sans-serif; font-size: 15px; font-weight: 700; color: var(--t); line-height: 1; }
+.lc-zip { font-family: inherit; font-size: 15px; font-weight: 700; color: var(--t); line-height: 1; }
 .lc-city { font-size: 10px; color: var(--t3); margin-top: 1px; margin-bottom: 5px; }
 .lc-tags { display: flex; flex-wrap: wrap; gap: 3px; }
 .lc-tag { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; }
 .lc-cnt { text-align: right; flex-shrink: 0; }
-.lcc-v { font-family: var(--font-syne), "Syne", sans-serif; font-size: 17px; font-weight: 700; color: var(--acc); line-height: 1; }
+.lcc-v { font-family: inherit; font-size: 17px; font-weight: 700; color: var(--acc); line-height: 1; }
 .lcc-l { font-size: 9px; color: var(--t3); text-transform: uppercase; }
 
 /* ── STATUS BAR ── */
@@ -3463,7 +3463,7 @@ body {
 .hs-ok::after { background: var(--yellow); }
 .hs-up { background: rgba(78,224,156,.07); border: 1px solid var(--gb); }
 .hs-up::after { background: var(--green); }
-.hs-v { font-family: var(--font-syne), "Syne", sans-serif; font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.hs-v { font-family: inherit; font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
 .hs-l { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
 .hs-s { font-size: 10px; margin-top: 3px; }
 
@@ -3508,7 +3508,7 @@ body {
 .dcc-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: .5rem; }
 .dcc-name { font-size: 12px; font-weight: 600; color: var(--t); flex: 1; line-height: 1.3; }
 .dcc-cat { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; }
-.dcc-delta { font-family: var(--font-syne), "Syne", sans-serif; font-size: 18px; font-weight: 800; line-height: 1; margin-bottom: 2px; }
+.dcc-delta { font-family: inherit; font-size: 18px; font-weight: 800; line-height: 1; margin-bottom: 2px; }
 .dcc-delta-dn { color: var(--red); }
 .dcc-delta-ok { color: var(--yellow); }
 .dcc-delta-up { color: var(--green); }

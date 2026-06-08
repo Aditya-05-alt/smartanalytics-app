@@ -5,11 +5,24 @@ import {
   getChannelBreakdownCache,
   setChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
+import {
+  vdpRpcExtraParams,
+  vdpFilterCacheSuffix,
+  appendVdpFiltersToSearchParams,
+} from '@/lib/vdp/vdpFilterParams';
 
 const CLIENT_CHUNK_DAYS = 14;
 const CLIENT_CHUNK_CONCURRENCY = 3;
 
-async function fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck }) {
+async function fetchViaApi({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  vdpFilters,
+  tab,
+  onCancelCheck,
+}) {
   if (typeof window === 'undefined') return null;
   if (onCancelCheck?.()) return null;
 
@@ -19,6 +32,8 @@ async function fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck }
     to,
     pageType: pageTypeFilter,
   });
+  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
+
   const res = await fetch(`/api/dashboard/channel-breakdown?${qs}`, {
     credentials: 'same-origin',
   });
@@ -33,7 +48,15 @@ async function fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck }
   return json.rows || [];
 }
 
-async function fetchViaClient({ clientId, from, to, pageTypeFilter, onCancelCheck }) {
+async function fetchViaClient({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  vdpFilters,
+  tab,
+  onCancelCheck,
+}) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
@@ -41,7 +64,10 @@ async function fetchViaClient({ clientId, from, to, pageTypeFilter, onCancelChec
     clientId,
     from,
     to,
-    extraParams: { p_page_type: pageTypeFilter },
+    extraParams: {
+      p_page_type: pageTypeFilter,
+      ...vdpRpcExtraParams(vdpFilters, tab),
+    },
     chunkDays: CLIENT_CHUNK_DAYS,
     concurrency: CLIENT_CHUNK_CONCURRENCY,
     onCancelCheck,
@@ -51,45 +77,50 @@ async function fetchViaClient({ clientId, from, to, pageTypeFilter, onCancelChec
   return mergeChannelBreakdownRows(raw);
 }
 
-/**
- * Channel breakdown — server API (service role) with client fallback + session cache.
- */
 export async function fetchChannelBreakdownBundle({
   clientId,
   from,
   to,
   pageTypeFilter = 'ALL',
+  vdpFilters,
+  tab = 'all',
   onCancelCheck,
   skipCache = false,
 }) {
   if (!clientId || !from || !to) return [];
 
-  if (!skipCache) {
-    const cached = getChannelBreakdownCache(clientId, from, to, pageTypeFilter);
-    if (cached) return cached;
-  }
+  const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
 
-  let rows;
-  try {
-    rows = await fetchViaApi({ clientId, from, to, pageTypeFilter, onCancelCheck });
-    if (rows == null) {
-      rows = await fetchViaClient({
-        clientId,
-        from,
-        to,
-        pageTypeFilter,
-        onCancelCheck,
-      });
-    }
-  } catch (err) {
-    if (onCancelCheck?.()) return null;
-    const fallback = await fetchViaClient({
+  if (!skipCache) {
+    const cached = getChannelBreakdownCache(
       clientId,
       from,
       to,
       pageTypeFilter,
-      onCancelCheck,
-    });
+      cacheSuffix
+    );
+    if (cached) return cached;
+  }
+
+  const fetchOpts = {
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    onCancelCheck,
+  };
+
+  let rows;
+  try {
+    rows = await fetchViaApi(fetchOpts);
+    if (rows == null) {
+      rows = await fetchViaClient(fetchOpts);
+    }
+  } catch (err) {
+    if (onCancelCheck?.()) return null;
+    const fallback = await fetchViaClient(fetchOpts);
     if (fallback != null) {
       rows = fallback;
     } else {
@@ -99,6 +130,13 @@ export async function fetchChannelBreakdownBundle({
 
   if (onCancelCheck?.()) return null;
   const result = rows || [];
-  setChannelBreakdownCache(clientId, from, to, pageTypeFilter, result);
+  setChannelBreakdownCache(
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    result,
+    cacheSuffix
+  );
   return result;
 }

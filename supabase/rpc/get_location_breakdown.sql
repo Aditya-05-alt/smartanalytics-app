@@ -2,7 +2,7 @@
 -- Fixes empty [] from the browser: anon cannot read smart_final_data via RLS unless
 -- this function is SECURITY DEFINER (same pattern as get_ga4_overview).
 --
--- Drop legacy 3-arg overload if PostgREST reports ambiguity:
+-- Drop legacy overloads if PostgREST reports ambiguity:
 -- DROP FUNCTION IF EXISTS public.get_location_breakdown(text, date, date);
 
 DROP FUNCTION IF EXISTS public.get_location_breakdown(
@@ -17,6 +17,7 @@ CREATE OR REPLACE FUNCTION public.get_location_breakdown(
   p_classes text[] DEFAULT NULL,
   p_condition text DEFAULT NULL,
   p_makes text[] DEFAULT NULL,
+  p_models text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
   p_locations text[] DEFAULT NULL,
   p_channels text[] DEFAULT NULL
@@ -40,6 +41,18 @@ AS $$
     WHERE client_id::text = trim(p_client_id)
       AND report_date >= p_from
       AND report_date <= p_to
+      AND (COALESCE(array_length(p_types, 1), 0) = 0 OR inv_type = ANY(p_types))
+      AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR inv_make = ANY(p_makes))
+      AND (COALESCE(array_length(p_models, 1), 0) = 0 OR inv_model = ANY(p_models))
+      AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR inv_location = ANY(p_locations))
+      AND (
+        COALESCE(array_length(p_years, 1), 0) = 0
+        OR (inv_year ~ '^\d{4}$' AND inv_year::int = ANY(p_years))
+      )
+      AND (
+        UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH'
+        OR UPPER(inv_condition) = UPPER(p_condition)
+      )
   ),
   agg AS (
     SELECT loc, SUM(v) AS views
@@ -81,9 +94,9 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION public.get_location_breakdown(
-  text, date, date, text[], text[], text, text[], integer[], text[], text[]
+  text, date, date, text[], text[], text, text[], text[], integer[], text[], text[]
 ) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_location_breakdown(
-  text, date, date, text[], text[], text, text[], integer[], text[], text[]
+  text, date, date, text[], text[], text, text[], text[], integer[], text[], text[]
 ) TO anon, authenticated;

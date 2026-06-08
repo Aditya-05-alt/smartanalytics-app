@@ -47,7 +47,7 @@ export default function ModelBreakdown({
   to: toProp,
   limit = null,
 }) {
-  const { tab, clientKey, from: ctxFrom, to: ctxTo } = useOverview();
+  const { tab, vdpFilters, clientKey, from: ctxFrom, to: ctxTo } = useOverview();
   const clientId = clientIdProp ?? clientKey;
   const from = fromProp ?? ctxFrom;
   const to = toProp ?? ctxTo;
@@ -83,6 +83,8 @@ export default function ModelBreakdown({
       from,
       to,
       limit: topN,
+      vdpFilters,
+      tab,
       onCancelCheck: () => cancelled,
     })
       .then((data) => {
@@ -102,7 +104,7 @@ export default function ModelBreakdown({
     return () => {
       cancelled = true;
     };
-  }, [enabled, clientId, from, to, topN, tab]);
+  }, [enabled, clientId, from, to, topN, tab, vdpFilters]);
 
   const total = useMemo(
     () => rows.reduce((sum, row) => sum + row.views, 0),

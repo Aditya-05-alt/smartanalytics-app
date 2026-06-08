@@ -8,6 +8,7 @@ import {
   getTopCampaignsCache,
   hasTopCampaignsCache,
 } from '@/lib/data/topCampaignsCache';
+import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
 import { useOverview } from './overview/OverviewDataContext';
 
 const TAB_TO_CAMPAIGN_FILTER = {
@@ -59,16 +60,25 @@ export default function TopCampaigns({
   from: fromProp,
   to: toProp,
 }) {
-  const { tab, clientKey, from: ctxFrom, to: ctxTo } = useOverview();
+  const { tab, vdpFilters, clientKey, from: ctxFrom, to: ctxTo } = useOverview();
   const clientId = clientIdProp ?? clientKey;
   const from = fromProp ?? ctxFrom;
   const to = toProp ?? ctxTo;
 
   const pageTypeFilter = TAB_TO_CAMPAIGN_FILTER[tab] || 'ALL';
+  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
   const [chartTopN, setChartTopN] = useState(null);
   const [rows, setRows] = useState(() =>
     clientId && from && to
-      ? normalizeRows(getTopCampaignsCache(clientId, from, to, pageTypeFilter) || [])
+      ? normalizeRows(
+          getTopCampaignsCache(
+            clientId,
+            from,
+            to,
+            pageTypeFilter,
+            filterCacheSuffix
+          ) || []
+        )
       : []
   );
   const [loading, setLoading] = useState(
@@ -77,7 +87,13 @@ export default function TopCampaigns({
         clientId &&
           from &&
           to &&
-          !hasTopCampaignsCache(clientId, from, to, pageTypeFilter)
+          !hasTopCampaignsCache(
+            clientId,
+            from,
+            to,
+            pageTypeFilter,
+            filterCacheSuffix
+          )
       )
   );
   const [error, setError] = useState(null);
@@ -114,6 +130,8 @@ export default function TopCampaigns({
             from,
             to,
             pageTypeFilter: filter,
+            vdpFilters,
+            tab,
             onCancelCheck: () => cancelled,
           });
         } catch {
@@ -129,7 +147,7 @@ export default function TopCampaigns({
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to]);
+  }, [clientId, from, to, vdpFilters, tab]);
 
   useEffect(() => {
     if (!clientId || !from || !to) {
@@ -138,7 +156,13 @@ export default function TopCampaigns({
       return undefined;
     }
 
-    const cached = getTopCampaignsCache(clientId, from, to, pageTypeFilter);
+    const cached = getTopCampaignsCache(
+      clientId,
+      from,
+      to,
+      pageTypeFilter,
+      filterCacheSuffix
+    );
     if (cached) {
       setRows(normalizeRows(cached));
       setLoading(false);
@@ -155,6 +179,8 @@ export default function TopCampaigns({
       from,
       to,
       pageTypeFilter,
+      vdpFilters,
+      tab,
       onCancelCheck: () => cancelled,
     })
       .then((data) => {
@@ -173,7 +199,7 @@ export default function TopCampaigns({
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, pageTypeFilter, tab]);
+  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
 
   const allRows = rows;
   const displayRows = useMemo(() => {

@@ -1,64 +1,40 @@
 'use client';
 
-import { useState } from 'react';
 import FilterDropdown from '../FilterDropdown';
 import CalendarRangePicker from '../CalendarRangePicker';
 import { useClient } from '../ClientContext';
 import { useOverview } from './OverviewDataContext';
 
+const CONDITION_OPTIONS = ['All', 'Used + New', 'Used', 'New'];
+
+function toOpts(values, allLabel) {
+  return (values || ['All']).map((v) => ({
+    value: v,
+    label: v === 'All' ? allLabel : v,
+  }));
+}
+
 export default function OverviewFilters() {
   const { config } = useClient();
-  const { dateRange, setDateRange, tab } = useOverview();
+  const {
+    dateRange,
+    setDateRange,
+    tab,
+    vdpFilters,
+    setVdpFilter,
+    vdpFilterOptions,
+  } = useOverview();
+
   const showVdpFilters = tab === 'vdp';
-  const filtersDisabled = true;
 
-  const [typeV, setTypeV]   = useState('All');
-  const [classV, setClassV] = useState('All');
-  const [condV, setCondV]   = useState('Used + New');
-  const [makeV, setMakeV]   = useState('All');
-  const [locV, setLocV]     = useState('All');
-  const [chanV, setChanV]   = useState('All');
-  const [radV, setRadV]     = useState('All');
+  const typeValues = vdpFilterOptions.types?.length > 1
+    ? vdpFilterOptions.types
+    : ['All', ...(config.types || [])];
 
-  const typeOpts = [
-    { value: 'All', label: 'All Types' },
-    ...config.types.map((t) => ({ value: t, label: t })),
-  ];
-  const classOpts = [
-    { value: 'All',     label: 'All Classes' },
-    { value: 'Class A', label: 'Class A' },
-    { value: 'Class B', label: 'Class B' },
-    { value: 'Class C', label: 'Class C' },
-  ];
-  const condOpts = [
-    { value: 'Used + New', label: 'Used + New' },
-    { value: 'Used',       label: 'Used Only'  },
-    { value: 'New',        label: 'New Only'   },
-  ];
-  const makeOpts = [
-    { value: 'All', label: 'All Makes' },
-    ...config.makes.map((m) => ({ value: m, label: m })),
-  ];
-  const locOpts = [
-    { value: 'All',         label: 'All Locations' },
-    { value: 'Dallas',      label: 'Dallas — Main' },
-    { value: 'Fort Worth',  label: 'Fort Worth' },
-    { value: 'Plano',       label: 'Plano' },
-  ];
-  const chanOpts = [
-    { value: 'All',          label: 'All Channels'    },
-    { value: 'Organic',      label: 'Organic Search'  },
-    { value: 'Paid Search',  label: 'Paid Search'     },
-    { value: 'Direct',       label: 'Direct'          },
-    { value: 'Paid Social',  label: 'Paid Social'     },
-  ];
-  const radOpts = [
-    { value: 'All',         label: 'All Distances' },
-    { value: '15',          label: 'Within 15 mi'  },
-    { value: '15-40',       label: '15–40 mi'      },
-    { value: '40-100',      label: '40–100 mi'     },
-    { value: 'out',         label: 'Out of area'   },
-  ];
+  const conditionOpts = CONDITION_OPTIONS.map((v) => ({
+    value: v,
+    label: v === 'All' ? 'All Conditions' : v,
+  }));
 
   return (
     <div className="filters">
@@ -66,56 +42,36 @@ export default function OverviewFilters() {
         <>
           <span className="f-label">Filter</span>
           <FilterDropdown
-            options={typeOpts}
-            value={typeV}
-            onChange={setTypeV}
-            disabled={filtersDisabled}
+            options={conditionOpts}
+            value={vdpFilters.condition}
+            onChange={(v) => setVdpFilter('condition', v)}
           />
-          {config.showClass && (
+          <FilterDropdown
+            options={toOpts(vdpFilterOptions.years, 'All Years')}
+            value={vdpFilters.year}
+            onChange={(v) => setVdpFilter('year', v)}
+          />
+          <FilterDropdown
+            options={toOpts(vdpFilterOptions.makes, 'All Makes')}
+            value={vdpFilters.make}
+            onChange={(v) => setVdpFilter('make', v)}
+          />
+          <FilterDropdown
+            options={toOpts(vdpFilterOptions.models, 'All Models')}
+            value={vdpFilters.model}
+            onChange={(v) => setVdpFilter('model', v)}
+          />
+          <FilterDropdown
+            options={toOpts(typeValues, `All ${config.typeH || 'Types'}`)}
+            value={vdpFilters.type}
+            onChange={(v) => setVdpFilter('type', v)}
+          />
+          {config.showLoc !== false && (
             <FilterDropdown
-              options={classOpts}
-              value={classV}
-              onChange={setClassV}
-              disabled={filtersDisabled}
+              options={toOpts(vdpFilterOptions.locations, 'All Locations')}
+              value={vdpFilters.location}
+              onChange={(v) => setVdpFilter('location', v)}
             />
-          )}
-          <FilterDropdown
-            options={condOpts}
-            value={condV}
-            onChange={setCondV}
-            defaultAll="Used + New"
-            disabled={filtersDisabled}
-          />
-          <FilterDropdown
-            options={makeOpts}
-            value={makeV}
-            onChange={setMakeV}
-            disabled={filtersDisabled}
-          />
-          {config.showLoc && (
-            <FilterDropdown
-              options={locOpts}
-              value={locV}
-              onChange={setLocV}
-              disabled={filtersDisabled}
-            />
-          )}
-          <FilterDropdown
-            options={chanOpts}
-            value={chanV}
-            onChange={setChanV}
-            disabled={filtersDisabled}
-          />
-          <FilterDropdown
-            options={radOpts}
-            value={radV}
-            onChange={setRadV}
-            disabled={filtersDisabled}
-          />
-          {filtersDisabled && (
-            <span className="f-wip-msg" role="status">
-              Disabled — under progress
-            </span>
           )}
         </>
       )}

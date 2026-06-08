@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
 /**
  * Server-side location breakdown (uses service role when configured).
@@ -29,10 +30,13 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const inv = parseInvRpcFromSearchParams(searchParams);
+
   const params = {
     p_client_id: String(clientId).trim(),
     p_from: String(from).slice(0, 10),
     p_to: String(to).slice(0, 10),
+    ...inv,
   };
 
   const { data, error } = await supabase.rpc('get_location_breakdown', params);

@@ -6,13 +6,19 @@ const MAX_ENTRIES = 24;
 const STALE_MS = 5 * 60 * 1000;
 const store = new Map();
 
-export function channelCacheKey(clientId, from, to, pageTypeFilter) {
-  return `${clientId}|${from}|${to}|${pageTypeFilter}|v2`;
+export function channelCacheKey(clientId, from, to, pageTypeFilter, suffix = '') {
+  return `${clientId}|${from}|${to}|${pageTypeFilter}|v2${suffix}`;
 }
 
-export function getChannelBreakdownCache(clientId, from, to, pageTypeFilter) {
+export function getChannelBreakdownCache(
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  suffix = ''
+) {
   if (!clientId || !from || !to || !pageTypeFilter) return null;
-  const k = channelCacheKey(clientId, from, to, pageTypeFilter);
+  const k = channelCacheKey(clientId, from, to, pageTypeFilter, suffix);
   const entry = store.get(k);
   if (!entry) return null;
   if (Date.now() - entry.at > STALE_MS) {
@@ -22,9 +28,16 @@ export function getChannelBreakdownCache(clientId, from, to, pageTypeFilter) {
   return entry.rows;
 }
 
-export function setChannelBreakdownCache(clientId, from, to, pageTypeFilter, rows) {
+export function setChannelBreakdownCache(
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  rows,
+  suffix = ''
+) {
   if (!clientId || !from || !to || !pageTypeFilter) return;
-  const k = channelCacheKey(clientId, from, to, pageTypeFilter);
+  const k = channelCacheKey(clientId, from, to, pageTypeFilter, suffix);
   if (store.has(k)) store.delete(k);
   store.set(k, { rows: rows || [], at: Date.now() });
   while (store.size > MAX_ENTRIES) {
@@ -33,6 +46,12 @@ export function setChannelBreakdownCache(clientId, from, to, pageTypeFilter, row
   }
 }
 
-export function hasChannelBreakdownCache(clientId, from, to, pageTypeFilter) {
-  return getChannelBreakdownCache(clientId, from, to, pageTypeFilter) != null;
+export function hasChannelBreakdownCache(
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  suffix = ''
+) {
+  return getChannelBreakdownCache(clientId, from, to, pageTypeFilter, suffix) != null;
 }

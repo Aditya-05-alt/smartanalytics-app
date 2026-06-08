@@ -3,6 +3,12 @@ import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
 import { aggregateLocationBuckets } from '@/lib/api/locationBreakdownAggregate';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
+import {
+  vdpFiltersActive,
+  vdpRpcExtraParams,
+  appendInvParamsToSearchParams,
+} from '@/lib/vdp/vdpFilterParams';
+import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
 
 const FINAL_DATA_TABLE = 'smart_final_data';
 const LOCATION_PAGE_SIZE = 5000;
@@ -42,6 +48,8 @@ export async function fetchChannelBreakdown({
   from,
   to,
   pageTypeFilter = 'VDP',
+  vdpFilters,
+  tab = 'all',
   onCancelCheck,
 }) {
   return fetchChannelBreakdownBundle({
@@ -49,8 +57,79 @@ export async function fetchChannelBreakdown({
     from,
     to,
     pageTypeFilter,
+    vdpFilters,
+    tab,
     onCancelCheck,
   });
+}
+
+/** Distinct VDP filter dropdown values for dealer + date range. */
+export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck }) {
+  const supabase = createClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  if (onCancelCheck?.()) return null;
+
+  const { data, error } = await supabase.rpc('get_vdp_filter_options', {
+    p_client_id: String(clientId).trim(),
+    p_from: toDateOnly(from),
+    p_to: toDateOnly(to),
+  });
+
+  if (error) throw new Error(error.message || 'Failed to load VDP filter options.');
+
+  const row = Array.isArray(data) ? data[0] : data;
+  const asList = (key) => {
+    const raw = row?.[key];
+    return Array.isArray(raw) ? raw.filter(Boolean) : [];
+  };
+
+  return {
+    years: ['All', ...asList('years')],
+    makes: ['All', ...asList('makes')],
+    models: ['All', ...asList('models')],
+    locations: ['All', ...asList('locations')],
+    types: ['All', ...asList('types')],
+  };
+}
+
+/** Daily VDP views from smart_final_data (combined inventory filters). */
+export async function fetchVdpDailyFiltered({
+  clientId,
+  from,
+  to,
+  vdpFilters,
+  tab = 'vdp',
+  onCancelCheck,
+}) {
+  const supabase = createClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const inv = vdpRpcExtraParams(vdpFilters, tab);
+  if (!vdpFiltersActive(vdpFilters, tab)) return null;
+  if (onCancelCheck?.()) return null;
+
+  const { data, error } = await supabase.rpc('build_date_wise_final_data', {
+    p_date_from: toDateOnly(from),
+    p_date_to: toDateOnly(to),
+    p_client_id: String(clientId).trim(),
+    ...inv,
+  });
+
+  if (error) throw new Error(error.message || 'Failed to load VDP daily views.');
+  const daily = {};
+  let total = 0;
+  for (const row of data || []) {
+    const day = normalizeReportDate(row.report_date);
+    const views = Number(row.views) || 0;
+    if (!day || views === 0) continue;
+    daily[day] = (daily[day] || 0) + views;
+    total += views;
+  }
+  return { daily, total };
+}
+
+/** @deprecated use fetchVdpDailyFiltered */
+export async function fetchVdpDailyByYear(opts) {
+  return fetchVdpDailyFiltered(opts);
 }
 
 export async function fetchMakeBreakdown({
@@ -58,6 +137,8 @@ export async function fetchMakeBreakdown({
   from,
   to,
   limit = null,
+  vdpFilters,
+  tab = 'vdp',
   onCancelCheck,
 }) {
   const supabase = createClient();
@@ -69,11 +150,10 @@ export async function fetchMakeBreakdown({
     p_from: toDateOnly(from),
     p_to: toDateOnly(to),
     p_limit: limit,
+    ...vdpRpcExtraParams(vdpFilters, tab),
   };
 
-  const { data, error } = await supabase.rpc('get_make_breakdown', {
-    ...params,
-  });
+  const { data, error } = await supabase.rpc('get_make_breakdown', params);
 
   if (error) throw new Error(error.message || 'Failed to fetch make breakdown.');
   return data || [];
@@ -85,6 +165,8 @@ export async function fetchModelBreakdown({
   from,
   to,
   limit = null,
+  vdpFilters,
+  tab = 'vdp',
   onCancelCheck,
 }) {
   const supabase = createClient();
@@ -96,6 +178,7 @@ export async function fetchModelBreakdown({
     p_from: toDateOnly(from),
     p_to: toDateOnly(to),
     p_limit: limit,
+    ...vdpRpcExtraParams(vdpFilters, tab),
   });
 
   if (error) throw new Error(error.message || 'Failed to fetch model breakdown.');
@@ -108,6 +191,8 @@ export async function fetchYearBreakdown({
   from,
   to,
   limit = null,
+  vdpFilters,
+  tab = 'vdp',
   onCancelCheck,
 }) {
   const supabase = createClient();
@@ -119,6 +204,7 @@ export async function fetchYearBreakdown({
     p_from: toDateOnly(from),
     p_to: toDateOnly(to),
     p_limit: limit,
+    ...vdpRpcExtraParams(vdpFilters, tab),
   });
 
   if (error) throw new Error(error.message || 'Failed to fetch year breakdown.');
@@ -131,6 +217,8 @@ export async function fetchConditionBreakdown({
   from,
   to,
   limit = null,
+  vdpFilters,
+  tab = 'vdp',
   onCancelCheck,
 }) {
   const supabase = createClient();
@@ -142,6 +230,7 @@ export async function fetchConditionBreakdown({
     p_from: toDateOnly(from),
     p_to: toDateOnly(to),
     p_limit: limit,
+    ...vdpRpcExtraParams(vdpFilters, tab),
   });
 
   if (error) throw new Error(error.message || 'Failed to fetch condition breakdown.');
@@ -154,6 +243,8 @@ export async function fetchTopCampaigns({
   from,
   to,
   pageTypeFilter = 'ALL',
+  vdpFilters,
+  tab = 'all',
   onCancelCheck,
 }) {
   return fetchTopCampaignsBundle({
@@ -161,6 +252,8 @@ export async function fetchTopCampaigns({
     from,
     to,
     pageTypeFilter,
+    vdpFilters,
+    tab,
     onCancelCheck,
   });
 }
@@ -218,6 +311,7 @@ async function fetchLocationBreakdownViaApi(params, onCancelCheck) {
     from: params.p_from,
     to: params.p_to,
   });
+  appendInvParamsToSearchParams(qs, params);
 
   try {
     const res = await fetch(`/api/dashboard/location-breakdown?${qs}`);
@@ -238,16 +332,20 @@ export async function fetchLocationBreakdown({
   clientId,
   from,
   to,
+  vdpFilters,
+  tab = 'vdp',
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return undefined;
 
+  const inv = vdpRpcExtraParams(vdpFilters, tab);
   const params = {
     p_client_id: String(clientId).trim(),
     p_from: toDateOnly(from),
     p_to: toDateOnly(to),
+    ...inv,
   };
 
   const { data, error } = await supabase.rpc('get_location_breakdown', params);

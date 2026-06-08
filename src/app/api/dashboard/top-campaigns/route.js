@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeTopCampaignRows } from '@/lib/ga4/topCampaignsMerge';
+import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
 export const maxDuration = 60;
 
@@ -14,6 +15,7 @@ export async function GET(request) {
   const from = searchParams.get('from')?.slice(0, 10);
   const to = searchParams.get('to')?.slice(0, 10);
   const pageType = searchParams.get('pageType')?.trim() || 'ALL';
+  const inv = parseInvRpcFromSearchParams(searchParams);
 
   if (!clientId || !from || !to) {
     return NextResponse.json({ error: 'Missing clientId, from, or to' }, { status: 400 });
@@ -37,7 +39,11 @@ export async function GET(request) {
       clientId,
       from,
       to,
-      extraParams: { p_page_type: pageType, p_limit: null },
+      extraParams: {
+        p_page_type: pageType,
+        p_limit: null,
+        ...inv,
+      },
       chunkDays: CAMPAIGN_CHUNK_DAYS,
       concurrency: CAMPAIGN_CHUNK_CONCURRENCY,
     });

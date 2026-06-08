@@ -3,11 +3,18 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from 'react';
 import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
+import { fetchVdpDailyFiltered, fetchVdpFilterOptions } from '@/lib/api/dashboardApi';
+import {
+  DEFAULT_VDP_FILTERS,
+  vdpFiltersActive,
+  normalizeVdpFilters,
+} from '@/lib/vdp/vdpFilterParams';
 import {
   getOverviewCache,
   setOverviewCache,
@@ -18,6 +25,25 @@ import { useClient } from '../ClientContext';
 
 const OverviewDataContext = createContext(null);
 
+const EMPTY_VDP_FILTER_OPTIONS = {
+  years: ['All'],
+  makes: ['All'],
+  models: ['All'],
+  locations: ['All'],
+  types: ['All'],
+};
+
+function pruneInvalidFilterSelections(filters, options) {
+  const next = { ...filters };
+  const keys = ['year', 'make', 'model', 'type', 'location'];
+  for (const key of keys) {
+    const list = options[`${key}s`] || options[key] || ['All'];
+    if (next[key] !== 'All' && !list.includes(next[key])) {
+      next[key] = 'All';
+    }
+  }
+  return next;
+}
 const TAB_IDS = ['all', 'vdp', 'srp', 'home', 'other'];
 const DEFAULT_RANGE = 'current_month';
 
@@ -142,6 +168,10 @@ export function OverviewProvider({ children }) {
 
   const [tab, setTab] = useState('all');
   const [dateRange, setDateRange] = useState(DEFAULT_RANGE);
+  const [vdpFilters, setVdpFilters] = useState(DEFAULT_VDP_FILTERS);
+  const [vdpFilterOptions, setVdpFilterOptions] = useState(EMPTY_VDP_FILTER_OPTIONS);
+  const [vdpFilteredDaily, setVdpFilteredDaily] = useState(null);
+  const [vdpFiltersLoading, setVdpFiltersLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [userTotalsRows, setUserTotalsRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -152,6 +182,14 @@ export function OverviewProvider({ children }) {
   // ── single fetch keyed by (client, from, to) ─────────────────
   // Join: `smart_ga4_page_data.client_id` === `smart_hoot_config.ga4_customer_id`.
   const clientKey = client?.ga4CustomerId || null;
+
+  const setVdpFilter = useCallback((key, value) => {
+    setVdpFilters((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  useEffect(() => {
+    setVdpFilters(DEFAULT_VDP_FILTERS);
+  }, [clientKey, from, to]);
 
   useEffect(() => {
     if (!clientKey || !from || !to) {
@@ -205,6 +243,70 @@ export function OverviewProvider({ children }) {
       cancelled = true;
     };
   }, [clientKey, from, to]);
+
+  // ── VDP filter dropdown options (from inventory in range) ──
+  useEffect(() => {
+    if (!clientKey || !from || !to) {
+      setVdpFilterOptions(EMPTY_VDP_FILTER_OPTIONS);
+      return undefined;
+    }
+
+    let cancelled = false;
+    fetchVdpFilterOptions({
+      clientId: clientKey,
+      from,
+      to,
+      onCancelCheck: () => cancelled,
+    })
+      .then((options) => {
+        if (cancelled || !options) return;
+        setVdpFilterOptions(options);
+        setVdpFilters((current) =>
+          pruneInvalidFilterSelections(normalizeVdpFilters(current), options)
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setVdpFilterOptions(EMPTY_VDP_FILTER_OPTIONS);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientKey, from, to]);
+
+  // ── VDP daily views when any inventory filter is active ──
+  useEffect(() => {
+    if (!clientKey || !from || !to || !vdpFiltersActive(vdpFilters, 'vdp')) {
+      setVdpFilteredDaily(null);
+      setVdpFiltersLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setVdpFiltersLoading(true);
+
+    fetchVdpDailyFiltered({
+      clientId: clientKey,
+      from,
+      to,
+      vdpFilters,
+      tab: 'vdp',
+      onCancelCheck: () => cancelled,
+    })
+      .then((result) => {
+        if (!cancelled) setVdpFilteredDaily(result);
+      })
+      .catch(() => {
+        if (!cancelled) setVdpFilteredDaily({ daily: {}, total: 0 });
+      })
+      .finally(() => {
+        if (!cancelled) setVdpFiltersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientKey, from, to, vdpFilters]);
 
   // ── derived: totals + daily-by-date map per tab + raw page-type histogram ──
   const derived = useMemo(() => {
@@ -263,6 +365,15 @@ export function OverviewProvider({ children }) {
     return { totals, uniqueVisitors, daily, pageTypes };
   }, [rows, userTotalsRows]);
 
+  const adjustedDerived = useMemo(() => {
+    if (!vdpFiltersActive(vdpFilters, 'vdp') || !vdpFilteredDaily) return derived;
+    return {
+      ...derived,
+      totals: { ...derived.totals, vdp: vdpFilteredDaily.total || 0 },
+      daily: { ...derived.daily, vdp: vdpFilteredDaily.daily || {} },
+    };
+  }, [derived, vdpFilters, vdpFilteredDaily]);
+
   // ── derived: continuous daily series (zero-fills missing days) ──
   const fullDateList = useMemo(
     () => enumerateDatesInclusive(from, to),
@@ -272,10 +383,10 @@ export function OverviewProvider({ children }) {
   const seriesByTabRaw = useMemo(() => {
     const out = {};
     for (const key of TAB_IDS) {
-      out[key] = fullDateList.map((d) => derived.daily[key]?.[d] || 0);
+      out[key] = fullDateList.map((d) => adjustedDerived.daily[key]?.[d] || 0);
     }
     return out;
-  }, [derived, fullDateList]);
+  }, [adjustedDerived, fullDateList]);
 
   const { dateList, seriesByTab } = useMemo(
     () => chartDateListAndSeries(fullDateList, seriesByTabRaw),
@@ -290,14 +401,18 @@ export function OverviewProvider({ children }) {
       setTab,
       dateRange,
       setDateRange,
+      vdpFilters,
+      setVdpFilter,
+      vdpFilterOptions,
+      vdpFiltersLoading,
       from,
       to,
       dateList,
-      totals: derived.totals,
+      totals: adjustedDerived.totals,
       uniqueVisitors: derived.uniqueVisitors,
       pageTypes: derived.pageTypes,
       seriesByTab,
-      loading,
+      loading: loading || (tab === 'vdp' && vdpFiltersActive(vdpFilters, 'vdp') && vdpFiltersLoading),
       error,
       rowCount,
       clientKey,
@@ -306,14 +421,19 @@ export function OverviewProvider({ children }) {
     [
       tab,
       dateRange,
+      vdpFilters,
+      setVdpFilter,
+      vdpFilterOptions,
+      vdpFiltersLoading,
       from,
       to,
       dateList,
-      derived.totals,
+      adjustedDerived.totals,
       derived.uniqueVisitors,
       derived.pageTypes,
       seriesByTab,
       loading,
+      vdpFiltersLoading,
       error,
       rowCount,
       clientKey,

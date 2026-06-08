@@ -6,6 +6,7 @@ import {
   getChannelBreakdownCache,
   hasChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
+import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { channelRowsToDonutData } from '@/lib/ga4/channelDisplay';
 import { useOverview } from './OverviewDataContext';
@@ -59,6 +60,7 @@ export default function ChannelDonut({
 }) {
   const {
     tab,
+    vdpFilters,
     clientKey,
     from: ctxFrom,
     to: ctxTo,
@@ -68,6 +70,7 @@ export default function ChannelDonut({
   const tabId = resolveTabId(pageTypeProp, tab);
   const pageTypeFilter = TAB_TO_FILTER[tabId] || 'ALL';
   const centerLabel = CENTER_LABEL[tabId] || 'ALL VIEWS';
+  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
 
   const clientId = clientIdProp ?? clientKey;
   const from = fromProp ?? ctxFrom;
@@ -76,7 +79,13 @@ export default function ChannelDonut({
   const [chartTopN, setChartTopN] = useState(null);
   const [rows, setRows] = useState(() =>
     clientId && from && to
-      ? getChannelBreakdownCache(clientId, from, to, pageTypeFilter) || []
+      ? getChannelBreakdownCache(
+          clientId,
+          from,
+          to,
+          pageTypeFilter,
+          filterCacheSuffix
+        ) || []
       : []
   );
   const [loading, setLoading] = useState(
@@ -85,7 +94,13 @@ export default function ChannelDonut({
         clientId &&
           from &&
           to &&
-          !hasChannelBreakdownCache(clientId, from, to, pageTypeFilter)
+          !hasChannelBreakdownCache(
+            clientId,
+            from,
+            to,
+            pageTypeFilter,
+            filterCacheSuffix
+          )
       )
   );
   const [error, setError] = useState(null);
@@ -114,6 +129,8 @@ export default function ChannelDonut({
             from,
             to,
             pageTypeFilter: filter,
+            vdpFilters,
+            tab,
             onCancelCheck: () => cancelled,
           });
         } catch {
@@ -131,7 +148,7 @@ export default function ChannelDonut({
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to]);
+  }, [clientId, from, to, vdpFilters, tab]);
 
   // Active tab: cache-first, then fetch if needed.
   useEffect(() => {
@@ -141,7 +158,13 @@ export default function ChannelDonut({
       return undefined;
     }
 
-    const cached = getChannelBreakdownCache(clientId, from, to, pageTypeFilter);
+    const cached = getChannelBreakdownCache(
+      clientId,
+      from,
+      to,
+      pageTypeFilter,
+      filterCacheSuffix
+    );
     if (cached) {
       setRows(cached);
       setLoading(false);
@@ -158,6 +181,8 @@ export default function ChannelDonut({
       from,
       to,
       pageTypeFilter,
+      vdpFilters,
+      tab,
       onCancelCheck: () => cancelled,
     })
       .then((data) => {
@@ -176,7 +201,7 @@ export default function ChannelDonut({
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, pageTypeFilter]);
+  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
 
   const allData = useMemo(() => channelRowsToDonutData(rows), [rows]);
 
