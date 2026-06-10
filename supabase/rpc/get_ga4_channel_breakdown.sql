@@ -1,9 +1,8 @@
 -- Channel breakdown: one row per GA4 session channel (no "Other" rollup).
--- Run in Supabase SQL editor after reviewing parameter defaults.
---
--- DROP legacy overloads if PostgREST reports ambiguity:
--- DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(text, date, date, text);
+-- Fast path skips smart_final_data join when no VDP inventory filters are active.
+-- Run in Supabase SQL editor.
 
+DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(text, date, date, text);
 DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
   text, date, date, text, text[], text[], text, text[], integer[], text[], text[]
 );
@@ -12,89 +11,100 @@ CREATE OR REPLACE FUNCTION public.get_ga4_channel_breakdown(
   p_client_id   text,
   p_from        date,
   p_to          date,
-  p_page_type   text DEFAULT 'ALL',
+  p_page_type   text   DEFAULT 'ALL',
+  p_channels    text[] DEFAULT NULL,
   p_types       text[] DEFAULT NULL,
   p_classes     text[] DEFAULT NULL,
-  p_condition   text DEFAULT 'BOTH',
+  p_condition   text   DEFAULT 'BOTH',
   p_makes       text[] DEFAULT NULL,
   p_models      text[] DEFAULT NULL,
   p_years       integer[] DEFAULT NULL,
-  p_locations   text[] DEFAULT NULL,
-  p_channels    text[] DEFAULT NULL
+  p_locations   text[] DEFAULT NULL
 )
 RETURNS TABLE (
   channel_bucket text,
   views          bigint,
   pct            numeric
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  WITH inv_filter_active AS (
-    SELECT (
-      COALESCE(array_length(p_types, 1), 0)     > 0 OR
-      COALESCE(array_length(p_classes, 1), 0)   > 0 OR
-      UPPER(COALESCE(p_condition, 'BOTH')) <> 'BOTH' OR
-      COALESCE(array_length(p_makes, 1), 0)     > 0 OR
-      COALESCE(array_length(p_models, 1), 0)    > 0 OR
-      COALESCE(array_length(p_years, 1), 0)     > 0 OR
-      COALESCE(array_length(p_locations, 1), 0) > 0
-    ) AS active
-  ),
-  pages AS (
-    SELECT p.channel, p.views, p.client_id, p.report_date, p.page_path
+DECLARE
+  v_filter_active boolean;
+  v_page_type     text := UPPER(COALESCE(p_page_type, 'ALL'));
+  v_condition     text := UPPER(COALESCE(p_condition, 'BOTH'));
+BEGIN
+  v_filter_active :=
+       COALESCE(array_length(p_types, 1), 0)     > 0
+    OR COALESCE(array_length(p_classes, 1), 0)   > 0
+    OR v_condition <> 'BOTH'
+    OR COALESCE(array_length(p_makes, 1), 0)     > 0
+    OR COALESCE(array_length(p_models, 1), 0)    > 0
+    OR COALESCE(array_length(p_years, 1), 0)     > 0
+    OR COALESCE(array_length(p_locations, 1), 0) > 0;
+
+  RETURN QUERY
+  WITH pages AS (
+    SELECT
+      p.channel,
+      p.views,
+      p.client_id,
+      p.report_date,
+      p.page_path
     FROM smart_ga4_page_data p
     WHERE p.client_id = p_client_id
       AND p.report_date BETWEEN p_from AND p_to
       AND (
-        (UPPER(p_page_type) = 'ALL')                                                          OR
-        (UPPER(p_page_type) = 'VDP'   AND UPPER(COALESCE(p.ga4_page_type,'')) LIKE 'VDP%')    OR
-        (UPPER(p_page_type) = 'SRP'   AND UPPER(COALESCE(p.ga4_page_type,'')) = 'SRP')        OR
-        (UPPER(p_page_type) = 'HOME'  AND LOWER(COALESCE(p.ga4_page_type,'')) = 'home page')  OR
-        (UPPER(p_page_type) = 'OTHER' AND UPPER(COALESCE(p.ga4_page_type,'')) NOT LIKE 'VDP%'
-                                      AND UPPER(COALESCE(p.ga4_page_type,'')) <> 'SRP'
-                                      AND LOWER(COALESCE(p.ga4_page_type,'')) <> 'home page')
+        v_page_type = 'ALL'
+        OR (v_page_type = 'VDP'   AND p.ga4_page_type ILIKE 'VDP%')
+        OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
+        OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
+        OR (v_page_type = 'OTHER' AND p.ga4_page_type NOT ILIKE 'VDP%'
+                                  AND p.ga4_page_type <> 'SRP'
+                                  AND p.ga4_page_type NOT ILIKE 'home%')
       )
-      AND (COALESCE(array_length(p_channels, 1), 0) = 0 OR p.channel = ANY(p_channels))
+      AND (p_channels IS NULL OR array_length(p_channels, 1) = 0 OR p.channel = ANY(p_channels))
   ),
   combined AS (
     SELECT p.channel, p.views
     FROM pages p
-    CROSS JOIN inv_filter_active a
-    WHERE NOT a.active
+    WHERE NOT v_filter_active
 
     UNION ALL
 
     SELECT p.channel, p.views
     FROM pages p
-    INNER JOIN smart_final_data s
+    JOIN smart_final_data s
       ON s.client_id   = p.client_id
      AND s.report_date = p.report_date
      AND s.page_path   = p.page_path
-    CROSS JOIN inv_filter_active a
-    WHERE a.active
-      AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
-      AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
-      AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
-      AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
-      AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
-      AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
+    WHERE v_filter_active
+      AND (p_types     IS NULL OR array_length(p_types, 1)     = 0 OR s.inv_type     = ANY(p_types))
+      AND (p_makes     IS NULL OR array_length(p_makes, 1)     = 0 OR s.inv_make     = ANY(p_makes))
+      AND (p_models    IS NULL OR array_length(p_models, 1)    = 0 OR s.inv_model    = ANY(p_models))
+      AND (p_locations IS NULL OR array_length(p_locations, 1) = 0 OR s.inv_location = ANY(p_locations))
+      AND (p_years     IS NULL OR array_length(p_years, 1)     = 0
+           OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
+      AND (v_condition = 'BOTH' OR UPPER(s.inv_condition) = v_condition)
       AND (
-        COALESCE(array_length(p_classes, 1), 0) = 0 OR
+        p_classes IS NULL OR array_length(p_classes, 1) = 0 OR
         (
-          ('Class A'  = ANY(p_classes) AND s.inv_type ILIKE '%class a%') OR
-          ('Class B'  = ANY(p_classes) AND s.inv_type ILIKE '%class b%') OR
-          ('Class C'  = ANY(p_classes) AND s.inv_type ILIKE '%class c%') OR
-          ('Towable'  = ANY(p_classes) AND (s.inv_type ILIKE '%travel trailer%' OR s.inv_type ILIKE '%fifth wheel%'
-                                            OR s.inv_type ILIKE '%toy hauler%' OR s.inv_type ILIKE '%pop-up%'))
+          ('Class A' = ANY(p_classes) AND s.inv_type ILIKE '%class a%') OR
+          ('Class B' = ANY(p_classes) AND s.inv_type ILIKE '%class b%') OR
+          ('Class C' = ANY(p_classes) AND s.inv_type ILIKE '%class c%') OR
+          ('Towable' = ANY(p_classes) AND (
+              s.inv_type ILIKE '%travel trailer%'
+           OR s.inv_type ILIKE '%fifth wheel%'
+           OR s.inv_type ILIKE '%toy hauler%'
+           OR s.inv_type ILIKE '%pop-up%'))
         )
       )
   ),
   filtered AS (
     SELECT
-      CASE lower(trim(COALESCE(channel, '')))
+      CASE lower(trim(COALESCE(c.channel, '')))
         WHEN 'organic_search'  THEN 'Organic Search'
         WHEN 'paid_search'     THEN 'Paid Search'
         WHEN 'direct'          THEN 'Direct'
@@ -112,18 +122,18 @@ AS $$
         WHEN 'cross-network'   THEN 'Cross-network'
         WHEN 'unassigned'      THEN 'Unassigned'
         WHEN ''                THEN '(not set)'
-        ELSE initcap(replace(replace(lower(trim(channel)), '_', ' '), '-', ' '))
+        ELSE initcap(replace(replace(lower(trim(c.channel)), '_', ' '), '-', ' '))
       END AS channel_bucket,
-      views
-    FROM combined
+      c.views
+    FROM combined c
   ),
   agg AS (
-    SELECT channel_bucket, SUM(views)::bigint AS views
-    FROM filtered
-    GROUP BY channel_bucket
+    SELECT f.channel_bucket, SUM(f.views)::bigint AS views
+    FROM filtered f
+    GROUP BY f.channel_bucket
   ),
   grand AS (
-    SELECT NULLIF(SUM(views), 0)::numeric AS total FROM agg
+    SELECT NULLIF(SUM(a.views), 0)::numeric AS total FROM agg a
   )
   SELECT
     a.channel_bucket,
@@ -133,8 +143,9 @@ AS $$
   CROSS JOIN grand g
   WHERE a.views > 0
   ORDER BY a.views DESC, a.channel_bucket;
+END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text, text[], text[], integer[], text[], text[]
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
 ) TO authenticated, service_role;

@@ -56,7 +56,6 @@ export default function VdpLogicsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState({ open: false, mode: 'create', row: null });
@@ -76,7 +75,7 @@ export default function VdpLogicsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [search, cms, dataSource, reloadKey]);
+  }, [search, cms, dataSource]);
 
   useEffect(() => {
     const t = setTimeout(load, search ? 280 : 0);
@@ -91,8 +90,6 @@ export default function VdpLogicsPanel() {
     () => filterOptions.dataSourceOptions || [],
     [filterOptions.dataSourceOptions]
   );
-
-  const bump = () => setReloadKey((k) => k + 1);
 
   const openCreate = () => setModal({ open: true, mode: 'create', row: null });
   const openEdit = (row) => setModal({ open: true, mode: 'edit', row });
@@ -110,7 +107,7 @@ export default function VdpLogicsPanel() {
         setMessage('Row created.');
       }
       closeModal();
-      bump();
+      load();
     } finally {
       setSaving(false);
     }
@@ -125,7 +122,7 @@ export default function VdpLogicsPanel() {
     try {
       await deleteVdpLogic(row.id);
       setMessage('Row deleted.');
-      bump();
+      load();
     } catch (e) {
       setError(e?.message || 'Delete failed.');
     }
@@ -155,7 +152,7 @@ export default function VdpLogicsPanel() {
             .join(' · ')
         );
       }
-      bump();
+      load();
     } catch (err) {
       setError(err?.message || 'CSV upload failed.');
     } finally {
@@ -243,7 +240,7 @@ export default function VdpLogicsPanel() {
           <button
             type="button"
             className="ga4-count-export-btn"
-            onClick={bump}
+            onClick={load}
             disabled={loading}
           >
             Refresh
@@ -278,7 +275,7 @@ export default function VdpLogicsPanel() {
       {error && !loading && (
         <div className="ga4-count-alert">
           <p>{error}</p>
-          <button type="button" className="ga4-count-retry-btn" onClick={bump}>
+          <button type="button" className="ga4-count-retry-btn" onClick={load}>
             Retry
           </button>
         </div>

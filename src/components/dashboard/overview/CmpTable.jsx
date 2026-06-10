@@ -1,42 +1,202 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Panel, PanelHeader } from '../Panel';
 import Delta from '../Delta';
-import { CHANNEL_COMPARISON } from '@/lib/data/channels';
+import ChannelGroupToggle from './ChannelGroupToggle';
+import { useOverview } from './OverviewDataContext';
+import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
+import { colorForChannel } from '@/lib/ga4/channelDisplay';
+import {
+  applyChannelGroupsToComparisonRows,
+  filterByExpandedGroups,
+} from '@/lib/ga4/channelGroups';
+import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
+import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
+import {
+  mergeChannelComparison,
+  sameMonthLastYearLabel,
+} from '@/lib/overview/comparePeriod';
 
-function pct(a, b) {
-  return b > 0 ? Math.round(((a - b) / b) * 100) : 0;
-}
+const TAB_TO_PAGE_TYPE = {
+  all: 'ALL',
+  vdp: 'VDP',
+  srp: 'SRP',
+  home: 'Home',
+  other: 'Other',
+};
+
+const TAB_TITLES = {
+  all: 'All Pages',
+  vdp: 'VDP',
+  srp: 'SRP',
+  home: 'Homepage',
+  other: 'Other',
+};
+
+const VISIBLE_TABS = new Set(['all', 'vdp']);
 
 export default function CmpTable() {
+  const {
+    tab,
+    clientKey,
+    from,
+    to,
+    compareFrom,
+    compareTo,
+    currentPeriodLabel,
+    comparePeriodLabel,
+    vdpFilters,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+  } = useOverview();
+
+  const [curRows, setCurRows] = useState([]);
+  const [cmpRows, setCmpRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const { expanded, isExpanded, toggle } = useChannelGroupExpansion(true);
 
-  const rows = useMemo(() => {
-    return CHANNEL_COMPARISON.map((r) => ({
-      ...r,
-      mom: pct(r.cur, r.prev),
-      prevYoy: pct(r.prev, r.ly),
-      yoy: pct(r.cur, r.ly),
-    }));
-  }, []);
+  const pageTypeFilter = TAB_TO_PAGE_TYPE[tab] || 'ALL';
+  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
+  const viewsLabel = tab === 'vdp' ? 'VDP Views' : 'Views';
+  const panelTitle = `${TAB_TITLES[tab] || 'Page'} Views by Channel — Period Comparison`;
+  const lyPeriodLabel = useMemo(
+    () => sameMonthLastYearLabel(from, to),
+    [from, to]
+  );
 
-  const totals = useMemo(() => {
-    const cur = CHANNEL_COMPARISON.reduce((a, r) => a + r.cur, 0);
-    const prev = CHANNEL_COMPARISON.reduce((a, r) => a + r.prev, 0);
-    const ly = CHANNEL_COMPARISON.reduce((a, r) => a + r.ly, 0);
-    return { cur, prev, ly, mom: pct(cur, prev), prevYoy: pct(prev, ly), yoy: pct(cur, ly) };
-  }, []);
+  useEffect(() => {
+    if (
+      !VISIBLE_TABS.has(tab)
+      || !clientKey
+      || !from
+      || !to
+      || !compareFrom
+      || !compareTo
+    ) {
+      setCurRows([]);
+      setCmpRows([]);
+      setLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let loadTracked = false;
+    setLoading(true);
+    setError(null);
+    beginBreakdownLoad();
+    loadTracked = true;
+
+    Promise.all([
+      fetchChannelBreakdownBundle({
+        clientId: clientKey,
+        from,
+        to,
+        pageTypeFilter,
+        vdpFilters,
+        tab,
+        onCancelCheck: () => cancelled,
+      }),
+      fetchChannelBreakdownBundle({
+        clientId: clientKey,
+        from: compareFrom,
+        to: compareTo,
+        pageTypeFilter,
+        vdpFilters,
+        tab,
+        onCancelCheck: () => cancelled,
+      }),
+    ])
+      .then(([current, compare]) => {
+        if (cancelled) return;
+        setCurRows(current || []);
+        setCmpRows(compare || []);
+      })
+      .catch((fetchError) => {
+        if (cancelled) return;
+        setError(fetchError?.message || 'Failed to load comparison data.');
+        setCurRows([]);
+        setCmpRows([]);
+      })
+      .finally(() => {
+        if (loadTracked) endBreakdownLoad();
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    tab,
+    clientKey,
+    from,
+    to,
+    compareFrom,
+    compareTo,
+    pageTypeFilter,
+    vdpFilters,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+  ]);
+
+  const { rows, totals } = useMemo(
+    () => mergeChannelComparison(curRows, cmpRows),
+    [curRows, cmpRows]
+  );
+
+  const rowsWithColors = useMemo(() => {
+    const colored = rows.map((r, i) => ({ ...r, color: colorForChannel(r.ch, i) }));
+    return applyChannelGroupsToComparisonRows(colored);
+  }, [rows]);
+
+  const visibleRows = useMemo(
+    () => filterByExpandedGroups(rowsWithColors, expanded),
+    [rowsWithColors, expanded]
+  );
+
+  const showGroupColumn = useMemo(
+    () => rowsWithColors.some((r) => r.isGroupRollup && r.collapsible),
+    [rowsWithColors]
+  );
 
   const onCopy = useCallback(() => {
-    const lines = ['Channel\tApr 2026 VDP\tMoM%\tMar 2026 VDP\tPrev YoY%\tApr 2025 VDP\tYoY%'];
-    rows.forEach((r) => {
+    const lines = [
+      [
+        'Channel',
+        `Current ${viewsLabel}`,
+        'MoM Δ',
+        `Previous ${viewsLabel}`,
+        'YoY Δ',
+        `Last Year ${viewsLabel}`,
+        'YoY % vs Cur',
+      ].join('\t'),
+    ];
+    rowsWithColors.forEach((r) => {
       lines.push(
-        `${r.ch}\t${r.cur}\t${r.mom >= 0 ? '+' : ''}${r.mom}%\t${r.prev}\t${r.prevYoy >= 0 ? '+' : ''}${r.prevYoy}%\t${r.ly}\t${r.yoy >= 0 ? '+' : ''}${r.yoy}%`
+        [
+          r.ch,
+          r.cur,
+          `${r.delta >= 0 ? '+' : ''}${r.delta}%`,
+          r.cmp,
+          '0%',
+          0,
+          '0%',
+        ].join('\t')
       );
     });
     lines.push(
-      `Total VDP\t${totals.cur}\t${totals.mom >= 0 ? '+' : ''}${totals.mom}%\t${totals.prev}\t${totals.prevYoy >= 0 ? '+' : ''}${totals.prevYoy}%\t${totals.ly}\t${totals.yoy >= 0 ? '+' : ''}${totals.yoy}%`
+      [
+        'Total',
+        totals.cur,
+        `${totals.delta >= 0 ? '+' : ''}${totals.delta}%`,
+        totals.cmp,
+        '0%',
+        0,
+        '0%',
+      ].join('\t')
     );
     navigator.clipboard
       .writeText(lines.join('\n'))
@@ -45,22 +205,25 @@ export default function CmpTable() {
         setTimeout(() => setCopied(false), 1800);
       })
       .catch(() => {});
-  }, [rows, totals]);
+  }, [rowsWithColors, totals, viewsLabel]);
+
+  if (!VISIBLE_TABS.has(tab)) return null;
 
   return (
-    <Panel>
+    <Panel className="cmp-table-panel">
       <PanelHeader
-        title="VDP Views by Channel — Period Comparison"
+        title={panelTitle}
         badge={{ label: 'Copy-ready', bg: 'var(--acc-soft)', color: 'var(--acc)' }}
       >
-        <div className="ph-s" style={{ marginLeft: 8 }}>
-          Current MTD vs Prev MTD vs Same Month Last Year
-        </div>
+        <span className="cmp-table-head-note">
+          Current vs Previous vs Same Month Last Year
+        </span>
         <button
           type="button"
           className={`copy-btn ${copied ? 'copied' : ''}`}
           onClick={onCopy}
           style={{ marginLeft: 'auto' }}
+          disabled={loading || !!error}
         >
           {copied ? (
             <>
@@ -81,74 +244,120 @@ export default function CmpTable() {
         </button>
       </PanelHeader>
 
-      <div className="cmp-table-wrap">
-        <table className="cmp-tbl">
-          <thead>
-            <tr>
-              <th>Channel</th>
-              <th colSpan="2" className="col-cur">Current MTD — Apr 2026</th>
-              <th colSpan="2" className="col-prev">Previous MTD — Mar 2026</th>
-              <th colSpan="2" className="col-lyear">Same Month Last Year — Apr 2025</th>
-            </tr>
-            <tr>
-              <th>Channel</th>
-              <th className="col-cur">VDP Views</th>
-              <th className="col-cur">MoM Δ</th>
-              <th className="col-prev">VDP Views</th>
-              <th className="col-prev">YoY Δ</th>
-              <th className="col-lyear">VDP Views</th>
-              <th className="col-lyear">YoY % vs Cur</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.ch}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color, flexShrink: 0 }} />
-                    <span>{r.ch}</span>
-                  </div>
-                </td>
-                <td className="col-cur">{r.cur.toLocaleString()}</td>
-                <td className="col-cur"><Delta value={r.mom} /></td>
-                <td className="col-prev">{r.prev.toLocaleString()}</td>
-                <td className="col-prev"><Delta value={r.prevYoy} size={10} /></td>
-                <td className="col-lyear">{r.ly.toLocaleString()}</td>
-                <td className="col-lyear"><Delta value={r.yoy} size={10} /></td>
+      {error ? (
+        <div className="cmp-table-error">{error}</div>
+      ) : (
+        <div className="cmp-table-wrap">
+          <table className="cmp-tbl cmp-tbl--period-compare">
+            <thead>
+              <tr>
+                <th rowSpan={2}>Channel</th>
+                <th colSpan={2} className="col-cur">
+                  Current — {currentPeriodLabel}
+                </th>
+                <th colSpan={2} className="col-prev">
+                  Previous — {comparePeriodLabel}
+                </th>
+                <th colSpan={2} className="col-lyear">
+                  Same Month Last Year — {lyPeriodLabel}
+                </th>
               </tr>
-            ))}
-            <tr>
-              <td>Total VDP</td>
-              <td className="col-cur">{totals.cur.toLocaleString()}</td>
-              <td className="col-cur"><Delta value={totals.mom} /></td>
-              <td className="col-prev">{totals.prev.toLocaleString()}</td>
-              <td className="col-prev"><Delta value={totals.prevYoy} size={10} /></td>
-              <td className="col-lyear">{totals.ly.toLocaleString()}</td>
-              <td className="col-lyear"><Delta value={totals.yoy} size={10} /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              <tr>
+                <th className="col-cur">{viewsLabel}</th>
+                <th className="col-cur">MoM Δ</th>
+                <th className="col-prev">{viewsLabel}</th>
+                <th className="col-prev">YoY Δ</th>
+                <th className="col-lyear">{viewsLabel}</th>
+                <th className="col-lyear">YoY % vs Cur</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && visibleRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="cmp-table-loading">
+                    Loading channel comparison…
+                  </td>
+                </tr>
+              ) : (
+                visibleRows.map((r) => (
+                  <tr
+                    key={r.rowKey || r.ch}
+                    className={
+                      r.isGroupRollup
+                        ? 'cmp-tbl-row--group-rollup'
+                        : r.isGroupMember
+                        ? 'cmp-tbl-row--group-member'
+                        : undefined
+                    }
+                  >
+                    <td>
+                      <div
+                        className={`cmp-channel-cell${r.isGroupMember ? ' cmp-channel-cell--member' : ''}`}
+                      >
+                        {showGroupColumn && (
+                          r.isGroupRollup && r.collapsible ? (
+                            <ChannelGroupToggle
+                              expanded={isExpanded(r.groupKey)}
+                              onToggle={() => toggle(r.groupKey)}
+                              label={r.ch}
+                            />
+                          ) : (
+                            <span className="cmp-channel-toggle-spacer" aria-hidden />
+                          )
+                        )}
+                        <div
+                          className="cmp-channel-dot"
+                          style={{ background: r.color }}
+                        />
+                        <span>{r.ch}</span>
+                      </div>
+                    </td>
+                    <td className="col-cur">{r.cur.toLocaleString()}</td>
+                    <td className="col-cur">
+                      <Delta value={r.delta} />
+                    </td>
+                    <td className="col-prev">{r.cmp.toLocaleString()}</td>
+                    <td className="col-prev">
+                      <Delta value={0} />
+                    </td>
+                    <td className="col-lyear">0</td>
+                    <td className="col-lyear">
+                      <Delta value={0} />
+                    </td>
+                  </tr>
+                ))
+              )}
+              {!loading && visibleRows.length > 0 && (
+                <tr className="cmp-tbl-total-row">
+                  <td>Total {tab === 'vdp' ? 'VDP' : ''}</td>
+                  <td className="col-cur">{totals.cur.toLocaleString()}</td>
+                  <td className="col-cur">
+                    <Delta value={totals.delta} />
+                  </td>
+                  <td className="col-prev">{totals.cmp.toLocaleString()}</td>
+                  <td className="col-prev">
+                    <Delta value={0} />
+                  </td>
+                  <td className="col-lyear">0</td>
+                  <td className="col-lyear">
+                    <Delta value={0} />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <div
-        style={{
-          padding: '.5rem .875rem',
-          borderTop: '1px solid var(--bd)',
-          fontSize: 10,
-          color: 'var(--t3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(200,232,122,.15)', border: '1px solid rgba(200,232,122,.3)' }} />
-        Current period &nbsp;&nbsp;
-        <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(111,160,255,.1)', border: '1px solid rgba(111,160,255,.2)' }} />
-        Previous period &nbsp;&nbsp;
-        <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(184,155,255,.08)', border: '1px solid rgba(184,155,255,.2)' }} />
+      <div className="cmp-table-foot">
+        <div className="cmp-legend-swatch cmp-legend-swatch--cur" />
+        Current period
+        <div className="cmp-legend-swatch cmp-legend-swatch--prev" />
+        Previous period
+        <div className="cmp-legend-swatch cmp-legend-swatch--lyear" />
         Last year same month
-        <span style={{ marginLeft: 'auto' }}>
-          MTD = Month to date · All times reflect client timezone
+        <span className="cmp-table-foot-note">
+          MoM compares current vs previous · YoY coming soon
         </span>
       </div>
     </Panel>

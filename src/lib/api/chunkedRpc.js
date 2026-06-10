@@ -91,3 +91,66 @@ export async function rpcByDateChunks(
   }
   return merged;
 }
+
+/**
+ * Run RPC in date windows; calls onBatch after each window with cumulative rows.
+ */
+export async function rpcByDateChunksProgressive(
+  supabase,
+  rpcName,
+  {
+    clientId,
+    from,
+    to,
+    extraParams = {},
+    chunkDays = RPC_CHUNK_DAYS,
+    concurrency = 1,
+    onCancelCheck,
+    onBatch,
+  } = {}
+) {
+  if (!clientId || !from || !to) return [];
+  if (onCancelCheck?.()) return null;
+
+  const ranges = chunkDateRangesInclusive(from, to, chunkDays);
+  if (!ranges.length) return [];
+
+  const merged = [];
+  const total = ranges.length;
+  let completed = 0;
+
+  const emit = () => {
+    if (onBatch) onBatch([...merged], { completed, total });
+  };
+
+  if (ranges.length === 1) {
+    const data = await runRpcRangeResilient(
+      supabase,
+      rpcName,
+      clientId,
+      ranges[0],
+      extraParams
+    );
+    if (onCancelCheck?.()) return null;
+    if (data?.length) merged.push(...data);
+    completed = 1;
+    emit();
+    return merged;
+  }
+
+  for (let i = 0; i < ranges.length; i += concurrency) {
+    if (onCancelCheck?.()) return null;
+    const batch = ranges.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map((range) =>
+        runRpcRangeResilient(supabase, rpcName, clientId, range, extraParams)
+      )
+    );
+    for (const data of results) {
+      completed += 1;
+      if (data?.length) merged.push(...data);
+      emit();
+    }
+  }
+  return merged;
+}

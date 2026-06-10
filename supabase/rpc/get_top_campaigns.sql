@@ -1,21 +1,25 @@
 -- Top campaigns by views (all campaigns when p_limit IS NULL).
+-- Same fast/slow path pattern as get_ga4_channel_breakdown.
 -- Run in Supabase SQL editor.
 
 DROP FUNCTION IF EXISTS public.get_top_campaigns(text, date, date, text, integer);
 DROP FUNCTION IF EXISTS public.get_top_campaigns(text, date, date, text, integer, integer[]);
+DROP FUNCTION IF EXISTS public.get_top_campaigns(
+  text, date, date, text, integer, text[], text[], text[], text[], integer[], text
+);
 
 CREATE OR REPLACE FUNCTION public.get_top_campaigns(
   p_client_id text,
   p_from      date,
   p_to        date,
-  p_page_type text DEFAULT 'ALL',
+  p_page_type text   DEFAULT 'ALL',
   p_limit     integer DEFAULT NULL,
   p_types     text[] DEFAULT NULL,
   p_makes     text[] DEFAULT NULL,
   p_models    text[] DEFAULT NULL,
   p_locations text[] DEFAULT NULL,
   p_years     integer[] DEFAULT NULL,
-  p_condition text DEFAULT 'BOTH'
+  p_condition text   DEFAULT 'BOTH'
 )
 RETURNS TABLE (
   campaign    text,
@@ -29,22 +33,26 @@ RETURNS TABLE (
   pct         numeric,
   rank        integer
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  WITH inv_filter_active AS (
-    SELECT (
-      COALESCE(array_length(p_types, 1), 0)     > 0 OR
-      COALESCE(array_length(p_makes, 1), 0)     > 0 OR
-      COALESCE(array_length(p_models, 1), 0)    > 0 OR
-      COALESCE(array_length(p_locations, 1), 0) > 0 OR
-      COALESCE(array_length(p_years, 1), 0)     > 0 OR
-      UPPER(COALESCE(p_condition, 'BOTH')) <> 'BOTH'
-    ) AS active
-  ),
-  pages AS (
+DECLARE
+  v_filter_active boolean;
+  v_page_type     text := UPPER(COALESCE(p_page_type, 'ALL'));
+  v_condition     text := UPPER(COALESCE(p_condition, 'BOTH'));
+BEGIN
+  v_filter_active :=
+       COALESCE(array_length(p_types, 1), 0)     > 0
+    OR COALESCE(array_length(p_makes, 1), 0)     > 0
+    OR COALESCE(array_length(p_models, 1), 0)    > 0
+    OR COALESCE(array_length(p_locations, 1), 0) > 0
+    OR COALESCE(array_length(p_years, 1), 0)     > 0
+    OR v_condition <> 'BOTH';
+
+  RETURN QUERY
+  WITH pages AS (
     SELECT
       p.session_campaign,
       p.source,
@@ -61,13 +69,13 @@ AS $$
     WHERE p.client_id = p_client_id
       AND p.report_date BETWEEN p_from AND p_to
       AND (
-        (UPPER(p_page_type) = 'ALL')
-        OR (UPPER(p_page_type) = 'VDP'   AND UPPER(COALESCE(p.ga4_page_type, '')) LIKE 'VDP%')
-        OR (UPPER(p_page_type) = 'SRP'   AND UPPER(COALESCE(p.ga4_page_type, '')) = 'SRP')
-        OR (UPPER(p_page_type) = 'HOME'  AND LOWER(COALESCE(p.ga4_page_type, '')) = 'home page')
-        OR (UPPER(p_page_type) = 'OTHER' AND UPPER(COALESCE(p.ga4_page_type, '')) NOT LIKE 'VDP%'
-                                       AND UPPER(COALESCE(p.ga4_page_type, '')) <> 'SRP'
-                                       AND LOWER(COALESCE(p.ga4_page_type, '')) <> 'home page')
+        v_page_type = 'ALL'
+        OR (v_page_type = 'VDP'   AND p.ga4_page_type ILIKE 'VDP%')
+        OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
+        OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
+        OR (v_page_type = 'OTHER' AND p.ga4_page_type NOT ILIKE 'VDP%'
+                                  AND p.ga4_page_type <> 'SRP'
+                                  AND p.ga4_page_type NOT ILIKE 'home%')
       )
   ),
   filtered AS (
@@ -81,8 +89,7 @@ AS $$
       p.total_users,
       p.new_users
     FROM pages p
-    CROSS JOIN inv_filter_active a
-    WHERE NOT a.active
+    WHERE NOT v_filter_active
 
     UNION ALL
 
@@ -96,45 +103,45 @@ AS $$
       p.total_users,
       p.new_users
     FROM pages p
-    INNER JOIN smart_final_data s
+    JOIN smart_final_data s
       ON s.client_id   = p.client_id
      AND s.report_date = p.report_date
      AND s.page_path   = p.page_path
-    CROSS JOIN inv_filter_active a
-    WHERE a.active
-      AND (COALESCE(array_length(p_types, 1), 0) = 0     OR s.inv_type     = ANY(p_types))
-      AND (COALESCE(array_length(p_makes, 1), 0) = 0     OR s.inv_make     = ANY(p_makes))
-      AND (COALESCE(array_length(p_models, 1), 0) = 0    OR s.inv_model    = ANY(p_models))
-      AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
-      AND (COALESCE(array_length(p_years, 1), 0) = 0     OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
-      AND (UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH' OR UPPER(s.inv_condition) = UPPER(p_condition))
+    WHERE v_filter_active
+      AND (p_types     IS NULL OR array_length(p_types, 1)     = 0 OR s.inv_type     = ANY(p_types))
+      AND (p_makes     IS NULL OR array_length(p_makes, 1)     = 0 OR s.inv_make     = ANY(p_makes))
+      AND (p_models    IS NULL OR array_length(p_models, 1)    = 0 OR s.inv_model    = ANY(p_models))
+      AND (p_locations IS NULL OR array_length(p_locations, 1) = 0 OR s.inv_location = ANY(p_locations))
+      AND (p_years     IS NULL OR array_length(p_years, 1)     = 0
+           OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years)))
+      AND (v_condition = 'BOTH' OR UPPER(s.inv_condition) = v_condition)
   ),
   agg AS (
     SELECT
-      campaign,
-      source,
-      medium,
-      channel,
-      SUM(views)::bigint AS views,
-      SUM(sessions)::bigint AS sessions,
-      SUM(total_users)::bigint AS total_users,
-      SUM(new_users)::bigint AS new_users
-    FROM filtered
-    GROUP BY campaign, source, medium, channel
+      f.campaign,
+      f.source,
+      f.medium,
+      f.channel,
+      SUM(f.views)::bigint AS views,
+      SUM(f.sessions)::bigint AS sessions,
+      SUM(f.total_users)::bigint AS total_users,
+      SUM(f.new_users)::bigint AS new_users
+    FROM filtered f
+    GROUP BY f.campaign, f.source, f.medium, f.channel
   ),
   ranked AS (
     SELECT
-      *,
-      ROW_NUMBER() OVER (ORDER BY views DESC, campaign, source, medium) AS rn
-    FROM agg
-    WHERE views > 0
+      a.*,
+      ROW_NUMBER() OVER (ORDER BY a.views DESC, a.campaign, a.source, a.medium) AS rn
+    FROM agg a
+    WHERE a.views > 0
   ),
   top_n AS (
-    SELECT * FROM ranked
-    WHERE p_limit IS NULL OR rn <= p_limit
+    SELECT * FROM ranked r
+    WHERE p_limit IS NULL OR r.rn <= p_limit
   ),
   grand AS (
-    SELECT NULLIF(SUM(views), 0)::numeric AS total FROM ranked
+    SELECT NULLIF(SUM(r.views), 0)::numeric AS total FROM ranked r
   )
   SELECT
     t.campaign,
@@ -150,6 +157,7 @@ AS $$
   FROM top_n t
   CROSS JOIN grand g
   ORDER BY t.rn;
+END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_top_campaigns(

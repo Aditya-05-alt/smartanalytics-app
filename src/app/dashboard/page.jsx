@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useCallback } from 'react';
 import PageTabs from '@/components/dashboard/overview/PageTabs';
 import OverviewFilters from '@/components/dashboard/overview/OverviewFilters';
 import KpiRow from '@/components/dashboard/overview/KpiRow';
@@ -29,21 +28,22 @@ const TAB_PAGE_TYPE = {
   other: 'Other',
 };
 
-function OverviewBody({ comparing, onToggleCmp }) {
-  const { tab, setTab, error, clientKey, from, to } = useOverview();
+function OverviewBody() {
+  const { tab, error, clientKey, from, to } = useOverview();
 
   return (
     <>
-      <PageTabs
-        active={tab}
-        onChange={setTab}
-        comparing={comparing}
-        onToggleCmp={onToggleCmp}
-      />
+      <PageTabs />
       <OverviewFilters />
 
       <div className="content">
         <KpiRow />
+
+        {(tab === 'all' || tab === 'vdp') && (
+          <div className="dashboard-full-row">
+            <CmpTable />
+          </div>
+        )}
 
         {tab === 'vdp' ? (
           <div className="g2">
@@ -112,8 +112,6 @@ function OverviewBody({ comparing, onToggleCmp }) {
           <TopCampaigns clientId={clientKey} from={from} to={to} />
         </div>
 
-        <CmpTable />
-
         {/* Bottom row — re-enable when ready:
         <div className="g3">
           <MakesTable />
@@ -136,12 +134,9 @@ function OverviewBody({ comparing, onToggleCmp }) {
 }
 
 export default function OverviewPage() {
-  const [comparing, setComparing] = useState(false);
-  const toggleCmp = useCallback(() => setComparing((c) => !c), []);
-
   return (
     <OverviewProvider>
-      <OverviewBody comparing={comparing} onToggleCmp={toggleCmp} />
+      <OverviewBody />
     </OverviewProvider>
   );
 }

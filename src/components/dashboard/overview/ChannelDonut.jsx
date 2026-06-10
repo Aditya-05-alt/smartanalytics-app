@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
-import { shouldPrefetchBreakdownTabs } from '@/lib/api/rpcChunkPlan';
 import {
   getChannelBreakdownCache,
   hasChannelBreakdownCache,
@@ -10,12 +9,14 @@ import {
 import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { channelRowsToDonutData } from '@/lib/ga4/channelDisplay';
+import {
+  applyChannelGroupsToDonutItems,
+  attachCompareValuesForGrouping,
+} from '@/lib/ga4/channelGroups';
+import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
 import { useOverview } from './OverviewDataContext';
 import BreakdownDonut from './BreakdownDonut';
 
-const ALL_PAGE_TYPE_FILTERS = ['ALL', 'VDP', 'SRP', 'Home', 'Other'];
-
-/** Top tab id (OverviewDataContext) → RPC p_page_type */
 const TAB_TO_FILTER = {
   all: 'ALL',
   vdp: 'VDP',
@@ -32,7 +33,6 @@ const CENTER_LABEL = {
   other: 'OTHER VIEWS',
 };
 
-/** Optional prop labels → tab id */
 const PAGE_TYPE_TO_TAB = {
   All: 'all',
   VDP: 'vdp',
@@ -48,116 +48,35 @@ function resolveTabId(pageTypeProp, tabFromContext) {
   return tabFromContext || 'all';
 }
 
-/**
- * Channel-breakdown donut — views by marketing channel from
- * `get_ga4_channel_breakdown` (page-grain views only).
- * Page type filter follows the top-level dashboard tabs via OverviewDataContext.
- */
-export default function ChannelDonut({
-  clientId: clientIdProp,
-  from: fromProp,
-  to: toProp,
-  pageType: pageTypeProp,
+function useChannelBreakdownRows({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  vdpFilters,
+  tab,
+  filterCacheSuffix,
+  beginBreakdownLoad,
+  endBreakdownLoad,
+  reportBreakdownChunk,
+  trackBreakdownLoad = true,
 }) {
-  const {
-    tab,
-    vdpFilters,
-    clientKey,
-    from: ctxFrom,
-    to: ctxTo,
-    loading: overviewLoading,
-  } = useOverview();
-
-  const tabId = resolveTabId(pageTypeProp, tab);
-  const pageTypeFilter = TAB_TO_FILTER[tabId] || 'ALL';
-  const centerLabel = CENTER_LABEL[tabId] || 'ALL VIEWS';
-  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
-
-  const clientId = clientIdProp ?? clientKey;
-  const from = fromProp ?? ctxFrom;
-  const to = toProp ?? ctxTo;
-
-  const [chartTopN, setChartTopN] = useState(null);
   const [rows, setRows] = useState(() =>
     clientId && from && to
-      ? getChannelBreakdownCache(
-          clientId,
-          from,
-          to,
-          pageTypeFilter,
-          filterCacheSuffix
-        ) || []
+      ? getChannelBreakdownCache(clientId, from, to, pageTypeFilter, filterCacheSuffix) || []
       : []
   );
   const [loading, setLoading] = useState(
     () =>
       Boolean(
-        clientId &&
-          from &&
-          to &&
-          !hasChannelBreakdownCache(
-            clientId,
-            from,
-            to,
-            pageTypeFilter,
-            filterCacheSuffix
-          )
+        clientId
+          && from
+          && to
+          && !hasChannelBreakdownCache(clientId, from, to, pageTypeFilter, filterCacheSuffix)
       )
   );
   const [error, setError] = useState(null);
 
-  // Prefetch other tab filters only for short ranges (long ranges load active tab only).
-  useEffect(() => {
-    if (!clientId || !from || !to || !shouldPrefetchBreakdownTabs(from, to)) {
-      return undefined;
-    }
-
-    let cancelled = false;
-
-    const pending = ALL_PAGE_TYPE_FILTERS.filter(
-      (filter) =>
-        filter !== pageTypeFilter &&
-        !hasChannelBreakdownCache(clientId, from, to, filter, filterCacheSuffix)
-    );
-
-    if (!pending.length) return undefined;
-
-    const PREFETCH_CONCURRENCY = 1;
-    let next = 0;
-
-    async function worker() {
-      while (next < pending.length) {
-        if (cancelled) return;
-        const filter = pending[next];
-        next += 1;
-        try {
-          await fetchChannelBreakdownBundle({
-            clientId,
-            from,
-            to,
-            pageTypeFilter: filter,
-            vdpFilters,
-            tab,
-            onCancelCheck: () => cancelled,
-          });
-        } catch {
-          /* prefetch failures are non-fatal */
-        }
-      }
-    }
-
-    Promise.all(
-      Array.from({ length: Math.min(PREFETCH_CONCURRENCY, pending.length) }, () =>
-        worker()
-      )
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
-
-  // Active tab: cache-first, then fetch if needed.
   useEffect(() => {
     if (!clientId || !from || !to) {
       setRows([]);
@@ -182,6 +101,7 @@ export default function ChannelDonut({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    if (trackBreakdownLoad) beginBreakdownLoad?.();
 
     fetchChannelBreakdownBundle({
       clientId,
@@ -191,6 +111,14 @@ export default function ChannelDonut({
       vdpFilters,
       tab,
       onCancelCheck: () => cancelled,
+      onProgress: (partial, meta) => {
+        if (cancelled) return;
+        setRows(partial || []);
+        if (trackBreakdownLoad && meta?.total > 1 && !meta?.fromCache) {
+          reportBreakdownChunk?.(meta);
+        }
+        if (partial?.length) setLoading(false);
+      },
     })
       .then((data) => {
         if (!cancelled) setRows(data || []);
@@ -203,37 +131,300 @@ export default function ChannelDonut({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+        if (trackBreakdownLoad) endBreakdownLoad?.();
       });
 
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
+  }, [
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+    trackBreakdownLoad,
+  ]);
 
+  return { rows, loading, error };
+}
+
+function ChannelDonutDisplay({
+  rows,
+  loading,
+  error,
+  clientId,
+  periodLabel,
+  centerLabel,
+  chartTopN,
+  overviewLoading,
+  baselineDonutData,
+}) {
   const allData = useMemo(() => channelRowsToDonutData(rows), [rows]);
-
-  const displayData = useMemo(() => {
+  const chartData = useMemo(() => {
     if (chartTopN == null) return allData;
     return allData.slice(0, chartTopN);
   }, [allData, chartTopN]);
 
-  const displayedTotal = useMemo(
-    () => displayData.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
-    [displayData]
+  const listData = useMemo(() => {
+    if (!baselineDonutData) {
+      return applyChannelGroupsToDonutItems(allData);
+    }
+    const withCmp = attachCompareValuesForGrouping(allData, baselineDonutData);
+    const { items } = buildDonutCompareDeltas(withCmp, baselineDonutData);
+    return applyChannelGroupsToDonutItems(items);
+  }, [allData, baselineDonutData]);
+
+  const { totalDelta } = useMemo(() => {
+    if (!baselineDonutData) return { totalDelta: null };
+    return buildDonutCompareDeltas(allData, baselineDonutData);
+  }, [allData, baselineDonutData]);
+
+  const leafTotal = useMemo(
+    () => allData.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
+    [allData]
+  );
+
+  const chartTotal = useMemo(
+    () => chartData.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
+    [chartData]
   );
 
   const centerDisplay =
-    displayedTotal > 0
+    chartTotal > 0
       ? new Intl.NumberFormat('en', {
           notation: 'compact',
           maximumFractionDigits: 1,
-        }).format(displayedTotal)
+        }).format(chartTotal)
       : '0';
+
+  const showSkeleton = loading && rows.length === 0;
+
+  return (
+    <BreakdownDonut
+      title={periodLabel}
+      data={listData}
+      chartData={chartData}
+      centerLabel={centerLabel}
+      centerValue={centerDisplay}
+      totalViews={leafTotal}
+      totalLabel="Total"
+      totalDelta={totalDelta}
+      loading={showSkeleton || (!clientId && overviewLoading)}
+      error={error}
+      skeletonRows={8}
+      listScrollable
+    />
+  );
+}
+
+function ChannelDonutPane({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  tab,
+  vdpFilters,
+  filterCacheSuffix,
+  periodLabel,
+  centerLabel,
+  chartTopN,
+  overviewLoading,
+  beginBreakdownLoad,
+  endBreakdownLoad,
+  reportBreakdownChunk,
+  trackBreakdownLoad,
+  baselineDonutData,
+}) {
+  const { rows, loading, error } = useChannelBreakdownRows({
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+    trackBreakdownLoad,
+  });
+
+  return (
+    <ChannelDonutDisplay
+      rows={rows}
+      loading={loading}
+      error={error}
+      clientId={clientId}
+      periodLabel={periodLabel}
+      centerLabel={centerLabel}
+      chartTopN={chartTopN}
+      overviewLoading={overviewLoading}
+      baselineDonutData={baselineDonutData}
+    />
+  );
+}
+
+function ChannelDonutCompare({
+  clientId,
+  from,
+  to,
+  compareFrom,
+  compareTo,
+  pageTypeFilter,
+  tab,
+  vdpFilters,
+  filterCacheSuffix,
+  currentPeriodLabel,
+  comparePeriodLabel,
+  centerLabel,
+  overviewLoading,
+  beginBreakdownLoad,
+  endBreakdownLoad,
+  reportBreakdownChunk,
+}) {
+  const [chartTopN, setChartTopN] = useState(null);
+
+  const compareFetch = useChannelBreakdownRows({
+    clientId,
+    from: compareFrom,
+    to: compareTo,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+    trackBreakdownLoad: true,
+  });
+
+  const currentFetch = useChannelBreakdownRows({
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+    trackBreakdownLoad: true,
+  });
+
+  const compareAllData = useMemo(
+    () => channelRowsToDonutData(compareFetch.rows),
+    [compareFetch.rows]
+  );
+
+  return (
+    <div className="compare-donut-section">
+      <div className="compare-donut-head">
+        <div className="compare-donut-title">Channel Breakdown</div>
+        <div className="make-breakdown-head-controls">
+          <ChartTopNSelect
+            value={chartTopN}
+            onChange={setChartTopN}
+            ariaLabel="Channel chart limit"
+          />
+        </div>
+      </div>
+      <div className="compare-donut-grid">
+        <ChannelDonutDisplay
+          rows={compareFetch.rows}
+          loading={compareFetch.loading}
+          error={compareFetch.error}
+          clientId={clientId}
+          periodLabel={comparePeriodLabel}
+          centerLabel={centerLabel}
+          chartTopN={chartTopN}
+          overviewLoading={overviewLoading}
+        />
+        <ChannelDonutDisplay
+          rows={currentFetch.rows}
+          loading={currentFetch.loading}
+          error={currentFetch.error}
+          clientId={clientId}
+          periodLabel={currentPeriodLabel}
+          centerLabel={centerLabel}
+          chartTopN={chartTopN}
+          overviewLoading={overviewLoading}
+          baselineDonutData={compareAllData}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChannelDonutSingle({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  tab,
+  vdpFilters,
+  filterCacheSuffix,
+  centerLabel,
+  overviewLoading,
+  beginBreakdownLoad,
+  endBreakdownLoad,
+  reportBreakdownChunk,
+}) {
+  const [chartTopN, setChartTopN] = useState(null);
+  const { rows, loading, error } = useChannelBreakdownRows({
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+  });
+
+  const allData = useMemo(() => channelRowsToDonutData(rows), [rows]);
+  const chartData = useMemo(() => {
+    if (chartTopN == null) return allData;
+    return allData.slice(0, chartTopN);
+  }, [allData, chartTopN]);
+  const listData = useMemo(
+    () => applyChannelGroupsToDonutItems(allData),
+    [allData]
+  );
+
+  const leafTotal = useMemo(
+    () => allData.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
+    [allData]
+  );
+
+  const chartTotal = useMemo(
+    () => chartData.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
+    [chartData]
+  );
+
+  const centerDisplay =
+    chartTotal > 0
+      ? new Intl.NumberFormat('en', {
+          notation: 'compact',
+          maximumFractionDigits: 1,
+        }).format(chartTotal)
+      : '0';
+
+  const showSkeleton = loading && rows.length === 0;
 
   return (
     <BreakdownDonut
       title="Channel Breakdown"
-      data={displayData}
+      data={listData}
+      chartData={chartData}
       headerExtra={
         <div className="make-breakdown-head-controls">
           <ChartTopNSelect
@@ -245,12 +436,87 @@ export default function ChannelDonut({
       }
       centerLabel={centerLabel}
       centerValue={centerDisplay}
-      totalViews={displayedTotal}
+      totalViews={leafTotal}
       totalLabel="Total"
-      loading={loading || (!clientId && overviewLoading)}
+      loading={showSkeleton || (!clientId && overviewLoading)}
       error={error}
       skeletonRows={8}
       listScrollable
+    />
+  );
+}
+
+export default function ChannelDonut({
+  clientId: clientIdProp,
+  from: fromProp,
+  to: toProp,
+  pageType: pageTypeProp,
+}) {
+  const {
+    tab,
+    vdpFilters,
+    clientKey,
+    from: ctxFrom,
+    to: ctxTo,
+    loading: overviewLoading,
+    compareEnabled,
+    compareFrom,
+    compareTo,
+    currentPeriodLabel,
+    comparePeriodLabel,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+  } = useOverview();
+
+  const tabId = resolveTabId(pageTypeProp, tab);
+  const pageTypeFilter = TAB_TO_FILTER[tabId] || 'ALL';
+  const centerLabel = CENTER_LABEL[tabId] || 'ALL VIEWS';
+  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
+
+  const clientId = clientIdProp ?? clientKey;
+  const from = fromProp ?? ctxFrom;
+  const to = toProp ?? ctxTo;
+
+  const showCompare = compareEnabled && compareFrom && compareTo;
+
+  if (showCompare) {
+    return (
+      <ChannelDonutCompare
+        clientId={clientId}
+        from={from}
+        to={to}
+        compareFrom={compareFrom}
+        compareTo={compareTo}
+        pageTypeFilter={pageTypeFilter}
+        tab={tab}
+        vdpFilters={vdpFilters}
+        filterCacheSuffix={filterCacheSuffix}
+        currentPeriodLabel={currentPeriodLabel}
+        comparePeriodLabel={comparePeriodLabel}
+        centerLabel={centerLabel}
+        overviewLoading={overviewLoading}
+        beginBreakdownLoad={beginBreakdownLoad}
+        endBreakdownLoad={endBreakdownLoad}
+        reportBreakdownChunk={reportBreakdownChunk}
+      />
+    );
+  }
+
+  return (
+    <ChannelDonutSingle
+      clientId={clientId}
+      from={from}
+      to={to}
+      pageTypeFilter={pageTypeFilter}
+      tab={tab}
+      vdpFilters={vdpFilters}
+      filterCacheSuffix={filterCacheSuffix}
+      centerLabel={centerLabel}
+      overviewLoading={overviewLoading}
+      beginBreakdownLoad={beginBreakdownLoad}
+      endBreakdownLoad={endBreakdownLoad}
+      reportBreakdownChunk={reportBreakdownChunk}
     />
   );
 }

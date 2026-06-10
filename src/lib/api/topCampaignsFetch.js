@@ -1,19 +1,17 @@
 import { createClient } from '@/lib/supabase/client';
-import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
+import { rpcByDateChunksProgressive } from '@/lib/api/chunkedRpc';
 import { mergeTopCampaignRows } from '@/lib/ga4/topCampaignsMerge';
-import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
+import { BREAKDOWN_UI_CHUNK_DAYS } from '@/lib/api/rpcChunkPlan';
 import {
   getTopCampaignsCache,
   setTopCampaignsCache,
 } from '@/lib/data/topCampaignsCache';
 import {
-  vdpFiltersActive,
   vdpRpcExtraParams,
   vdpFilterCacheSuffix,
-  appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
 
-async function fetchViaApi({
+async function fetchViaClientProgressive({
   clientId,
   from,
   to,
@@ -21,67 +19,40 @@ async function fetchViaApi({
   vdpFilters,
   tab,
   onCancelCheck,
-}) {
-  if (typeof window === 'undefined') return null;
-  if (onCancelCheck?.()) return null;
-
-  const qs = new URLSearchParams({
-    clientId,
-    from,
-    to,
-    pageType: pageTypeFilter,
-  });
-  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
-
-  const res = await fetch(`/api/dashboard/top-campaigns?${qs}`, {
-    credentials: 'same-origin',
-  });
-  const json = await res.json().catch(() => ({}));
-
-  if (onCancelCheck?.()) return null;
-  if (!res.ok) {
-    if (res.status === 503) return null;
-    throw new Error(json.error || `Top campaigns failed (${res.status})`);
-  }
-
-  return json.rows || [];
-}
-
-async function fetchViaClient({
-  clientId,
-  from,
-  to,
-  pageTypeFilter,
-  vdpFilters,
-  tab,
-  onCancelCheck,
+  onProgress,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
-  const invActive = vdpFiltersActive(vdpFilters, tab);
-  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
-    invFilters: invActive,
-  });
+  const extraParams = {
+    p_page_type: pageTypeFilter,
+    p_limit: null,
+    ...vdpRpcExtraParams(vdpFilters, tab),
+  };
 
-  const raw = await rpcByDateChunks(supabase, 'get_top_campaigns', {
+  const raw = await rpcByDateChunksProgressive(supabase, 'get_top_campaigns', {
     clientId,
     from,
     to,
-    extraParams: {
-      p_page_type: pageTypeFilter,
-      p_limit: null,
-      ...vdpRpcExtraParams(vdpFilters, tab),
-    },
-    chunkDays,
-    concurrency,
+    extraParams,
+    chunkDays: BREAKDOWN_UI_CHUNK_DAYS,
+    concurrency: 1,
     onCancelCheck,
+    onBatch: (batchRows, meta) => {
+      if (onCancelCheck?.()) return;
+      const merged = mergeTopCampaignRows(batchRows);
+      onProgress?.(merged, meta);
+    },
   });
 
   if (onCancelCheck?.()) return null;
-  return mergeTopCampaignRows(raw);
+  return mergeTopCampaignRows(raw || []);
 }
 
+/**
+ * Fetch top campaigns for ONE page type only (ALL | VDP | SRP | Home | Other).
+ * Streams partial results every BREAKDOWN_UI_CHUNK_DAYS as chunks complete.
+ */
 export async function fetchTopCampaignsBundle({
   clientId,
   from,
@@ -90,6 +61,7 @@ export async function fetchTopCampaignsBundle({
   vdpFilters,
   tab = 'all',
   onCancelCheck,
+  onProgress,
   skipCache = false,
 }) {
   if (!clientId || !from || !to) return [];
@@ -104,10 +76,13 @@ export async function fetchTopCampaignsBundle({
       pageTypeFilter,
       cacheSuffix
     );
-    if (cached) return cached;
+    if (cached) {
+      onProgress?.(cached, { completed: 1, total: 1, fromCache: true });
+      return cached;
+    }
   }
 
-  const fetchOpts = {
+  const result = await fetchViaClientProgressive({
     clientId,
     from,
     to,
@@ -115,29 +90,18 @@ export async function fetchTopCampaignsBundle({
     vdpFilters,
     tab,
     onCancelCheck,
-  };
-
-  let rows;
-  try {
-    rows = await fetchViaApi(fetchOpts);
-    if (rows == null) {
-      rows = await fetchViaClient(fetchOpts);
-    }
-  } catch (err) {
-    if (onCancelCheck?.()) return null;
-    rows = await fetchViaClient(fetchOpts);
-    if (rows == null) throw err;
-  }
+    onProgress,
+  });
 
   if (onCancelCheck?.()) return null;
-  const result = rows || [];
+  const rows = result || [];
   setTopCampaignsCache(
     clientId,
     from,
     to,
     pageTypeFilter,
-    result,
+    rows,
     cacheSuffix
   );
-  return result;
+  return rows;
 }

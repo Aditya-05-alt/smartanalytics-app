@@ -2,17 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
-import { Panel, PanelBody, PanelHeader } from './Panel';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
-import { shouldPrefetchBreakdownTabs } from '@/lib/api/rpcChunkPlan';
 import {
   getTopCampaignsCache,
   hasTopCampaignsCache,
 } from '@/lib/data/topCampaignsCache';
 import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
+import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
 import { useOverview } from './overview/OverviewDataContext';
+import BreakdownDonut from '@/components/dashboard/overview/BreakdownDonut';
 
-const TAB_TO_CAMPAIGN_FILTER = {
+const TAB_TO_FILTER = {
   all: 'ALL',
   vdp: 'VDP',
   srp: 'SRP',
@@ -20,142 +20,91 @@ const TAB_TO_CAMPAIGN_FILTER = {
   other: 'Other',
 };
 
-const ALL_PAGE_TYPE_FILTERS = ['ALL', 'VDP', 'SRP', 'Home', 'Other'];
+const CENTER_LABEL = {
+  all: 'ALL VIEWS',
+  vdp: 'VDP VIEWS',
+  srp: 'SRP VIEWS',
+  home: 'HOMEPAGE VIEWS',
+  other: 'OTHER VIEWS',
+};
 
-const CAMPAIGN_COLORS = [
-  '#4f86f7',
-  '#57cfa1',
-  '#f2be22',
-  '#e8806f',
-  '#8f7af6',
+const CAMPAIGN_PALETTE = [
   '#34d399',
   '#60a5fa',
+  '#a3e635',
   '#fb923c',
+  '#8f7af6',
   '#f472b6',
-  '#94a3b8',
+  '#22d3ee',
+  '#f2be22',
+  '#e8806f',
+  '#748ab2',
 ];
-
-function colorForRank(rank) {
-  const r = Number(rank) || 1;
-  return CAMPAIGN_COLORS[Math.min(Math.max(r - 1, 0), CAMPAIGN_COLORS.length - 1)];
-}
 
 function normalizeRows(data) {
   const list = Array.isArray(data) ? data : data ? [data] : [];
   return list.map((row, index) => ({
     campaign: String(row.campaign ?? '(not set)'),
-    source: String(row.source ?? ''),
-    medium: String(row.medium ?? ''),
-    channel: String(row.channel ?? ''),
     views: Number(row.views ?? 0) || 0,
-    sessions: Number(row.sessions ?? 0) || 0,
-    total_users: Number(row.total_users ?? 0) || 0,
-    new_users: Number(row.new_users ?? 0) || 0,
     pct: Number(row.pct ?? 0) || 0,
     rank: Number(row.rank ?? index + 1) || index + 1,
   }));
 }
 
-export default function TopCampaigns({
-  clientId: clientIdProp,
-  from: fromProp,
-  to: toProp,
-}) {
-  const { tab, vdpFilters, clientKey, from: ctxFrom, to: ctxTo } = useOverview();
-  const clientId = clientIdProp ?? clientKey;
-  const from = fromProp ?? ctxFrom;
-  const to = toProp ?? ctxTo;
+function colorForCampaign(index = 0) {
+  return CAMPAIGN_PALETTE[index % CAMPAIGN_PALETTE.length];
+}
 
-  const pageTypeFilter = TAB_TO_CAMPAIGN_FILTER[tab] || 'ALL';
-  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
-  const [chartTopN, setChartTopN] = useState(null);
+function campaignRowsToDonutData(rows) {
+  const sorted = [...(rows || [])].sort(
+    (a, b) => (Number(b.views) || 0) - (Number(a.views) || 0)
+  );
+
+  return sorted
+    .filter((row) => (Number(row.views) || 0) > 0)
+    .map((row, index) => {
+      const fullName = String(row.campaign ?? '(not set)');
+      const name = fullName.length > 32 ? `${fullName.slice(0, 30)}…` : fullName;
+      return {
+        name,
+        fullName,
+        color: colorForCampaign(index),
+        value: Number(row.views) || 0,
+        pct: Number(row.pct) || 0,
+      };
+    });
+}
+
+function useTopCampaignsRows({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  vdpFilters,
+  tab,
+  filterCacheSuffix,
+  beginBreakdownLoad,
+  endBreakdownLoad,
+  reportBreakdownChunk,
+  trackBreakdownLoad = true,
+}) {
   const [rows, setRows] = useState(() =>
     clientId && from && to
       ? normalizeRows(
-          getTopCampaignsCache(
-            clientId,
-            from,
-            to,
-            pageTypeFilter,
-            filterCacheSuffix
-          ) || []
+          getTopCampaignsCache(clientId, from, to, pageTypeFilter, filterCacheSuffix) || []
         )
       : []
   );
   const [loading, setLoading] = useState(
     () =>
       Boolean(
-        clientId &&
-          from &&
-          to &&
-          !hasTopCampaignsCache(
-            clientId,
-            from,
-            to,
-            pageTypeFilter,
-            filterCacheSuffix
-          )
+        clientId
+          && from
+          && to
+          && !hasTopCampaignsCache(clientId, from, to, pageTypeFilter, filterCacheSuffix)
       )
   );
   const [error, setError] = useState(null);
-
-  const tabLabel = useMemo(() => {
-    const labels = {
-      all: 'All Pages',
-      vdp: 'VDP',
-      srp: 'SRP',
-      home: 'Homepage',
-      other: 'Other',
-    };
-    return labels[tab] || 'Page';
-  }, [tab]);
-
-  useEffect(() => {
-    if (!clientId || !from || !to || !shouldPrefetchBreakdownTabs(from, to)) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    const pending = ALL_PAGE_TYPE_FILTERS.filter(
-      (f) =>
-        f !== pageTypeFilter &&
-        !hasTopCampaignsCache(clientId, from, to, f, filterCacheSuffix)
-    );
-
-    if (!pending.length) return undefined;
-
-    let next = 0;
-    const concurrency = 1;
-
-    async function worker() {
-      while (next < pending.length) {
-        if (cancelled) return;
-        const filter = pending[next];
-        next += 1;
-        try {
-          await fetchTopCampaignsBundle({
-            clientId,
-            from,
-            to,
-            pageTypeFilter: filter,
-            vdpFilters,
-            tab,
-            onCancelCheck: () => cancelled,
-          });
-        } catch {
-          /* prefetch */
-        }
-      }
-    }
-
-    Promise.all(
-      Array.from({ length: Math.min(concurrency, pending.length) }, () => worker())
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
 
   useEffect(() => {
     if (!clientId || !from || !to) {
@@ -181,6 +130,7 @@ export default function TopCampaigns({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    if (trackBreakdownLoad) beginBreakdownLoad?.();
 
     fetchTopCampaignsBundle({
       clientId,
@@ -190,6 +140,14 @@ export default function TopCampaigns({
       vdpFilters,
       tab,
       onCancelCheck: () => cancelled,
+      onProgress: (partial, meta) => {
+        if (cancelled) return;
+        setRows(normalizeRows(partial));
+        if (trackBreakdownLoad && meta?.total > 1 && !meta?.fromCache) {
+          reportBreakdownChunk?.(meta);
+        }
+        if (partial?.length) setLoading(false);
+      },
     })
       .then((data) => {
         if (cancelled || data === undefined) return;
@@ -202,43 +160,143 @@ export default function TopCampaigns({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+        if (trackBreakdownLoad) endBreakdownLoad?.();
       });
 
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, pageTypeFilter, vdpFilters, tab, filterCacheSuffix]);
+  }, [
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+    trackBreakdownLoad,
+  ]);
 
-  const allRows = rows;
-  const displayRows = useMemo(() => {
-    if (chartTopN == null) return allRows;
-    return allRows.slice(0, chartTopN);
-  }, [allRows, chartTopN]);
+  return { rows, loading, error };
+}
 
-  const displayTotal = useMemo(
-    () => displayRows.reduce((sum, row) => sum + row.views, 0),
-    [displayRows]
+function TopCampaignsDisplay({
+  rows,
+  loading,
+  error,
+  clientId,
+  periodLabel,
+  centerLabel,
+  chartTopN,
+  overviewLoading,
+  baselineDonutData,
+}) {
+  const allData = useMemo(() => campaignRowsToDonutData(rows), [rows]);
+  const displayData = useMemo(() => {
+    if (chartTopN == null) return allData;
+    return allData.slice(0, chartTopN);
+  }, [allData, chartTopN]);
+
+  const { items: dataWithDelta, totalDelta } = useMemo(() => {
+    if (!baselineDonutData) {
+      return { items: displayData, totalDelta: null };
+    }
+    return buildDonutCompareDeltas(displayData, baselineDonutData);
+  }, [displayData, baselineDonutData]);
+
+  const displayedTotal = useMemo(
+    () => dataWithDelta.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
+    [dataWithDelta]
   );
 
-  const chartData = useMemo(
-    () =>
-      displayRows.map((row) => ({
-        ...row,
-        color: colorForRank(row.rank),
-      })),
-    [displayRows]
+  const centerDisplay =
+    displayedTotal > 0
+      ? new Intl.NumberFormat('en', {
+          notation: 'compact',
+          maximumFractionDigits: 1,
+        }).format(displayedTotal)
+      : '0';
+
+  const showSkeleton = loading && rows.length === 0;
+
+  return (
+    <BreakdownDonut
+      title={periodLabel}
+      data={dataWithDelta}
+      centerLabel={centerLabel}
+      centerValue={centerDisplay}
+      totalViews={displayedTotal}
+      totalLabel="Total"
+      totalDelta={totalDelta}
+      loading={showSkeleton || (!clientId && overviewLoading)}
+      error={error}
+      emptyMessage={!loading && !error && rows.length === 0 ? 'No campaign data for this period.' : null}
+      skeletonRows={8}
+      listScrollable
+    />
+  );
+}
+
+function TopCampaignsCompare({
+  clientId,
+  from,
+  to,
+  compareFrom,
+  compareTo,
+  pageTypeFilter,
+  tab,
+  vdpFilters,
+  filterCacheSuffix,
+  currentPeriodLabel,
+  comparePeriodLabel,
+  centerLabel,
+  overviewLoading,
+  beginBreakdownLoad,
+  endBreakdownLoad,
+  reportBreakdownChunk,
+}) {
+  const [chartTopN, setChartTopN] = useState(null);
+
+  const compareFetch = useTopCampaignsRows({
+    clientId,
+    from: compareFrom,
+    to: compareTo,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+    trackBreakdownLoad: true,
+  });
+
+  const currentFetch = useTopCampaignsRows({
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+    trackBreakdownLoad: true,
+  });
+
+  const compareAllData = useMemo(
+    () => campaignRowsToDonutData(compareFetch.rows),
+    [compareFetch.rows]
   );
 
   return (
-    <Panel className="make-breakdown-panel top-campaigns-panel">
-      <PanelHeader
-        title="Campaign Breakdown"
-        subtitle={
-          chartTopN == null
-            ? `${tabLabel} · ${allRows.length} campaign(s)`
-            : `${tabLabel} · Top ${chartTopN} of ${allRows.length} campaign(s)`
-        }
-      >
+    <div className="compare-donut-section">
+      <div className="compare-donut-head">
+        <div className="compare-donut-title">Campaign Breakdown</div>
         <div className="make-breakdown-head-controls">
           <ChartTopNSelect
             value={chartTopN}
@@ -246,123 +304,182 @@ export default function TopCampaigns({
             ariaLabel="Campaign chart limit"
           />
         </div>
-      </PanelHeader>
-
-      <PanelBody>
-        {loading && (
-          <div className="make-breakdown-loading">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="make-breakdown-skel" />
-            ))}
-          </div>
-        )}
-
-        {!loading && error && (
-          <div className="make-breakdown-error" role="alert">
-            {error}
-          </div>
-        )}
-
-        {!loading && !error && allRows.length === 0 && (
-          <div className="make-breakdown-empty">No campaign data for this period.</div>
-        )}
-
-        {!loading && !error && allRows.length > 0 && (
-          <div className="make-breakdown-content">
-            <div className="make-breakdown-split">
-              <div className="make-breakdown-chart-col">
-                <CampaignPieChart data={chartData} total={displayTotal} />
-              </div>
-              <div className="make-breakdown-table-side">
-                <div className="make-breakdown-table-header">
-                  <span>Campaign</span>
-                  <span>Views</span>
-                </div>
-                <div className="make-breakdown-table-scroll">
-                  {displayRows.map((row, index) => (
-                    <div
-                      key={`${row.rank}-${row.campaign}-${row.source}-${index}`}
-                      className="make-breakdown-data-row"
-                    >
-                      <div className="make-breakdown-make-cell" title={row.campaign}>
-                        <span
-                          className="make-breakdown-dot"
-                          style={{ backgroundColor: colorForRank(row.rank) }}
-                        />
-                        <span className="make-breakdown-name">{row.campaign}</span>
-                      </div>
-                      <span className="make-breakdown-views-cell">
-                        {row.views.toLocaleString()}
-                        <span className="make-breakdown-pct-inline">
-                          {row.pct.toFixed(2)}%
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="make-breakdown-total">
-                  <span>TOTAL</span>
-                  <span className="make-breakdown-total-value">
-                    {displayTotal.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </PanelBody>
-    </Panel>
+      </div>
+      <div className="compare-donut-grid">
+        <TopCampaignsDisplay
+          rows={compareFetch.rows}
+          loading={compareFetch.loading}
+          error={compareFetch.error}
+          clientId={clientId}
+          periodLabel={comparePeriodLabel}
+          centerLabel={centerLabel}
+          chartTopN={chartTopN}
+          overviewLoading={overviewLoading}
+        />
+        <TopCampaignsDisplay
+          rows={currentFetch.rows}
+          loading={currentFetch.loading}
+          error={currentFetch.error}
+          clientId={clientId}
+          periodLabel={currentPeriodLabel}
+          centerLabel={centerLabel}
+          chartTopN={chartTopN}
+          overviewLoading={overviewLoading}
+          baselineDonutData={compareAllData}
+        />
+      </div>
+    </div>
   );
 }
 
-function CampaignPieChart({ data, total }) {
-  const size = 200;
-  const stroke = 26;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+function TopCampaignsSingle({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  tab,
+  vdpFilters,
+  filterCacheSuffix,
+  centerLabel,
+  overviewLoading,
+  beginBreakdownLoad,
+  endBreakdownLoad,
+  reportBreakdownChunk,
+}) {
+  const [chartTopN, setChartTopN] = useState(null);
+  const { rows, loading, error } = useTopCampaignsRows({
+    clientId,
+    from,
+    to,
+    pageTypeFilter,
+    vdpFilters,
+    tab,
+    filterCacheSuffix,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+  });
+
+  const allData = useMemo(() => campaignRowsToDonutData(rows), [rows]);
+  const displayData = useMemo(() => {
+    if (chartTopN == null) return allData;
+    return allData.slice(0, chartTopN);
+  }, [allData, chartTopN]);
+
+  const displayedTotal = useMemo(
+    () => displayData.reduce((sum, row) => sum + (Number(row.value) || 0), 0),
+    [displayData]
+  );
+
+  const centerDisplay =
+    displayedTotal > 0
+      ? new Intl.NumberFormat('en', {
+          notation: 'compact',
+          maximumFractionDigits: 1,
+        }).format(displayedTotal)
+      : '0';
+
+  const showSkeleton = loading && rows.length === 0;
 
   return (
-    <div className="make-breakdown-pie">
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        style={{ transform: 'rotate(-90deg)' }}
-        aria-label="Top campaigns by views"
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="var(--s3)"
-          strokeWidth={stroke}
-        />
-        {data.map((row) => {
-          const dash = (row.views / Math.max(total, 1)) * circumference;
-          if (dash <= 0) return null;
-          const node = (
-            <circle
-              key={`${row.rank}-${row.campaign}`}
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke={row.color}
-              strokeWidth={stroke}
-              strokeDasharray={`${dash} ${circumference - dash}`}
-              strokeDashoffset={-offset}
-            />
-          );
-          offset += dash;
-          return node;
-        })}
-      </svg>
-      <div className="make-breakdown-center">
-        <div className="make-breakdown-center-value">{total.toLocaleString()}</div>
-        <div className="make-breakdown-center-label">Chart views</div>
-      </div>
-    </div>
+    <BreakdownDonut
+      title="Campaign Breakdown"
+      data={displayData}
+      headerExtra={
+        <div className="make-breakdown-head-controls">
+          <ChartTopNSelect
+            value={chartTopN}
+            onChange={setChartTopN}
+            ariaLabel="Campaign chart limit"
+          />
+        </div>
+      }
+      centerLabel={centerLabel}
+      centerValue={centerDisplay}
+      totalViews={displayedTotal}
+      totalLabel="Total"
+      loading={showSkeleton || (!clientId && overviewLoading)}
+      error={error}
+      emptyMessage={!loading && !error && rows.length === 0 ? 'No campaign data for this period.' : null}
+      skeletonRows={8}
+      listScrollable
+    />
+  );
+}
+
+/**
+ * Campaign breakdown — same donut layout as Channel Breakdown.
+ * One RPC per active tab; side-by-side compare when Compare period is on.
+ */
+export default function TopCampaigns({
+  clientId: clientIdProp,
+  from: fromProp,
+  to: toProp,
+}) {
+  const {
+    tab,
+    vdpFilters,
+    clientKey,
+    from: ctxFrom,
+    to: ctxTo,
+    loading: overviewLoading,
+    compareEnabled,
+    compareFrom,
+    compareTo,
+    currentPeriodLabel,
+    comparePeriodLabel,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+    reportBreakdownChunk,
+  } = useOverview();
+
+  const pageTypeFilter = TAB_TO_FILTER[tab] || 'ALL';
+  const centerLabel = CENTER_LABEL[tab] || 'ALL VIEWS';
+  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
+
+  const clientId = clientIdProp ?? clientKey;
+  const from = fromProp ?? ctxFrom;
+  const to = toProp ?? ctxTo;
+
+  const showCompare = compareEnabled && compareFrom && compareTo;
+
+  if (showCompare) {
+    return (
+      <TopCampaignsCompare
+        clientId={clientId}
+        from={from}
+        to={to}
+        compareFrom={compareFrom}
+        compareTo={compareTo}
+        pageTypeFilter={pageTypeFilter}
+        tab={tab}
+        vdpFilters={vdpFilters}
+        filterCacheSuffix={filterCacheSuffix}
+        currentPeriodLabel={currentPeriodLabel}
+        comparePeriodLabel={comparePeriodLabel}
+        centerLabel={centerLabel}
+        overviewLoading={overviewLoading}
+        beginBreakdownLoad={beginBreakdownLoad}
+        endBreakdownLoad={endBreakdownLoad}
+        reportBreakdownChunk={reportBreakdownChunk}
+      />
+    );
+  }
+
+  return (
+    <TopCampaignsSingle
+      clientId={clientId}
+      from={from}
+      to={to}
+      pageTypeFilter={pageTypeFilter}
+      tab={tab}
+      vdpFilters={vdpFilters}
+      filterCacheSuffix={filterCacheSuffix}
+      centerLabel={centerLabel}
+      overviewLoading={overviewLoading}
+      beginBreakdownLoad={beginBreakdownLoad}
+      endBreakdownLoad={endBreakdownLoad}
+      reportBreakdownChunk={reportBreakdownChunk}
+    />
   );
 }

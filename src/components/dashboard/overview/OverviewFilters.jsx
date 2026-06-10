@@ -14,6 +14,23 @@ function toOpts(values, allLabel) {
   }));
 }
 
+function ComparePeriodSwitch({ enabled, onChange }) {
+  return (
+    <label className="compare-period-switch">
+      <span className="compare-period-switch-label">Compare period</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        className={`compare-period-switch-track ${enabled ? 'compare-period-switch-track--on' : ''}`}
+        onClick={onChange}
+      >
+        <span className="compare-period-switch-thumb" />
+      </button>
+    </label>
+  );
+}
+
 export default function OverviewFilters() {
   const { config } = useClient();
   const {
@@ -23,7 +40,18 @@ export default function OverviewFilters() {
     vdpFilters,
     setVdpFilter,
     vdpFilterOptions,
+    breakdownUpdating,
+    breakdownChunkProgress,
+    compareEnabled,
+    toggleCompareEnabled,
+    compareDateRange,
+    setCompareDateRange,
+    compareFrom,
+    compareTo,
+    compareLoading,
   } = useOverview();
+
+  const showDataUpdating = breakdownUpdating || (compareEnabled && compareLoading);
 
   const showVdpFilters = tab === 'vdp';
 
@@ -35,6 +63,12 @@ export default function OverviewFilters() {
     value: v,
     label: v === 'All' ? 'All Conditions' : v,
   }));
+
+  const comparePickerValue = compareDateRange ?? {
+    start: compareFrom,
+    end: compareTo,
+    preset: 'custom',
+  };
 
   return (
     <div className="filters">
@@ -76,6 +110,27 @@ export default function OverviewFilters() {
         </>
       )}
       <div className="f-right">
+        {showDataUpdating && (
+          <span className="data-updating-badge" role="status" aria-live="polite">
+            <span className="data-updating-dot" aria-hidden />
+            Data is updating
+            {breakdownChunkProgress?.total > 1 && (
+              <span className="data-updating-chunk">
+                {breakdownChunkProgress.completed}/{breakdownChunkProgress.total}
+              </span>
+            )}
+          </span>
+        )}
+        <ComparePeriodSwitch enabled={compareEnabled} onChange={toggleCompareEnabled} />
+        {compareEnabled && (
+          <>
+            <span className="f-label">Compare range</span>
+            <CalendarRangePicker
+              value={comparePickerValue}
+              onChange={setCompareDateRange}
+            />
+          </>
+        )}
         <CalendarRangePicker value={dateRange} onChange={setDateRange} />
       </div>
     </div>

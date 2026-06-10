@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
@@ -21,6 +22,10 @@ import {
 } from '@/lib/data/overviewCache';
 import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
 import { enumerateDatesInclusive, toCalendarISO } from '@/lib/ga4/dateRange';
+import {
+  previousMonthAlignedRange,
+  periodMonthLabel,
+} from '@/lib/overview/comparePeriod';
 import { useClient } from '../ClientContext';
 
 const OverviewDataContext = createContext(null);
@@ -44,7 +49,7 @@ function pruneInvalidFilterSelections(filters, options) {
   }
   return next;
 }
-const TAB_IDS = ['all', 'vdp', 'srp', 'home', 'other'];
+const TAB_IDS = ['vdp', 'srp', 'home', 'all', 'other'];
 const DEFAULT_RANGE = 'current_month';
 
 function daysAgo(base, n) {
@@ -166,8 +171,12 @@ function chartDateListAndSeries(dateList, seriesByTab) {
 export function OverviewProvider({ children }) {
   const { client } = useClient();
 
-  const [tab, setTab] = useState('all');
+  const [tab, setTab] = useState('vdp');
   const [dateRange, setDateRange] = useState(DEFAULT_RANGE);
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [compareDateRange, setCompareDateRange] = useState(null);
+  const [compareRows, setCompareRows] = useState([]);
+  const [compareLoading, setCompareLoading] = useState(false);
   const [vdpFilters, setVdpFilters] = useState(DEFAULT_VDP_FILTERS);
   const [vdpFilterOptions, setVdpFilterOptions] = useState(EMPTY_VDP_FILTER_OPTIONS);
   const [vdpFilteredDaily, setVdpFilteredDaily] = useState(null);
@@ -179,12 +188,89 @@ export function OverviewProvider({ children }) {
 
   const { from, to } = useMemo(() => resolveRange(dateRange), [dateRange]);
 
+  const defaultCompare = useMemo(
+    () => previousMonthAlignedRange(from, to),
+    [from, to]
+  );
+
+  const { compareFrom, compareTo } = useMemo(() => {
+    const fallback = defaultCompare;
+    if (!compareDateRange) return fallback;
+
+    if (
+      typeof compareDateRange === 'object'
+      && compareDateRange.start
+      && compareDateRange.end
+    ) {
+      return {
+        compareFrom: compareDateRange.start,
+        compareTo: compareDateRange.end,
+      };
+    }
+
+    if (typeof compareDateRange === 'string') {
+      const resolved = resolveRange(compareDateRange);
+      return { compareFrom: resolved.from, compareTo: resolved.to };
+    }
+
+    return fallback;
+  }, [compareDateRange, defaultCompare]);
+
+  const currentPeriodLabel = useMemo(
+    () => periodMonthLabel(from, to),
+    [from, to]
+  );
+  const comparePeriodLabel = useMemo(
+    () => periodMonthLabel(compareFrom, compareTo),
+    [compareFrom, compareTo]
+  );
+
+  const toggleCompareEnabled = useCallback(() => {
+    setCompareEnabled((prev) => {
+      const next = !prev;
+      if (next) {
+        const def = previousMonthAlignedRange(from, to);
+        setCompareDateRange({
+          start: def.compareFrom,
+          end: def.compareTo,
+          preset: 'custom',
+        });
+      }
+      return next;
+    });
+  }, [from, to]);
+
+  useEffect(() => {
+    setCompareDateRange(null);
+  }, [from, to]);
+
   // ── single fetch keyed by (client, from, to) ─────────────────
   // Join: `smart_ga4_page_data.client_id` === `smart_hoot_config.ga4_customer_id`.
   const clientKey = client?.ga4CustomerId || null;
 
   const setVdpFilter = useCallback((key, value) => {
     setVdpFilters((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const breakdownLoadsRef = useRef(0);
+  const [breakdownUpdating, setBreakdownUpdating] = useState(false);
+  const [breakdownChunkProgress, setBreakdownChunkProgress] = useState(null);
+
+  const beginBreakdownLoad = useCallback(() => {
+    breakdownLoadsRef.current += 1;
+    setBreakdownUpdating(true);
+  }, []);
+
+  const endBreakdownLoad = useCallback(() => {
+    breakdownLoadsRef.current = Math.max(0, breakdownLoadsRef.current - 1);
+    if (breakdownLoadsRef.current === 0) {
+      setBreakdownUpdating(false);
+      setBreakdownChunkProgress(null);
+    }
+  }, []);
+
+  const reportBreakdownChunk = useCallback((progress) => {
+    if (progress) setBreakdownChunkProgress(progress);
   }, []);
 
   useEffect(() => {
@@ -243,6 +329,50 @@ export function OverviewProvider({ children }) {
       cancelled = true;
     };
   }, [clientKey, from, to]);
+
+  // ── compare period overview (previous month, same day span) ──
+  useEffect(() => {
+    if (!compareEnabled || !clientKey || !compareFrom || !compareTo) {
+      setCompareRows([]);
+      setCompareLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const cached = getOverviewCache(clientKey, compareFrom, compareTo);
+    if (cached) {
+      setCompareRows(cached.rows || []);
+      setCompareLoading(false);
+    } else {
+      setCompareRows([]);
+      setCompareLoading(true);
+    }
+
+    (async () => {
+      try {
+        const bundle = await fetchOverviewBundle({
+          clientId: clientKey,
+          from: compareFrom,
+          to: compareTo,
+          onCancelCheck: () => cancelled,
+        });
+        if (cancelled || !bundle) return;
+        setCompareRows(bundle.rows || []);
+        setOverviewCache(clientKey, compareFrom, compareTo, {
+          rows: bundle.rows || [],
+          userTotalsRows: bundle.userTotalsRows || [],
+        });
+      } catch {
+        if (!cancelled && !cached) setCompareRows([]);
+      } finally {
+        if (!cancelled) setCompareLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [compareEnabled, clientKey, compareFrom, compareTo]);
 
   // ── VDP filter dropdown options (from inventory in range) ──
   useEffect(() => {
@@ -393,6 +523,44 @@ export function OverviewProvider({ children }) {
     [fullDateList, seriesByTabRaw]
   );
 
+  const compareFullDateList = useMemo(
+    () => (compareEnabled ? enumerateDatesInclusive(compareFrom, compareTo) : []),
+    [compareEnabled, compareFrom, compareTo]
+  );
+
+  const compareDerived = useMemo(() => {
+    const totals = { all: 0, vdp: 0, srp: 0, home: 0, other: 0 };
+    const daily = { all: {}, vdp: {}, srp: {}, home: {}, other: {} };
+
+    for (const r of compareRows) {
+      const views = Number(r.views) || 0;
+      const date = normalizeReportDate(r.report_date);
+      if (!date || views === 0) continue;
+      const tabKey = pageTypeToTab(r.ga4_page_type);
+
+      totals.all += views;
+      daily.all[date] = (daily.all[date] || 0) + views;
+      totals[tabKey] += views;
+      daily[tabKey][date] = (daily[tabKey][date] || 0) + views;
+    }
+
+    return { totals, daily };
+  }, [compareRows]);
+
+  const compareSeriesByTabRaw = useMemo(() => {
+    if (!compareEnabled) return {};
+    const out = {};
+    for (const key of TAB_IDS) {
+      out[key] = compareFullDateList.map((d) => compareDerived.daily[key]?.[d] || 0);
+    }
+    return out;
+  }, [compareEnabled, compareFullDateList, compareDerived]);
+
+  const { dateList: compareDateList, seriesByTab: compareSeriesTrimmed } = useMemo(
+    () => chartDateListAndSeries(compareFullDateList, compareSeriesByTabRaw),
+    [compareFullDateList, compareSeriesByTabRaw]
+  );
+
   const rowCount = rows.length;
 
   const value = useMemo(
@@ -405,6 +573,11 @@ export function OverviewProvider({ children }) {
       setVdpFilter,
       vdpFilterOptions,
       vdpFiltersLoading,
+      breakdownUpdating,
+      breakdownChunkProgress,
+      beginBreakdownLoad,
+      endBreakdownLoad,
+      reportBreakdownChunk,
       from,
       to,
       dateList,
@@ -417,6 +590,19 @@ export function OverviewProvider({ children }) {
       rowCount,
       clientKey,
       rows,
+      compareEnabled,
+      setCompareEnabled,
+      toggleCompareEnabled,
+      compareDateRange,
+      setCompareDateRange,
+      compareFrom,
+      compareTo,
+      currentPeriodLabel,
+      comparePeriodLabel,
+      compareTotals: compareDerived.totals,
+      compareDateList,
+      compareSeriesByTab: compareSeriesTrimmed,
+      compareLoading,
     }),
     [
       tab,
@@ -425,6 +611,11 @@ export function OverviewProvider({ children }) {
       setVdpFilter,
       vdpFilterOptions,
       vdpFiltersLoading,
+      breakdownUpdating,
+      breakdownChunkProgress,
+      beginBreakdownLoad,
+      endBreakdownLoad,
+      reportBreakdownChunk,
       from,
       to,
       dateList,
@@ -433,11 +624,21 @@ export function OverviewProvider({ children }) {
       derived.pageTypes,
       seriesByTab,
       loading,
-      vdpFiltersLoading,
       error,
       rowCount,
       clientKey,
       rows,
+      compareEnabled,
+      toggleCompareEnabled,
+      compareDateRange,
+      compareFrom,
+      compareTo,
+      currentPeriodLabel,
+      comparePeriodLabel,
+      compareDerived.totals,
+      compareDateList,
+      compareSeriesTrimmed,
+      compareLoading,
     ]
   );
 

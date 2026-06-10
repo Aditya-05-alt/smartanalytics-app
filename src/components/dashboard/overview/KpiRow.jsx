@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import KpiCard from '../KpiCard';
+import Delta from '../Delta';
 import { useOverview } from './OverviewDataContext';
+import { pctChange } from '@/lib/overview/comparePeriod';
 
 const TAB_LABELS = {
   all:   'All Pages',
@@ -11,6 +13,10 @@ const TAB_LABELS = {
   home:  'Homepage',
   other: 'Other',
 };
+
+const COLOR_CUR = '#4f86f7';
+const COLOR_CMP = '#57cfa1';
+const BAR_COLORS = ['#4f86f7', '#57cfa1', '#748ab2', '#f2be22', '#e8806f', '#8f7af6'];
 
 function fmt(n) {
   return Number(n || 0).toLocaleString();
@@ -34,7 +40,6 @@ function compact(n) {
   }).format(Number(n || 0));
 }
 
-/** Y-axis labels (high → low); deduped so React keys stay unique when max is small. */
 function buildYTicks(max) {
   const cap = Math.max(Number(max) || 0, 1);
   if (cap <= 4) {
@@ -48,28 +53,21 @@ function buildYTicks(max) {
   return ticks;
 }
 
-function toLinePoints(data, max, width = 1000, height = 220) {
-  if (!data.length) return '';
-  if (data.length === 1) {
-    const y = height - (data[0].value / max) * height;
+function toLinePoints(values, max, width = 1000, height = 220) {
+  if (!values.length) return '';
+  if (values.length === 1) {
+    const y = height - (values[0] / max) * height;
     return `${(width / 2).toFixed(2)},${y.toFixed(2)}`;
   }
-  return data
-    .map((row, i) => {
-      const x = (i / Math.max(data.length - 1, 1)) * width;
-      const y = height - (row.value / max) * height;
+  return values
+    .map((value, i) => {
+      const x = (i / Math.max(values.length - 1, 1)) * width;
+      const y = height - (value / max) * height;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(' ');
 }
 
-function toAreaPath(data, max, width = 1000, height = 220) {
-  const points = toLinePoints(data, max, width, height);
-  if (!points) return '';
-  return `M0,${height} L${points.split(' ').join(' L')} L${width},${height} Z`;
-}
-
-/** Dense chart axis: `May-01` (month name + hyphen + 2-digit day). */
 function dayLabelShort(iso) {
   if (!iso) return '';
   const d = new Date(`${iso}T00:00:00`);
@@ -79,7 +77,6 @@ function dayLabelShort(iso) {
   return `${month}-${day}`;
 }
 
-/** Full daily series — one bar/point per date in range. */
 function buildDisplaySeries(dateList, series) {
   return (series || []).map((value, index) => ({
     date: dateList[index],
@@ -87,60 +84,187 @@ function buildDisplaySeries(dateList, series) {
   }));
 }
 
+function buildPairedSeries(dateList, series, compareDateList, compareSeries) {
+  const cur = buildDisplaySeries(dateList, series);
+  const cmp = buildDisplaySeries(compareDateList, compareSeries);
+  const len = Math.max(cur.length, cmp.length, 1);
+  return Array.from({ length: len }, (_, i) => ({
+    curDate: cur[i]?.date,
+    cmpDate: cmp[i]?.date,
+    curValue: cur[i]?.value ?? 0,
+    cmpValue: cmp[i]?.value ?? 0,
+    label: cur[i]?.date ? dayLabelShort(cur[i].date) : `Day ${i + 1}`,
+  }));
+}
+
 const DENSE_CHART_DAY_THRESHOLD = 16;
 
 export default function KpiRow() {
-  const { tab, totals, loading, seriesByTab, dateList } = useOverview();
-  const [chartMode, setChartMode] = useState('bar');
+  const {
+    tab,
+    totals,
+    loading,
+    seriesByTab,
+    dateList,
+    compareEnabled,
+    compareTotals,
+    compareSeriesByTab,
+    compareDateList,
+    compareLoading,
+    currentPeriodLabel,
+    comparePeriodLabel,
+  } = useOverview();
+
   const views = totals?.[tab] || 0;
-  const viewsLabel = `${TAB_LABELS[tab] || 'Page'} Views`;
-  const viewsDisplay = loading && !views ? '…' : fmt(views);
+  const compareViews = compareTotals?.[tab] || 0;
   const series = useMemo(() => seriesByTab?.[tab] || [], [seriesByTab, tab]);
+  const compareSeries = useMemo(
+    () => compareSeriesByTab?.[tab] || [],
+    [compareSeriesByTab, tab]
+  );
+  const viewsLabel = `${TAB_LABELS[tab] || 'Page'} Views`;
+
+  return (
+    <KpiRowChart
+      tab={tab}
+      viewsLabel={viewsLabel}
+      views={views}
+      compareViews={compareViews}
+      loading={loading}
+      compareLoading={compareLoading}
+      dateList={dateList}
+      compareDateList={compareDateList}
+      series={series}
+      compareSeries={compareSeries}
+      compareEnabled={compareEnabled}
+      currentPeriodLabel={currentPeriodLabel}
+      comparePeriodLabel={comparePeriodLabel}
+    />
+  );
+}
+
+function KpiRowChart({
+  tab,
+  viewsLabel,
+  views,
+  compareViews,
+  loading,
+  compareLoading,
+  dateList,
+  compareDateList,
+  series,
+  compareSeries,
+  compareEnabled,
+  currentPeriodLabel,
+  comparePeriodLabel,
+}) {
+  const [chartMode, setChartMode] = useState('bar');
+  const totalDelta = pctChange(views, compareViews);
+  const gradientId = `kpi-line-area-${tab}`;
+
   const displaySeries = useMemo(
     () => buildDisplaySeries(dateList, series),
     [dateList, series]
   );
-  const isDenseChart = displaySeries.length >= DENSE_CHART_DAY_THRESHOLD;
-  const isSingleDay = displaySeries.length === 1;
+  const pairedSeries = useMemo(
+    () => buildPairedSeries(dateList, series, compareDateList, compareSeries),
+    [dateList, series, compareDateList, compareSeries]
+  );
+
+  const chartSeries = compareEnabled ? pairedSeries : displaySeries;
+  const isDenseChart = chartSeries.length >= DENSE_CHART_DAY_THRESHOLD;
+  const isSingleDay = chartSeries.length === 1;
+
   const max = useMemo(() => {
+    if (compareEnabled) {
+      const vals = pairedSeries.flatMap((d) => [d.curValue, d.cmpValue]);
+      const mx = vals.length ? Math.max(...vals) : 0;
+      return mx > 0 ? mx : 1;
+    }
     const mx = displaySeries.length ? Math.max(...displaySeries.map((d) => d.value)) : 0;
     return mx > 0 ? mx : 1;
-  }, [displaySeries]);
+  }, [compareEnabled, pairedSeries, displaySeries]);
+
   const yTicks = useMemo(() => buildYTicks(max), [max]);
-  const barColors = ['#4f86f7', '#57cfa1', '#748ab2', '#f2be22', '#e8806f', '#8f7af6'];
-  // const { uniqueVisitors } = useOverview();
-  // const visitors = uniqueVisitors?.[tab] || 0;
-  // const visitorsDisplay = loading && !visitors ? '…' : fmt(visitors);
+  const curLinePoints = useMemo(
+    () => toLinePoints(pairedSeries.map((d) => d.curValue), max),
+    [pairedSeries, max]
+  );
+  const cmpLinePoints = useMemo(
+    () => toLinePoints(pairedSeries.map((d) => d.cmpValue), max),
+    [pairedSeries, max]
+  );
+  const singleLinePoints = useMemo(
+    () => toLinePoints(displaySeries.map((d) => d.value), max),
+    [displaySeries, max]
+  );
+
+  const viewsDisplay = loading && !views ? '…' : fmt(views);
+  const compareDisplay = compareLoading && !compareViews ? '…' : fmt(compareViews);
 
   return (
     <div className="kpi-stack">
-      <div className="kpi-row">
-        {/* <KpiCard label="Unique Visitors" value={visitorsDisplay} mom={0} yoy={0} color="var(--green)" /> */}
-        <KpiCard label={viewsLabel} value={viewsDisplay} mom={0} yoy={0} color="var(--acc)" />
-      </div>
-
-      <div className="kpi-inline-chart">
-        <div className="kpi-inline-head">
-          <div className="kpi-inline-title">{viewsLabel} by Date</div>
-          <div className="chart-mode" role="group" aria-label="Chart type">
-            <button
-              type="button"
-              className={`cm-btn ${chartMode === 'bar' ? 'active' : ''}`}
-              onClick={() => setChartMode('bar')}
-              aria-pressed={chartMode === 'bar'}
-            >
-              Bar
-            </button>
-            <button
-              type="button"
-              className={`cm-btn ${chartMode === 'line' ? 'active' : ''}`}
-              onClick={() => setChartMode('line')}
-              aria-pressed={chartMode === 'line'}
-            >
-              Line
-            </button>
+      {compareEnabled ? (
+        <div className="kpi-compare-totals">
+          <div className="kpi-compare-total-row">
+            <span className="kpi-compare-total-dot" style={{ background: COLOR_CUR }} />
+            <span className="kpi-compare-total-label">{currentPeriodLabel}</span>
+            <span className="kpi-compare-total-value">{viewsDisplay}</span>
+          </div>
+          <div className="kpi-compare-total-row">
+            <span className="kpi-compare-total-dot" style={{ background: COLOR_CMP }} />
+            <span className="kpi-compare-total-label">{comparePeriodLabel}</span>
+            <span className="kpi-compare-total-value">{compareDisplay}</span>
+          </div>
+          <div className="kpi-compare-total-delta">
+            Change <Delta value={totalDelta} />
           </div>
         </div>
+      ) : (
+        <div className="kpi-row">
+          <KpiCard label={viewsLabel} value={viewsDisplay} mom={0} yoy={0} color="var(--acc)" />
+        </div>
+      )}
+
+      <div className="kpi-inline-chart">
+        <div className="kpi-inline-head kpi-inline-head--compare">
+          <div className="kpi-inline-head-left">
+            <div className="kpi-inline-title">{viewsLabel} by Date</div>
+          </div>
+          <div className="kpi-inline-head-right">
+            {compareEnabled && (
+              <div className="kpi-chart-legend">
+                <span className="kpi-chart-legend-item">
+                  <span className="kpi-chart-legend-dot" style={{ background: COLOR_CUR }} />
+                  {currentPeriodLabel}
+                </span>
+                <span className="kpi-chart-legend-item">
+                  <span className="kpi-chart-legend-dot" style={{ background: COLOR_CMP }} />
+                  {comparePeriodLabel}
+                </span>
+              </div>
+            )}
+            <div className="chart-mode" role="group" aria-label="Chart type">
+              <button
+                type="button"
+                className={`cm-btn ${chartMode === 'bar' ? 'active' : ''}`}
+                onClick={() => setChartMode('bar')}
+                aria-pressed={chartMode === 'bar'}
+              >
+                Bar
+              </button>
+              <button
+                type="button"
+                className={`cm-btn ${chartMode === 'line' ? 'active' : ''}`}
+                onClick={() => setChartMode('line')}
+                aria-pressed={chartMode === 'line'}
+              >
+                Line
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="kpi-big-chart">
           <div className="kpi-big-y">
             {yTicks.map((tick, i) => (
@@ -157,12 +281,13 @@ export default function KpiRow() {
                   'kpi-inline-bar-wrap',
                   isDenseChart ? 'kpi-inline-bar-wrap--dense' : '',
                   isSingleDay ? 'kpi-inline-bar-wrap--single' : '',
+                  compareEnabled ? 'kpi-inline-bar-wrap--paired' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 style={
                   isDenseChart && !isSingleDay
-                    ? { minWidth: `${Math.max(displaySeries.length * 34, 100)}px` }
+                    ? { minWidth: `${Math.max(chartSeries.length * (compareEnabled ? 44 : 34), 100)}px` }
                     : undefined
                 }
               >
@@ -171,40 +296,73 @@ export default function KpiRow() {
                     'kpi-inline-bars',
                     isDenseChart ? 'kpi-inline-bars--dense' : '',
                     isSingleDay ? 'kpi-inline-bars--single' : '',
+                    compareEnabled ? 'kpi-inline-bars--paired' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                 >
-                  {displaySeries.map((item, index) => {
-                    const h = Math.max(2, Math.round((item.value / max) * 200));
-                    return (
-                      <div key={`${item.date || index}`} className="kpi-inline-col">
-                        <div
-                          className="kpi-inline-bar"
-                          style={{ height: h, background: barColors[index % barColors.length] }}
-                        >
-                          <div className="kpi-inline-tip">{fmt(item.value)}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {compareEnabled
+                    ? pairedSeries.map((item, index) => {
+                        const hCur = Math.max(2, Math.round((item.curValue / max) * 200));
+                        const hCmp = Math.max(2, Math.round((item.cmpValue / max) * 200));
+                        return (
+                          <div key={`pair-${item.curDate || index}`} className="kpi-inline-col kpi-inline-col--paired">
+                            <div className="kpi-compare-bar-pair">
+                              <div
+                                className="kpi-inline-bar kpi-inline-bar--cur"
+                                style={{ height: hCur, background: COLOR_CUR }}
+                                title={`${currentPeriodLabel}: ${fmt(item.curValue)}`}
+                              >
+                                <div className="kpi-inline-tip">{fmt(item.curValue)}</div>
+                              </div>
+                              <div
+                                className="kpi-inline-bar kpi-inline-bar--cmp"
+                                style={{ height: hCmp, background: COLOR_CMP }}
+                                title={`${comparePeriodLabel}: ${fmt(item.cmpValue)}`}
+                              >
+                                <div className="kpi-inline-tip">{fmt(item.cmpValue)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    : displaySeries.map((item, index) => {
+                        const h = Math.max(2, Math.round((item.value / max) * 200));
+                        return (
+                          <div key={`${item.date || index}`} className="kpi-inline-col">
+                            <div
+                              className="kpi-inline-bar"
+                              style={{ height: h, background: BAR_COLORS[index % BAR_COLORS.length] }}
+                            >
+                              <div className="kpi-inline-tip">{fmt(item.value)}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
                 </div>
                 <div
                   className={[
                     'kpi-inline-bar-dates',
                     isDenseChart ? 'kpi-inline-bar-dates--dense' : '',
                     isSingleDay ? 'kpi-inline-bar-dates--single' : '',
+                    compareEnabled ? 'kpi-inline-bar-dates--paired' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                 >
-                  {displaySeries.map((item, index) => (
+                  {(compareEnabled ? pairedSeries : displaySeries).map((item, index) => (
                     <div
-                      key={`date-${item.date || index}`}
+                      key={`date-${index}`}
                       className="kpi-inline-date"
-                      title={dayLabel(item.date)}
+                      title={
+                        compareEnabled
+                          ? `${dayLabel(item.curDate)} vs ${dayLabel(item.cmpDate)}`
+                          : dayLabel(item.date)
+                      }
                     >
-                      {isDenseChart ? dayLabelShort(item.date) : dayLabel(item.date)}
+                      {compareEnabled
+                        ? item.label
+                        : (isDenseChart ? dayLabelShort(item.date) : dayLabel(item.date))}
                     </div>
                   ))}
                 </div>
@@ -218,21 +376,48 @@ export default function KpiRow() {
                   preserveAspectRatio="none"
                   aria-label={`${viewsLabel} line chart`}
                 >
-                  <defs>
-                    <linearGradient id="kpi-line-area" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#4f86f7" stopOpacity="0.35" />
-                      <stop offset="100%" stopColor="#4f86f7" stopOpacity="0.05" />
-                    </linearGradient>
-                  </defs>
-                  <path d={toAreaPath(displaySeries, max)} fill="url(#kpi-line-area)" />
-                  <polyline
-                    fill="none"
-                    stroke="#4f86f7"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points={toLinePoints(displaySeries, max)}
-                  />
+                  {compareEnabled ? (
+                    <>
+                      <polyline
+                        fill="none"
+                        stroke={COLOR_CMP}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeDasharray="6 4"
+                        points={cmpLinePoints}
+                      />
+                      <polyline
+                        fill="none"
+                        stroke={COLOR_CUR}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={curLinePoints}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <defs>
+                        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={COLOR_CUR} stopOpacity="0.35" />
+                          <stop offset="100%" stopColor={COLOR_CUR} stopOpacity="0.05" />
+                        </linearGradient>
+                      </defs>
+                      <path
+                        d={`M0,220 L${singleLinePoints.split(' ').join(' L')} L1000,220 Z`}
+                        fill={`url(#${gradientId})`}
+                      />
+                      <polyline
+                        fill="none"
+                        stroke={COLOR_CUR}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={singleLinePoints}
+                      />
+                    </>
+                  )}
                 </svg>
                 <div
                   className={[
@@ -246,17 +431,27 @@ export default function KpiRow() {
                     isSingleDay
                       ? undefined
                       : {
-                          gridTemplateColumns: `repeat(${Math.max(displaySeries.length, 1)}, minmax(0, 1fr))`,
+                          gridTemplateColumns: `repeat(${Math.max(chartSeries.length, 1)}, minmax(0, 1fr))`,
                         }
                   }
                 >
-                  {displaySeries.map((item, index) => (
-                    <div key={`${item.date || index}`} className="kpi-inline-date" title={dayLabel(item.date)}>
-                      {isDenseChart ? dayLabelShort(item.date) : dayLabel(item.date)}
+                  {(compareEnabled ? pairedSeries : displaySeries).map((item, index) => (
+                    <div
+                      key={`line-${index}`}
+                      className="kpi-inline-date"
+                      title={
+                        compareEnabled
+                          ? `${dayLabel(item.curDate)} vs ${dayLabel(item.cmpDate)}`
+                          : dayLabel(item.date)
+                      }
+                    >
+                      {compareEnabled
+                        ? item.label
+                        : (isDenseChart ? dayLabelShort(item.date) : dayLabel(item.date))}
                     </div>
                   ))}
-                  </div>
                 </div>
+              </div>
             )}
           </div>
         </div>

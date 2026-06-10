@@ -31,7 +31,10 @@ function dayLabel(iso) {
 
 export default function DailyChart() {
   const { tab, seriesByTab, dateList, loading } = useOverview();
-  const current = seriesByTab?.[tab] || [];
+  const current = useMemo(
+    () => seriesByTab?.[tab] || [],
+    [seriesByTab, tab]
+  );
 
   const max = useMemo(() => {
     const mx = current.length ? Math.max(...current) : 0;

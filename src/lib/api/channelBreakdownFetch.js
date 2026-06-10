@@ -1,19 +1,17 @@
 import { createClient } from '@/lib/supabase/client';
-import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
+import { rpcByDateChunksProgressive } from '@/lib/api/chunkedRpc';
 import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
-import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
+import { BREAKDOWN_UI_CHUNK_DAYS } from '@/lib/api/rpcChunkPlan';
 import {
   getChannelBreakdownCache,
   setChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
 import {
-  vdpFiltersActive,
   vdpRpcExtraParams,
   vdpFilterCacheSuffix,
-  appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
 
-async function fetchViaApi({
+async function fetchViaClientProgressive({
   clientId,
   from,
   to,
@@ -21,66 +19,43 @@ async function fetchViaApi({
   vdpFilters,
   tab,
   onCancelCheck,
-}) {
-  if (typeof window === 'undefined') return null;
-  if (onCancelCheck?.()) return null;
-
-  const qs = new URLSearchParams({
-    clientId,
-    from,
-    to,
-    pageType: pageTypeFilter,
-  });
-  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
-
-  const res = await fetch(`/api/dashboard/channel-breakdown?${qs}`, {
-    credentials: 'same-origin',
-  });
-  const json = await res.json().catch(() => ({}));
-
-  if (onCancelCheck?.()) return null;
-  if (!res.ok) {
-    if (res.status === 503) return null;
-    throw new Error(json.error || `Channel breakdown failed (${res.status})`);
-  }
-
-  return json.rows || [];
-}
-
-async function fetchViaClient({
-  clientId,
-  from,
-  to,
-  pageTypeFilter,
-  vdpFilters,
-  tab,
-  onCancelCheck,
+  onProgress,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
-  const invActive = vdpFiltersActive(vdpFilters, tab);
-  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
-    invFilters: invActive,
-  });
+  const extraParams = {
+    p_page_type: pageTypeFilter,
+    ...vdpRpcExtraParams(vdpFilters, tab),
+  };
 
-  const raw = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown', {
-    clientId,
-    from,
-    to,
-    extraParams: {
-      p_page_type: pageTypeFilter,
-      ...vdpRpcExtraParams(vdpFilters, tab),
-    },
-    chunkDays,
-    concurrency,
-    onCancelCheck,
-  });
+  const raw = await rpcByDateChunksProgressive(
+    supabase,
+    'get_ga4_channel_breakdown',
+    {
+      clientId,
+      from,
+      to,
+      extraParams,
+      chunkDays: BREAKDOWN_UI_CHUNK_DAYS,
+      concurrency: 1,
+      onCancelCheck,
+      onBatch: (batchRows, meta) => {
+        if (onCancelCheck?.()) return;
+        const merged = mergeChannelBreakdownRows(batchRows);
+        onProgress?.(merged, meta);
+      },
+    }
+  );
 
   if (onCancelCheck?.()) return null;
-  return mergeChannelBreakdownRows(raw);
+  return mergeChannelBreakdownRows(raw || []);
 }
 
+/**
+ * Fetch channel breakdown for ONE page type only (ALL | VDP | SRP | Home | Other).
+ * Streams partial results every BREAKDOWN_UI_CHUNK_DAYS as chunks complete.
+ */
 export async function fetchChannelBreakdownBundle({
   clientId,
   from,
@@ -89,6 +64,7 @@ export async function fetchChannelBreakdownBundle({
   vdpFilters,
   tab = 'all',
   onCancelCheck,
+  onProgress,
   skipCache = false,
 }) {
   if (!clientId || !from || !to) return [];
@@ -103,10 +79,13 @@ export async function fetchChannelBreakdownBundle({
       pageTypeFilter,
       cacheSuffix
     );
-    if (cached) return cached;
+    if (cached) {
+      onProgress?.(cached, { completed: 1, total: 1, fromCache: true });
+      return cached;
+    }
   }
 
-  const fetchOpts = {
+  const result = await fetchViaClientProgressive({
     clientId,
     from,
     to,
@@ -114,33 +93,18 @@ export async function fetchChannelBreakdownBundle({
     vdpFilters,
     tab,
     onCancelCheck,
-  };
-
-  let rows;
-  try {
-    rows = await fetchViaApi(fetchOpts);
-    if (rows == null) {
-      rows = await fetchViaClient(fetchOpts);
-    }
-  } catch (err) {
-    if (onCancelCheck?.()) return null;
-    const fallback = await fetchViaClient(fetchOpts);
-    if (fallback != null) {
-      rows = fallback;
-    } else {
-      throw err;
-    }
-  }
+    onProgress,
+  });
 
   if (onCancelCheck?.()) return null;
-  const result = rows || [];
+  const rows = result || [];
   setChannelBreakdownCache(
     clientId,
     from,
     to,
     pageTypeFilter,
-    result,
+    rows,
     cacheSuffix
   );
-  return result;
+  return rows;
 }

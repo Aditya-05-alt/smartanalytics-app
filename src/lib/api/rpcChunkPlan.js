@@ -1,8 +1,10 @@
 import { dayCountInclusive } from '@/lib/ga4/dateRange';
 
+/** Client-side chunk size for progressive Channel / Campaign breakdown UI. */
+export const BREAKDOWN_UI_CHUNK_DAYS = 5;
+
 /**
- * Pick RPC window size from range length + whether inventory filters are active.
- * Smaller windows avoid Postgres statement_timeout on heavy joins.
+ * Pick RPC window size for server-side / non-progressive fallback.
  */
 export function resolveRpcChunkPlan(from, to, { invFilters = false } = {}) {
   const days = dayCountInclusive(from, to);
@@ -27,9 +29,4 @@ export function resolveRpcChunkPlan(from, to, { invFilters = false } = {}) {
     chunkDays: invFilters ? 3 : 7,
     concurrency: 2,
   };
-}
-
-/** Skip background prefetch when the range is large (avoids 5× duplicate work). */
-export function shouldPrefetchBreakdownTabs(from, to) {
-  return dayCountInclusive(from, to) <= 45;
 }

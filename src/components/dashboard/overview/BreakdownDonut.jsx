@@ -1,4 +1,11 @@
+'use client';
+
+import { useMemo } from 'react';
 import { Panel, PanelHeader, PanelBody } from '../Panel';
+import Delta from '../Delta';
+import ChannelGroupToggle from './ChannelGroupToggle';
+import { filterByExpandedGroups } from '@/lib/ga4/channelGroups';
+import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
 
 /**
  * Reusable donut + breakdown list panel.
@@ -62,11 +69,22 @@ export default function BreakdownDonut({
   skeletonRows = 5,
   pctDecimals = 2,
   listScrollable = false,
+  /** % change vs compare period — shown on the right (green up / red down). */
+  totalDelta = null,
 }) {
+  const { expanded, isExpanded, toggle } = useChannelGroupExpansion(true);
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
 
   const listSeries = data;
+  const visibleListSeries = useMemo(
+    () => filterByExpandedGroups(listSeries, expanded),
+    [listSeries, expanded]
+  );
+  const showGroupColumn = useMemo(
+    () => listSeries.some((s) => s.isGroupRollup && s.collapsible),
+    [listSeries]
+  );
   const donutSeries = chartData ?? data;
   const sliceTotal = listSeries.reduce((a, s) => a + (Number(s.value) || 0), 0);
   const donutTotal = donutSeries.reduce((a, s) => a + (Number(s.value) || 0), 0);
@@ -199,8 +217,14 @@ export default function BreakdownDonut({
 
           {/* ── Breakdown (rows scroll; total stays fixed when listScrollable) ── */}
           <div
-            className={`donut-lg-list-col${listScrollable ? ' donut-lg-list-col--scroll' : ''}`}
+            className={`donut-lg-list-col${listScrollable ? ' donut-lg-list-col--scroll' : ''}${totalDelta != null ? ' donut-lg-list-col--compare' : ''}`}
           >
+            {totalDelta != null && (
+              <div className="donut-lg-list-header" aria-hidden>
+                <span className="donut-lg-list-header-spacer" />
+                <span className="donut-lg-list-header-delta">Δ vs left</span>
+              </div>
+            )}
             <div
               className={
                 listScrollable
@@ -208,13 +232,37 @@ export default function BreakdownDonut({
                   : 'donut-lg-list-rows'
               }
             >
-              {listSeries.map((s) => (
-                <div key={s.name} className="donut-lg-row">
+              {visibleListSeries.map((s) => (
+                <div
+                  key={`${s.groupKey || 'solo'}-${s.name}`}
+                  className={[
+                    'donut-lg-row',
+                    s.delta != null ? 'donut-lg-row--compare' : '',
+                    s.isGroupRollup ? 'donut-lg-row--group-rollup' : '',
+                    s.isGroupMember ? 'donut-lg-row--group-member' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {showGroupColumn && (
+                    s.isGroupRollup && s.collapsible ? (
+                      <ChannelGroupToggle
+                        expanded={isExpanded(s.groupKey)}
+                        onToggle={() => toggle(s.groupKey)}
+                        label={s.name}
+                      />
+                    ) : (
+                      <span className="donut-lg-toggle-spacer" aria-hidden />
+                    )
+                  )}
                   <div
                     className="donut-lg-swatch"
                     style={{ background: s.color }}
                   />
-                  <span className="donut-lg-name" title={s.fullName || s.name}>
+                  <span
+                    className={`donut-lg-name${s.isGroupMember ? ' donut-lg-name--member' : ''}`}
+                    title={s.fullName || s.name}
+                  >
                     {s.name}
                   </span>
                   <span className="donut-lg-value">
@@ -223,15 +271,27 @@ export default function BreakdownDonut({
                   <span className="donut-lg-pct">
                     {(Number(s.pct) || 0).toFixed(pctDecimals)}%
                   </span>
+                  {s.delta != null && (
+                    <span className="donut-lg-delta">
+                      <Delta value={s.delta} size={10} />
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
 
-            <div className="donut-lg-total donut-lg-total--fixed">
-              <span style={{ flex: 1 }}>{totalLabel}</span>
-              <span style={{ fontWeight: 700, color: 'var(--t)' }}>
+            <div
+              className={`donut-lg-total donut-lg-total--fixed${totalDelta != null ? ' donut-lg-total--compare' : ''}`}
+            >
+              <span className="donut-lg-total-label">{totalLabel}</span>
+              <span className="donut-lg-total-value">
                 {grandTotal.toLocaleString()}
               </span>
+              {totalDelta != null && (
+                <span className="donut-lg-total-delta">
+                  <Delta value={totalDelta} size={11} />
+                </span>
+              )}
             </div>
           </div>
         </div>
