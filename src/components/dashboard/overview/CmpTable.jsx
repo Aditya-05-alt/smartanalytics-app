@@ -65,7 +65,7 @@ export default function CmpTable() {
   const [copied, setCopied] = useState(false);
   const { expanded, isExpanded, toggle } = useChannelGroupExpansion(true);
 
-  const yoyEnabled = tab === 'all';
+  const yoyEnabled = VISIBLE_TABS.has(tab);
   const pageTypeFilter = TAB_TO_PAGE_TYPE[tab] || 'ALL';
   const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
   const viewsLabel = tab === 'vdp' ? 'VDP Views' : 'Views';
@@ -380,9 +380,7 @@ export default function CmpTable() {
         <div className="cmp-legend-swatch cmp-legend-swatch--lyear" />
         Last year same month
         <span className="cmp-table-foot-note">
-          {yoyEnabled
-            ? `MoM: ${currentPeriodLabel} vs ${comparePeriodLabel} · YoY: ${currentPeriodLabel} vs ${lyPeriodLabel}`
-            : 'MoM compares current vs previous · YoY on All tab only'}
+          {`MoM: ${currentPeriodLabel} vs ${comparePeriodLabel} · YoY: ${currentPeriodLabel} vs ${lyPeriodLabel}`}
         </span>
       </div>
     </Panel>
