@@ -135,6 +135,7 @@ export function applyChannelGroupsToComparisonRows(rows) {
 
     const cur = sumField(members, 'cur');
     const cmp = sumField(members, 'cmp');
+    const ly = sumField(members, 'ly');
 
     return {
       sortValue: cur,
@@ -143,7 +144,9 @@ export function applyChannelGroupsToComparisonRows(rows) {
         rowKey: `${group.key}-rollup`,
         cur,
         cmp,
+        ly,
         delta: pctChange(cur, cmp),
+        curYoyDelta: pctChange(cur, ly),
         color: group.color || members[0]?.color || colorForChannel(group.label),
         isGroupRollup: true,
         groupKey: group.key,

@@ -1,4 +1,4 @@
-import { daysBackForFinalSync } from '@/lib/pipeline/dates';
+import { daysBackForFinalSync, daysBackForVdpFiltration } from '@/lib/pipeline/dates';
 
 /** Step 2 — apply_vdp_filtration(p_client_id, p_days_back) */
 export async function runVdpFiltration(
@@ -7,7 +7,7 @@ export async function runVdpFiltration(
   { from, to, daysBack } = {}
 ) {
   const p_days_back =
-    daysBack ?? (from && to ? daysBackForFinalSync(from, to) : null);
+    daysBack ?? (from && to ? daysBackForVdpFiltration(from, to) : null);
 
   const { data, error } = await supabase.rpc('apply_vdp_filtration', {
     p_client_id: clientId,

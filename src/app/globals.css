@@ -3843,6 +3843,10 @@ body {
   color: var(--t);
   background: var(--s3);
 }
+.cmp-tbl-na {
+  color: var(--t3);
+  text-align: center;
+}
 .cmp-tbl-row--group-rollup td {
   font-weight: 600;
   color: var(--t);

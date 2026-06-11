@@ -81,9 +81,27 @@ export function chunkDates(dates, chunkSize = 5) {
   return out;
 }
 
+/** Inclusive day count for a From → To picker (min 1). */
 export function daysBackFromRange(fromIso, toIso) {
   const { dates } = coerceDateRange(fromIso, toIso);
   return Math.min(Math.max(dates.length, 1), 90);
+}
+
+/**
+ * Step 2 — apply_vdp_filtration uses:
+ *   report_date >= (CURRENT_DATE - p_days_back)
+ * So p_days_back = calendar days from selected `from` through today (0 = today only).
+ */
+export function daysBackForVdpFiltration(fromIso, toIso) {
+  const today = todayISO();
+  const { from } = coerceDateRange(fromIso, toIso);
+  const todayD = new Date(`${today}T12:00:00`);
+  const fromD = new Date(`${from}T12:00:00`);
+  if (Number.isNaN(fromD.getTime())) {
+    return daysBackFromRange(fromIso, toIso);
+  }
+  const days = Math.round((todayD - fromD) / (24 * 60 * 60 * 1000));
+  return Math.min(Math.max(days, 0), 365);
 }
 
 /** Days from `fromIso` through today — legacy RPC (CURRENT_DATE - p_days_back). */

@@ -37,6 +37,8 @@ export function setChannelBreakdownCache(
   suffix = ''
 ) {
   if (!clientId || !from || !to || !pageTypeFilter) return;
+  // Skip caching empty results so pipeline/DB backfills show up without waiting 10 min.
+  if (!rows?.length) return;
   const k = channelCacheKey(clientId, from, to, pageTypeFilter, suffix);
   if (store.has(k)) store.delete(k);
   store.set(k, { rows: rows || [], at: Date.now() });

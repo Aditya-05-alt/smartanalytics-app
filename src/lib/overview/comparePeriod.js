@@ -122,10 +122,16 @@ export function buildDonutCompareDeltas(currentItems, compareItems) {
   };
 }
 
-/** Merge two channel breakdown RPC result sets by channel_bucket. */
-export function mergeChannelComparison(currentRows, compareRows) {
+/**
+ * Merge channel breakdown rows for the comparison table.
+ * YoY is only current period vs same calendar span one year earlier (ly).
+ * MoM is current vs previous compare range (cmp).
+ */
+export function mergeChannelComparison(currentRows, compareRows, lyCurrentRows) {
   const curMap = new Map();
   const cmpMap = new Map();
+  const lyCurMap = new Map();
+  const yoyActive = lyCurrentRows != null;
 
   for (const row of currentRows || []) {
     const key = String(row.channel_bucket ?? '(not set)');
@@ -135,25 +141,41 @@ export function mergeChannelComparison(currentRows, compareRows) {
     const key = String(row.channel_bucket ?? '(not set)');
     cmpMap.set(key, Number(row.views) || 0);
   }
+  for (const row of lyCurrentRows || []) {
+    const key = String(row.channel_bucket ?? '(not set)');
+    lyCurMap.set(key, Number(row.views) || 0);
+  }
 
-  const keys = new Set([...curMap.keys(), ...cmpMap.keys()]);
+  const keys = new Set([...curMap.keys(), ...cmpMap.keys(), ...lyCurMap.keys()]);
+
   const rows = [...keys].map((ch) => {
     const cur = curMap.get(ch) || 0;
     const cmp = cmpMap.get(ch) || 0;
-    return { ch, cur, cmp, delta: pctChange(cur, cmp) };
+    const ly = lyCurMap.get(ch) || 0;
+    return {
+      ch,
+      cur,
+      cmp,
+      ly,
+      delta: pctChange(cur, cmp),
+      curYoyDelta: yoyActive ? pctChange(cur, ly) : 0,
+    };
   });
 
   rows.sort((a, b) => b.cur - a.cur || b.cmp - a.cmp || a.ch.localeCompare(b.ch));
 
   const curTotal = rows.reduce((s, r) => s + r.cur, 0);
   const cmpTotal = rows.reduce((s, r) => s + r.cmp, 0);
+  const lyTotal = rows.reduce((s, r) => s + r.ly, 0);
 
   return {
     rows,
     totals: {
       cur: curTotal,
       cmp: cmpTotal,
+      ly: lyTotal,
       delta: pctChange(curTotal, cmpTotal),
+      curYoyDelta: yoyActive ? pctChange(curTotal, lyTotal) : 0,
     },
   };
 }

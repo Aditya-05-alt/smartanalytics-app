@@ -283,7 +283,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
       const res = await runPipelineFiltration({ clientId, from, to });
       setStep2Result(res);
       if ((res.totalRowsUpdated ?? 0) > 0) setFiltrationDone(true);
-      setStepLog(2, formatStep2Log(clientId, res));
+      setStepLog(2, formatStep2Log(clientId, res, from, to));
       setMessage(
         `Step 2 complete — ${res.totalRowsUpdated.toLocaleString()} rows updated (vdp_conditions on smart_ga4_page_data).`
       );
