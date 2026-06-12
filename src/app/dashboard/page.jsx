@@ -39,12 +39,6 @@ function OverviewBody() {
       <div className="content">
         <KpiRow />
 
-        {(tab === 'all' || tab === 'vdp') && (
-          <div className="dashboard-full-row">
-            <CmpTable />
-          </div>
-        )}
-
         {tab === 'vdp' ? (
           <div className="g2">
             <ChannelDonut
@@ -113,6 +107,12 @@ function OverviewBody() {
           <TopCampaigns clientId={clientKey} from={from} to={to} />
         </div>
         */}
+
+        {(tab === 'all' || tab === 'vdp') && (
+          <div className="dashboard-full-row">
+            <CmpTable />
+          </div>
+        )}
 
         {/* Bottom row — re-enable when ready:
         <div className="g3">
