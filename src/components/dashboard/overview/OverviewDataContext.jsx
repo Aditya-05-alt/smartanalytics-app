@@ -49,6 +49,7 @@ function pruneInvalidFilterSelections(filters, options) {
   }
   return next;
 }
+
 const TAB_IDS = ['vdp', 'srp', 'home', 'all', 'other'];
 const DEFAULT_RANGE = 'current_month';
 
@@ -585,7 +586,7 @@ export function OverviewProvider({ children }) {
       uniqueVisitors: derived.uniqueVisitors,
       pageTypes: derived.pageTypes,
       seriesByTab,
-      loading: loading || (tab === 'vdp' && vdpFiltersActive(vdpFilters, 'vdp') && vdpFiltersLoading),
+      loading,
       error,
       rowCount,
       clientKey,

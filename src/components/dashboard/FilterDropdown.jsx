@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useDropdown } from './useDropdown';
-
 const DEFAULT_PAGE_SIZE = 10;
 
 function isPinnedOption(option, defaultAll) {

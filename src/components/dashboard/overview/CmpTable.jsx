@@ -12,7 +12,7 @@ import {
   filterByExpandedGroups,
 } from '@/lib/ga4/channelGroups';
 import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
-import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
+import { vdpFilterCacheSuffix, DEFAULT_VDP_FILTERS } from '@/lib/vdp/vdpFilterParams';
 import {
   mergeChannelComparison,
   sameMonthLastYearLabel,
@@ -63,12 +63,13 @@ export default function CmpTable() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
-  const { expanded, isExpanded, toggle } = useChannelGroupExpansion(true);
+  const { expanded, isExpanded, toggle } = useChannelGroupExpansion(false);
 
   const yoyEnabled = VISIBLE_TABS.has(tab);
   const pageTypeFilter = TAB_TO_PAGE_TYPE[tab] || 'ALL';
-  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
-  const viewsLabel = tab === 'vdp' ? 'VDP Views' : 'Views';
+  /** Period table ignores VDP inventory filters so MoM/YoY stay comparable. */
+  const tableVdpFilters = tab === 'vdp' ? DEFAULT_VDP_FILTERS : vdpFilters;
+  const tableFilterCacheSuffix = tab === 'vdp' ? '' : vdpFilterCacheSuffix(vdpFilters, tab);
   const panelTitle = `${TAB_TITLES[tab] || 'Page'} Views by Channel — Period Comparison`;
   const lyPeriodLabel = useMemo(
     () => sameMonthLastYearLabel(from, to),
@@ -106,46 +107,54 @@ export default function CmpTable() {
     const fetchOpts = {
       clientId: clientKey,
       pageTypeFilter,
-      vdpFilters,
+      vdpFilters: tableVdpFilters,
       tab,
       onCancelCheck: () => cancelled,
-      skipCache: true,
+      adaptiveChunks: true,
     };
 
-    const fetches = [
-      fetchChannelBreakdownBundle({ ...fetchOpts, from, to }),
+    const loadPeriod = (range, { preferServer = false } = {}) =>
       fetchChannelBreakdownBundle({
         ...fetchOpts,
-        from: compareFrom,
-        to: compareTo,
-      }),
-    ];
+        from: range.from,
+        to: range.to,
+        preferServer,
+      });
 
-    if (yoyEnabled && lyFrom && lyTo) {
-      fetches.push(
-        fetchChannelBreakdownBundle({ ...fetchOpts, from: lyFrom, to: lyTo })
-      );
-    }
-
-    Promise.all(fetches)
-      .then((results) => {
+    (async () => {
+      try {
+        const current = await loadPeriod({ from, to });
         if (cancelled) return;
-        const [current, compare, lyCurrent] = results;
         setCurRows(current || []);
+
+        const compare = await loadPeriod(
+          { from: compareFrom, to: compareTo },
+          { preferServer: true }
+        );
+        if (cancelled) return;
         setCmpRows(compare || []);
-        setLyCurRows(yoyEnabled ? lyCurrent || [] : null);
-      })
-      .catch((fetchError) => {
+
+        if (yoyEnabled && lyFrom && lyTo) {
+          const lyCurrent = await loadPeriod(
+            { from: lyFrom, to: lyTo },
+            { preferServer: true }
+          );
+          if (cancelled) return;
+          setLyCurRows(lyCurrent || []);
+        } else {
+          setLyCurRows(null);
+        }
+      } catch (fetchError) {
         if (cancelled) return;
         setError(fetchError?.message || 'Failed to load comparison data.');
         setCurRows([]);
         setCmpRows([]);
         setLyCurRows(null);
-      })
-      .finally(() => {
+      } finally {
         if (loadTracked) endBreakdownLoad();
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -161,8 +170,7 @@ export default function CmpTable() {
     lyFrom,
     lyTo,
     pageTypeFilter,
-    vdpFilters,
-    filterCacheSuffix,
+    tableFilterCacheSuffix,
     beginBreakdownLoad,
     endBreakdownLoad,
   ]);
@@ -191,11 +199,11 @@ export default function CmpTable() {
     const lines = [
       [
         'Channel',
-        `Current ${viewsLabel}`,
-        'MoM Δ',
-        `Previous ${viewsLabel}`,
-        `Last Year ${viewsLabel}`,
-        'YoY Δ',
+        currentPeriodLabel,
+        comparePeriodLabel,
+        lyPeriodLabel,
+        'MoM',
+        'YoY',
       ].join('\t'),
     ];
     rowsWithColors.forEach((r) => {
@@ -203,9 +211,9 @@ export default function CmpTable() {
         [
           r.ch,
           r.cur,
-          `${r.delta >= 0 ? '+' : ''}${r.delta}%`,
           r.cmp,
           yoyEnabled ? r.ly ?? 0 : 0,
+          `${r.delta >= 0 ? '+' : ''}${r.delta}%`,
           yoyEnabled
             ? `${(r.curYoyDelta ?? 0) >= 0 ? '+' : ''}${r.curYoyDelta ?? 0}%`
             : '0%',
@@ -216,9 +224,9 @@ export default function CmpTable() {
       [
         'Total',
         totals.cur,
-        `${totals.delta >= 0 ? '+' : ''}${totals.delta}%`,
         totals.cmp,
         yoyEnabled ? totals.ly ?? 0 : 0,
+        `${totals.delta >= 0 ? '+' : ''}${totals.delta}%`,
         yoyEnabled
           ? `${(totals.curYoyDelta ?? 0) >= 0 ? '+' : ''}${totals.curYoyDelta ?? 0}%`
           : '0%',
@@ -231,7 +239,14 @@ export default function CmpTable() {
         setTimeout(() => setCopied(false), 1800);
       })
       .catch(() => {});
-  }, [rowsWithColors, totals, viewsLabel, yoyEnabled]);
+  }, [
+    rowsWithColors,
+    totals,
+    yoyEnabled,
+    currentPeriodLabel,
+    comparePeriodLabel,
+    lyPeriodLabel,
+  ]);
 
   if (!VISIBLE_TABS.has(tab)) return null;
 
@@ -242,7 +257,7 @@ export default function CmpTable() {
         badge={{ label: 'Copy-ready', bg: 'var(--acc-soft)', color: 'var(--acc)' }}
       >
         <span className="cmp-table-head-note">
-          Current vs Previous vs Same Month Last Year
+          {`${currentPeriodLabel} · ${comparePeriodLabel} · ${lyPeriodLabel} · MoM · YoY`}
         </span>
         <button
           type="button"
@@ -277,23 +292,12 @@ export default function CmpTable() {
           <table className="cmp-tbl cmp-tbl--period-compare">
             <thead>
               <tr>
-                <th rowSpan={2}>Channel</th>
-                <th colSpan={2} className="col-cur">
-                  Current — {currentPeriodLabel}
-                </th>
-                <th className="col-prev">
-                  Previous — {comparePeriodLabel}
-                </th>
-                <th colSpan={2} className="col-lyear">
-                  Same Month Last Year — {lyPeriodLabel}
-                </th>
-              </tr>
-              <tr>
-                <th className="col-cur">{viewsLabel}</th>
-                <th className="col-cur">MoM Δ</th>
-                <th className="col-prev">{viewsLabel}</th>
-                <th className="col-lyear">{viewsLabel}</th>
-                <th className="col-lyear">YoY Δ</th>
+                <th>Channel</th>
+                <th className="col-cur">{currentPeriodLabel}</th>
+                <th className="col-prev">{comparePeriodLabel}</th>
+                <th className="col-lyear">{lyPeriodLabel}</th>
+                <th className="col-mom">MoM</th>
+                <th className="col-yoy">YoY</th>
               </tr>
             </thead>
             <tbody>
@@ -338,14 +342,14 @@ export default function CmpTable() {
                       </div>
                     </td>
                     <td className="col-cur">{r.cur.toLocaleString()}</td>
-                    <td className="col-cur">
-                      <Delta value={r.delta} />
-                    </td>
                     <td className="col-prev">{r.cmp.toLocaleString()}</td>
                     <td className="col-lyear">
                       {yoyEnabled ? (r.ly ?? 0).toLocaleString() : '0'}
                     </td>
-                    <td className="col-lyear">
+                    <td className="col-mom">
+                      <Delta value={r.delta} />
+                    </td>
+                    <td className="col-yoy">
                       {yoyCell(r.curYoyDelta, yoyEnabled)}
                     </td>
                   </tr>
@@ -355,14 +359,14 @@ export default function CmpTable() {
                 <tr className="cmp-tbl-total-row">
                   <td>Total {tab === 'vdp' ? 'VDP' : ''}</td>
                   <td className="col-cur">{totals.cur.toLocaleString()}</td>
-                  <td className="col-cur">
-                    <Delta value={totals.delta} />
-                  </td>
                   <td className="col-prev">{totals.cmp.toLocaleString()}</td>
                   <td className="col-lyear">
                     {yoyEnabled ? (totals.ly ?? 0).toLocaleString() : '0'}
                   </td>
-                  <td className="col-lyear">
+                  <td className="col-mom">
+                    <Delta value={totals.delta} />
+                  </td>
+                  <td className="col-yoy">
                     {yoyCell(totals.curYoyDelta, yoyEnabled)}
                   </td>
                 </tr>
@@ -374,13 +378,14 @@ export default function CmpTable() {
 
       <div className="cmp-table-foot">
         <div className="cmp-legend-swatch cmp-legend-swatch--cur" />
-        Current period
+        {currentPeriodLabel}
         <div className="cmp-legend-swatch cmp-legend-swatch--prev" />
-        Previous period
+        {comparePeriodLabel}
         <div className="cmp-legend-swatch cmp-legend-swatch--lyear" />
-        Last year same month
+        {lyPeriodLabel}
         <span className="cmp-table-foot-note">
           {`MoM: ${currentPeriodLabel} vs ${comparePeriodLabel} · YoY: ${currentPeriodLabel} vs ${lyPeriodLabel}`}
+          {tab === 'vdp' ? ' · Inventory filters do not apply to this table' : ''}
         </span>
       </div>
     </Panel>

@@ -9,7 +9,7 @@ import MakeBreakdown from '@/components/dashboard/MakeBreakdown';
 import ModelBreakdown from '@/components/dashboard/ModelBreakdown';
 import YearBreakdown from '@/components/dashboard/YearBreakdown';
 import ConditionBreakdown from '@/components/dashboard/ConditionBreakdown';
-import TopCampaigns from '@/components/dashboard/TopCampaigns';
+// import TopCampaigns from '@/components/dashboard/TopCampaigns';
 import CmpTable from '@/components/dashboard/overview/CmpTable';
 // import MakesTable from '@/components/dashboard/overview/MakesTable';
 // import ProximityBars from '@/components/dashboard/overview/ProximityBars';
@@ -108,9 +108,11 @@ function OverviewBody() {
           </>
         )}
 
+        {/* Campaign breakdown — temporarily hidden; uncomment to restore on all tabs:
         <div className="dashboard-full-row">
           <TopCampaigns clientId={clientKey} from={from} to={to} />
         </div>
+        */}
 
         {/* Bottom row — re-enable when ready:
         <div className="g3">

@@ -72,7 +72,7 @@ export default function BreakdownDonut({
   /** % change vs compare period — shown on the right (green up / red down). */
   totalDelta = null,
 }) {
-  const { expanded, isExpanded, toggle } = useChannelGroupExpansion(true);
+  const { expanded, isExpanded, toggle } = useChannelGroupExpansion(false);
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
 

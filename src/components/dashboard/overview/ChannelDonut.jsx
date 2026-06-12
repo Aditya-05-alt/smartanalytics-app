@@ -6,7 +6,10 @@ import {
   getChannelBreakdownCache,
   hasChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
-import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
+import {
+  vdpFilterCacheSuffix,
+  vdpFiltersActive,
+} from '@/lib/vdp/vdpFilterParams';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { channelRowsToDonutData } from '@/lib/ga4/channelDisplay';
 import {
@@ -99,9 +102,12 @@ function useChannelBreakdownRows({
     }
 
     let cancelled = false;
-    setLoading(true);
+    const initialLoad = rows.length === 0;
+    if (initialLoad) setLoading(true);
     setError(null);
-    if (trackBreakdownLoad) beginBreakdownLoad?.();
+    if (trackBreakdownLoad && initialLoad) beginBreakdownLoad?.();
+
+    const invFiltered = vdpFiltersActive(vdpFilters, tab);
 
     fetchChannelBreakdownBundle({
       clientId,
@@ -110,6 +116,8 @@ function useChannelBreakdownRows({
       pageTypeFilter,
       vdpFilters,
       tab,
+      adaptiveChunks: true,
+      preferServer: invFiltered,
       onCancelCheck: () => cancelled,
       onProgress: (partial, meta) => {
         if (cancelled) return;
@@ -131,7 +139,7 @@ function useChannelBreakdownRows({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
-        if (trackBreakdownLoad) endBreakdownLoad?.();
+        if (trackBreakdownLoad && initialLoad) endBreakdownLoad?.();
       });
 
     return () => {

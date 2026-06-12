@@ -90,7 +90,7 @@ export default function LocationDonut({
     let requestId = 0;
     const thisRequest = ++requestId;
 
-    setLoading(true);
+    if (rows.length === 0) setLoading(true);
     setError(null);
 
     fetchLocationBreakdown({
@@ -147,7 +147,7 @@ export default function LocationDonut({
       data={data}
       centerLabel="LOCAL VISITORS"
       totalLabel="Total"
-      loading={loading || (!clientId && overviewLoading)}
+      loading={(loading && rows.length === 0) || (!clientId && overviewLoading)}
       error={error}
       emptyMessage={
         emptyAfterLoad

@@ -63,7 +63,7 @@ export default function ConditionBreakdown({
     }
 
     let cancelled = false;
-    setLoading(true);
+    if (rows.length === 0) setLoading(true);
     setError(null);
 
     fetchConditionBreakdown({
@@ -156,7 +156,7 @@ export default function ConditionBreakdown({
       </PanelHeader>
 
       <PanelBody>
-        {loading && (
+        {loading && rows.length === 0 && (
           <div className="make-breakdown-loading">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="make-breakdown-skel" />
@@ -174,7 +174,7 @@ export default function ConditionBreakdown({
           <div className="make-breakdown-empty">No condition data for this period.</div>
         )}
 
-        {!loading && !error && rows.length > 0 && (
+        {!error && rows.length > 0 && (
           <div className="make-breakdown-content">
             <div className="make-breakdown-split year-breakdown-split">
               <div className="make-breakdown-chart-col">

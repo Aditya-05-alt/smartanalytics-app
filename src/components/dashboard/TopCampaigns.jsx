@@ -128,9 +128,10 @@ function useTopCampaignsRows({
     }
 
     let cancelled = false;
-    setLoading(true);
+    const initialLoad = rows.length === 0;
+    if (initialLoad) setLoading(true);
     setError(null);
-    if (trackBreakdownLoad) beginBreakdownLoad?.();
+    if (trackBreakdownLoad && initialLoad) beginBreakdownLoad?.();
 
     fetchTopCampaignsBundle({
       clientId,
@@ -160,7 +161,7 @@ function useTopCampaignsRows({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
-        if (trackBreakdownLoad) endBreakdownLoad?.();
+        if (trackBreakdownLoad && initialLoad) endBreakdownLoad?.();
       });
 
     return () => {

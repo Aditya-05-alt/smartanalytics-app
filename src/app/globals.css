@@ -454,7 +454,72 @@ body {
   background: linear-gradient(135deg, var(--blue), var(--purple));
   display: flex; align-items: center; justify-content: center;
   font-size: 10px; font-weight: 700; color: #fff;
-  cursor: pointer; flex-shrink: 0;
+  flex-shrink: 0;
+}
+.tb-user-menu { position: relative; }
+.tb-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px 4px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color .15s, background-color .15s;
+  max-width: 180px;
+}
+.tb-user-trigger:hover {
+  background: var(--s3);
+  border-color: var(--bd);
+}
+.tb-user-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tb-user-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: var(--s2);
+  border: 1px solid var(--bd2);
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: var(--shadow-pop);
+  z-index: 300;
+}
+.tb-user-dropdown-label {
+  padding: 8px 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t3);
+  border-bottom: 1px solid var(--bd);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tb-user-dropdown-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t2);
+  cursor: pointer;
+  transition: background-color .12s, color .12s;
+}
+.tb-user-dropdown-item:hover {
+  background: var(--s3);
+  color: var(--t);
 }
 
 /* ── LAYOUT ── */
@@ -3830,14 +3895,13 @@ body {
   flex-shrink: 0;
 }
 .cmp-tbl--period-compare thead tr:first-child th {
-  text-align: center;
+  text-align: right;
 }
 .cmp-tbl--period-compare thead tr:first-child th:first-child {
   text-align: left;
 }
-.cmp-tbl--period-compare thead tr:nth-child(2) th {
-  text-align: right;
-}
+.col-mom { text-align: right !important; }
+.col-yoy { text-align: right !important; border-right: 1px solid rgba(184,155,255,.15)!important; }
 .cmp-tbl-total-row td {
   font-weight: 600;
   color: var(--t);

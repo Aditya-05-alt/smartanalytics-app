@@ -2,6 +2,9 @@
 -- Deploy in Supabase SQL editor.
 
 DROP FUNCTION IF EXISTS public.get_vdp_filter_options(text, date, date);
+DROP FUNCTION IF EXISTS public.get_vdp_filter_options(
+  text, date, date, text[], text[], text[], text[], integer[], text
+);
 
 CREATE OR REPLACE FUNCTION public.get_vdp_filter_options(
   p_client_id text,

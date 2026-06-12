@@ -70,7 +70,7 @@ export default function YearBreakdown({
     }
 
     let cancelled = false;
-    setLoading(true);
+    if (rows.length === 0) setLoading(true);
     setError(null);
 
     fetchYearBreakdown({
@@ -163,7 +163,7 @@ export default function YearBreakdown({
       </PanelHeader>
 
       <PanelBody>
-        {loading && (
+        {loading && rows.length === 0 && (
           <div className="make-breakdown-loading">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="make-breakdown-skel" />
@@ -181,7 +181,7 @@ export default function YearBreakdown({
           <div className="make-breakdown-empty">No year data for this period.</div>
         )}
 
-        {!loading && !error && rows.length > 0 && (
+        {!error && rows.length > 0 && (
           <div className="make-breakdown-content">
             <div className="make-breakdown-split year-breakdown-split">
               <div className="make-breakdown-chart-col">

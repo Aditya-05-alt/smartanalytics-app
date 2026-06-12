@@ -7,6 +7,7 @@ import { useClient } from './ClientContext';
 import { useDropdown } from './useDropdown';
 import { CATEGORIES } from '@/lib/data/categories';
 import { signOutAction } from '@/lib/auth/actions';
+import { createClient } from '@/lib/supabase/client';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
 const NAV = [
@@ -143,6 +144,79 @@ function ClientPicker() {
   );
 }
 
+function userInitials(label) {
+  const text = String(label || '').trim();
+  if (!text) return 'U';
+  if (text.includes('@')) return text.slice(0, 2).toUpperCase();
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+  }
+  return text.slice(0, 2).toUpperCase();
+}
+
+function UserAccountMenu() {
+  const { open, toggle, close, ref } = useDropdown();
+  const [displayName, setDisplayName] = useState('Account');
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase) {
+      setDisplayName('Demo User');
+      return undefined;
+    }
+
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return;
+      const user = data?.user;
+      const name =
+        user?.user_metadata?.full_name
+        || user?.user_metadata?.name
+        || user?.email?.split('@')[0]
+        || 'Account';
+      setDisplayName(name);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const initials = useMemo(() => userInitials(displayName), [displayName]);
+
+  return (
+    <div ref={ref} className="tb-user-menu">
+      <button
+        type="button"
+        className="tb-user-trigger"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <span className="tb-avatar">{initials}</span>
+        <span className="tb-user-name">{displayName}</span>
+        <span className="cp-arr">▼</span>
+      </button>
+      {open && (
+        <div className="tb-user-dropdown animate-fade-in" role="menu">
+          <div className="tb-user-dropdown-label">{displayName}</div>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              className="tb-user-dropdown-item"
+              role="menuitem"
+              onClick={close}
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TopBar() {
   const pathname = usePathname();
   const hideDealerPicker =
@@ -199,16 +273,7 @@ export default function TopBar() {
         ))}
         <div className="tb-div" />
         <ThemeToggle variant="icon" />
-        <form action={signOutAction}>
-          <button
-            type="submit"
-            className="tb-avatar"
-            title="Sign out"
-            style={{ border: 0, padding: 0 }}
-          >
-            AK
-          </button>
-        </form>
+        <UserAccountMenu />
       </nav>
     </header>
   );

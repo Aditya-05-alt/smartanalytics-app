@@ -1,15 +1,54 @@
 import { createClient } from '@/lib/supabase/client';
 import { rpcByDateChunksProgressive } from '@/lib/api/chunkedRpc';
 import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
-import { BREAKDOWN_UI_CHUNK_DAYS } from '@/lib/api/rpcChunkPlan';
+import {
+  BREAKDOWN_UI_CHUNK_DAYS,
+  resolveRpcChunkPlan,
+} from '@/lib/api/rpcChunkPlan';
 import {
   getChannelBreakdownCache,
   setChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
 import {
+  vdpFiltersActive,
   vdpRpcExtraParams,
   vdpFilterCacheSuffix,
+  appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
+
+async function fetchChannelBreakdownViaApi({
+  clientId,
+  from,
+  to,
+  pageTypeFilter,
+  vdpFilters,
+  tab,
+  onCancelCheck,
+}) {
+  if (typeof window === 'undefined') return null;
+  if (onCancelCheck?.()) return null;
+
+  const qs = new URLSearchParams({
+    clientId,
+    from,
+    to,
+    pageType: pageTypeFilter,
+  });
+  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
+
+  const res = await fetch(`/api/dashboard/channel-breakdown?${qs}`, {
+    credentials: 'same-origin',
+  });
+  const json = await res.json().catch(() => ({}));
+
+  if (onCancelCheck?.()) return null;
+  if (!res.ok) {
+    if (res.status === 503) return null;
+    throw new Error(json.error || `Channel breakdown request failed (${res.status})`);
+  }
+
+  return json.rows || [];
+}
 
 async function fetchViaClientProgressive({
   clientId,
@@ -20,6 +59,9 @@ async function fetchViaClientProgressive({
   tab,
   onCancelCheck,
   onProgress,
+  chunkDays,
+  concurrency,
+  adaptiveChunks = false,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
@@ -29,6 +71,15 @@ async function fetchViaClientProgressive({
     ...vdpRpcExtraParams(vdpFilters, tab),
   };
 
+  const invFilters = vdpFiltersActive(vdpFilters, tab);
+  let resolvedChunkDays = chunkDays ?? BREAKDOWN_UI_CHUNK_DAYS;
+  let resolvedConcurrency = concurrency ?? 1;
+  if (adaptiveChunks) {
+    const plan = resolveRpcChunkPlan(from, to, { invFilters });
+    resolvedChunkDays = chunkDays ?? plan.chunkDays;
+    resolvedConcurrency = concurrency ?? plan.concurrency;
+  }
+
   const raw = await rpcByDateChunksProgressive(
     supabase,
     'get_ga4_channel_breakdown',
@@ -37,8 +88,8 @@ async function fetchViaClientProgressive({
       from,
       to,
       extraParams,
-      chunkDays: BREAKDOWN_UI_CHUNK_DAYS,
-      concurrency: 1,
+      chunkDays: resolvedChunkDays,
+      concurrency: resolvedConcurrency,
       onCancelCheck,
       onBatch: (batchRows, meta) => {
         if (onCancelCheck?.()) return;
@@ -66,6 +117,10 @@ export async function fetchChannelBreakdownBundle({
   onCancelCheck,
   onProgress,
   skipCache = false,
+  preferServer = false,
+  adaptiveChunks = false,
+  chunkDays,
+  concurrency,
 }) {
   if (!clientId || !from || !to) return [];
 
@@ -85,6 +140,37 @@ export async function fetchChannelBreakdownBundle({
     }
   }
 
+  if (preferServer) {
+    try {
+      const viaApi = await fetchChannelBreakdownViaApi({
+        clientId,
+        from,
+        to,
+        pageTypeFilter,
+        vdpFilters,
+        tab,
+        onCancelCheck,
+      });
+      if (viaApi) {
+        onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
+        if (!skipCache) {
+          setChannelBreakdownCache(
+            clientId,
+            from,
+            to,
+            pageTypeFilter,
+            viaApi,
+            cacheSuffix
+          );
+        }
+        return viaApi;
+      }
+    } catch (err) {
+      if (onCancelCheck?.()) return null;
+      // Fall through to client-side chunked fetch.
+    }
+  }
+
   const result = await fetchViaClientProgressive({
     clientId,
     from,
@@ -94,6 +180,9 @@ export async function fetchChannelBreakdownBundle({
     tab,
     onCancelCheck,
     onProgress,
+    chunkDays,
+    concurrency,
+    adaptiveChunks,
   });
 
   if (onCancelCheck?.()) return null;
