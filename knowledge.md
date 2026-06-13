@@ -1,7 +1,7 @@
 # SmartAnalytics — Knowledge Base
 
-Technical reference for RPCs, data sources, pipeline steps, and dashboard data flow.  
-Last updated from codebase: dashboard overview, compare period, channel groups, admin pipeline.
+Technical reference for RPCs, data sources, pipeline steps, dashboard data flow, and XLSX exports.  
+Last updated: May 2026 — overview resilience, VDP/All XLSX exports, compare table (MoM + YoY), channel groups.
 
 ### Contents
 
@@ -11,7 +11,7 @@ Last updated from codebase: dashboard overview, compare period, channel groups, 
 4. [Admin pipeline](#4-admin-pipeline-3-steps)  
 5. [Dashboard layout & tabs](#5-dashboard-page-layout--tabs)  
 6. [Overview data flow](#6-overview-data-flow)  
-7. [Compare period (MoM)](#7-compare-period-mom)  
+7. [Compare period (MoM + YoY)](#7-compare-period-mom--yoy)  
 8. [Channel grouping](#8-channel-grouping-rollup--dropdown)  
 9. [API routes map](#9-api-routes-map)  
 10. [Key frontend modules](#10-key-frontend-modules)  
@@ -22,7 +22,8 @@ Last updated from codebase: dashboard overview, compare period, channel groups, 
 15. [Environment variables](#15-environment-variables)  
 16. [Authentication & authorization](#16-authentication--authorization)  
 17. [Entity-relationship model](#17-entity-relationship-model)  
-18. [Related files index](#18-related-files-index)
+18. [Related files index](#18-related-files-index)  
+19. [XLSX exports (VDP + All tabs)](#19-xlsx-exports-vdp--all-tabs)
 
 ---
 
@@ -48,9 +49,9 @@ Dashboard RPCs ◄────────────────────�
 
 | Table | Role |
 |-------|------|
-| `smart_ga4_page_data` | Page-grain GA4 views after Step 1 sync. Columns include `page_path`, `channel`, `views`, `report_date`, `vdp_conditions`, `ga4_page_type`, `cms`. |
-| `smart_ga4_data` | Session/user totals (not page-grain). Used for unique visitors — **do not sum users from page table**. |
-| `smart_final_data` | VDP rows matched to inventory (Hoot). Used for filtered VDP breakdowns, make/model/year, location. |
+| `smart_ga4_page_data` | Page-grain GA4 facts after Step 1 sync. Includes `page_location`, `page_path`, `page_title`, `channel`, `source`, `medium`, `source_medium`, `session_campaign`, `views`, `total_users`, `sessions`, `new_users`, `report_date`, `vdp_conditions`, `ga4_page_type`, `vdp_vehicle_condition`, `year`, `cms`, `account_name`, `created_at`. |
+| `smart_ga4_data` | Session/user totals (not page-grain). Used for unique visitors via `get_ga4_user_totals`. **Optional** — overview still loads if this table/RPC is missing. |
+| `smart_final_data` | VDP rows matched to inventory (Hoot). Includes `inv_url`, `inv_make`, `inv_model`, `inv_location`, `inv_condition`, `page_location`, `hoot_url` (feed URL — **not** used for export URLs). |
 | `smart_hoot_config` | Dealer config: `ga4_customer_id`, `account_name`, `website_platform`, etc. |
 | `smart_vdp_logic` | Regex rules per dealer: `vdp_logic`, `srp_logic`, `home_page_logic`. Used by Step 2 filtration. |
 | `smart_ga4_config` | GA4 property registry for Step 1 sync (`client_id`, `ga4_property_id`). |
@@ -148,7 +149,9 @@ Chunked via `rpcByDateChunks`.
 
 Session/user totals from `smart_ga4_data` (not page table).
 
-**Caller:** `fetchUserTotals()` in `src/lib/api/dashboardApi.js`
+**Caller:** `/api/dashboard/overview` and `fetchOverviewBundle()` in `overviewFetch.js`
+
+**Resilience:** If `get_ga4_user_totals` fails (e.g. table `smart_ga4_data` missing), overview **still returns** page-grain rows from `get_ga4_overview`; `userTotalsRows` is empty and unique-visitor KPIs may show 0.
 
 ---
 
@@ -184,6 +187,28 @@ VDP inventory filters: `p_types`, `p_makes`, `p_models`, `p_locations`, `p_years
 
 ---
 
+### 3.4 XLSX export RPCs
+
+Used by **Download XLSX** on the dashboard (service role via API routes). All respect `p_client_id`, `p_from`, `p_to` and optional VDP inventory filters (same 9 params as breakdown RPCs where noted).
+
+| RPC | Params | Source table | Used by |
+|-----|--------|--------------|---------|
+| `get_vdp_export_by_channel` | 9 (client, from, to, types, makes, models, locations, years, condition) | `smart_final_data` + join `smart_ga4_page_data` for channel views | VDP XLSX — **By Channel** sheet |
+| `get_vdp_export_by_location` | 9 | `smart_final_data` | VDP XLSX — **By Location** |
+| `get_vdp_export_by_make` | 9 | `smart_final_data` | VDP XLSX — **By Make** |
+| `get_vdp_export_by_model` | 9 | `smart_final_data` | VDP XLSX — **By Model** |
+| `get_vdp_export_by_condition` | 9 | `smart_final_data` | VDP XLSX — **By Condition** |
+| `get_all_tab_export` | 3 (client, from, to) | `smart_ga4_page_data` | All tab XLSX — **All Page Data** sheet |
+
+**VDP URL rule:** Use `inv_url` first; fallback to `page_location` (never `hoot_url` API feed).  
+**VDP row grain:** One row per `report_date` + URL + dimension value; includes **0-view days** after client-side date fill.  
+**All tab columns:** All `smart_ga4_page_data` fields **except** `id`, `client_id`, `ga4_property_id`. Includes rows with **0 views**.  
+**All tab date fill:** Each page/channel/campaign combo is expanded across every day in the selected range; missing days get **0** metrics but keep `page_location` and other dimension columns.
+
+**SQL files:** `supabase/rpc/get_vdp_export_by_*.sql`, `get_all_tab_export.sql`
+
+---
+
 ## 4. Admin pipeline (3 steps)
 
 UI: `/dashboard/admin/pipeline` → `DealerPipelineCard.jsx`
@@ -210,14 +235,26 @@ UI: `/dashboard/admin/pipeline` → `DealerPipelineCard.jsx`
 **Tab order:** VDP → SRP → Homepage → **All** → Other  
 **Default tab:** `vdp`
 
+**Page layout order (top → bottom):**
+
+1. `PageTabs` + `OverviewFilters` (VDP filters + export buttons + date pickers)
+2. `KpiRow` — totals + daily chart
+3. Channel donut (+ Location donut on VDP tab)
+4. VDP breakdowns (Year, Condition, Make, Model) when on VDP tab
+5. **`CmpTable`** — period comparison (All + VDP tabs only), **bottom of page**
+
 | Section | Tabs | Component |
 |---------|------|-----------|
 | KPI cards + daily chart | All tabs | `KpiRow.jsx` |
-| Period comparison table (MoM) | **All + VDP only** | `CmpTable.jsx` |
+| Period comparison table (MoM + YoY) | **All + VDP only** (bottom) | `CmpTable.jsx` |
 | Channel donut | All tabs | `ChannelDonut.jsx` |
 | Location donut | VDP only | `LocationDonut.jsx` |
 | Year / Condition / Make / Model | VDP only | `YearBreakdown`, `ConditionBreakdown`, `MakeBreakdown`, `ModelBreakdown` |
-| Campaign donut | All tabs | `TopCampaigns.jsx` |
+| **Download XLSX** | **VDP tab** | `VdpExportButton.jsx` → 5 sheets |
+| **Download XLSX** | **All tab** | `AllExportButton.jsx` → full page data |
+| Campaign donut | *(commented out in `page.jsx`)* | `TopCampaigns.jsx` |
+
+**Top bar:** User avatar opens dropdown with Sign out (`TopBar.jsx`).
 
 ---
 
@@ -227,8 +264,9 @@ UI: `/dashboard/admin/pipeline` → `DealerPipelineCard.jsx`
 
 1. User picks date range + client (from `ClientContext`).
 2. `OverviewDataContext` calls `fetchOverviewBundle()` → `/api/dashboard/overview` or direct RPC.
-3. RPCs: `get_ga4_overview` + `get_ga4_user_totals` (chunked).
-4. Rows aggregated into:
+3. RPCs: `get_ga4_overview` (required) + `get_ga4_user_totals` (optional, chunked).
+4. If user totals fail, overview rows still load; KPI unique visitors may be 0.
+5. Rows aggregated into:
    - `totals` / `seriesByTab` per tab (`all`, `vdp`, `srp`, `home`, `other`)
    - `dateList` for chart X-axis
    - Cached in `src/lib/data/overviewCache.js` keyed by `(clientId, from, to)`.
@@ -248,7 +286,7 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 
 ---
 
-## 7. Compare period (MoM)
+## 7. Compare period (MoM + YoY)
 
 **Controls:** `OverviewFilters.jsx` — Compare period switch + compare date picker (next to main range).
 
@@ -257,22 +295,28 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | Function | Purpose |
 |----------|---------|
 | `previousMonthAlignedRange(from, to)` | Default compare range = same span, previous month |
-| `periodMonthLabel(from, to)` | Column headings ("April 2026") |
-| `pctChange(current, previous)` | MoM % (rounded integer) |
+| `sameMonthLastYearRange(from, to)` | YoY range = same calendar span, one year earlier |
+| `periodMonthLabel(from, to)` | Column headings ("June 2026") — no "Current/Previous" words |
+| `pctChange(current, previous)` | MoM / YoY % (rounded integer) |
 | `mergeChannelComparison(cur, cmp)` | Rows for comparison table |
 | `buildDonutCompareDeltas(current, compare)` | Per-row + total % for donut lists |
-| `sameMonthLastYearLabel(from, to)` | YoY column label (data placeholder = 0 for now) |
 
 **Compare fetch:** Second overview bundle for `compareFrom` / `compareTo` → `compareSeriesByTab`, `compareTotals`.
 
-**Where MoM appears:**
+**CmpTable (`All` + `VDP` tabs):**
+
+- Columns: **Channel | {current month} | {previous month} | {same month last year} | MoM | YoY**
+- **Ignores VDP inventory filters** on VDP tab (`DEFAULT_VDP_FILTERS`) so MoM/YoY stay comparable; channel donuts still respect filters.
+- Channel group rollups **collapsed by default** (`useChannelGroupExpansion(false)`).
+
+**Where compare appears:**
 
 | UI | Behavior |
 |----|----------|
-| `CmpTable` | All + VDP. Current vs Previous columns + MoM Δ. YoY columns = 0 placeholder. |
+| `CmpTable` | All + VDP. Current / Previous / Same month last year + MoM + YoY |
 | `KpiRow` | Combined daily chart when compare enabled |
-| `ChannelDonut` / `TopCampaigns` | Side-by-side donuts: **compare left**, **current right**, % on right pane only |
-| `BreakdownDonut` | Row `delta` + `totalDelta` via `Delta` component (green ↑ / red ↓) |
+| `ChannelDonut` | Side-by-side donuts when compare enabled: compare left, current right |
+| `BreakdownDonut` | Row `delta` + `totalDelta` via `Delta` component |
 
 ---
 
@@ -285,7 +329,7 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | Paid Search + Cross Network + Display | Paid Search, Cross-network, Display | Yes (expand/collapse) |
 | Paid Social + Organic Social | Paid Social, Organic Social | Yes (expand/collapse) |
 
-**UI toggle:** `ChannelGroupToggle.jsx` + `useChannelGroupExpansion()` hook.  
+**UI toggle:** `ChannelGroupToggle.jsx` + `useChannelGroupExpansion(false)` — **collapsed by default**.  
 **Applied in:** `CmpTable.jsx`, `BreakdownDonut.jsx` (list only; donut chart stays ungrouped slices).
 
 ---
@@ -296,10 +340,12 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/dashboard/overview` | GET | Overview page-grain + user totals |
+| `/api/dashboard/overview` | GET | Overview page-grain + user totals (user totals optional) |
 | `/api/dashboard/channel-breakdown` | GET | Channel RPC proxy |
 | `/api/dashboard/top-campaigns` | GET | Campaign RPC proxy |
 | `/api/dashboard/location-breakdown` | GET | Location RPC proxy |
+| `/api/dashboard/vdp-export` | GET | VDP XLSX data (5 RPCs in parallel) |
+| `/api/dashboard/all-export` | GET | All tab XLSX data (`get_all_tab_export`, chunked) |
 
 ### Admin
 
@@ -332,7 +378,9 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | `src/lib/api/chunkedRpc.js` | Date-chunked RPC runner, timeout bisection |
 | `src/lib/api/channelBreakdownFetch.js` | Progressive channel fetch + cache |
 | `src/lib/api/topCampaignsFetch.js` | Progressive campaign fetch + cache |
-| `src/lib/api/overviewFetch.js` | Overview bundle |
+| `src/lib/api/overviewFetch.js` | Overview bundle (resilient user-totals failure) |
+| `src/lib/api/vdpExport.js` | VDP tab XLSX builder (ExcelJS, 5 sheets, date zero-fill) |
+| `src/lib/api/allExport.js` | All tab XLSX builder (ExcelJS, full page columns, date zero-fill) |
 | `src/lib/ga4/channelBreakdownMerge.js` | Merge chunked channel rows |
 | `src/lib/ga4/channelDisplay.js` | Colors + `channelRowsToDonutData()` |
 | `src/lib/ga4/pageType.js` | Map `ga4_page_type` → tab id |
@@ -342,6 +390,8 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | `src/lib/pipeline/syncLogFormat.js` | Admin step log formatting |
 | `src/lib/data/channelBreakdownCache.js` | In-memory breakdown cache |
 | `src/components/dashboard/overview/BreakdownDonut.jsx` | Shared donut + list panel |
+| `src/components/dashboard/overview/VdpExportButton.jsx` | VDP tab Download XLSX |
+| `src/components/dashboard/overview/AllExportButton.jsx` | All tab Download XLSX |
 | `src/components/dashboard/Delta.jsx` | ↑/↓ % chip |
 
 ---
@@ -375,8 +425,17 @@ When RPC signatures change:
 
 1. Run updated `.sql` in Supabase SQL Editor (drop old overloads if PostgREST reports ambiguity).
 2. Run `apply_vdp_filtration.sql` grant/drop if 1-arg overload exists.
-3. Restart Next dev server / redeploy app.
-4. Verify with `npm run build`.
+3. **Export RPCs** (deploy when export behavior changes):
+   - `get_vdp_export_by_channel.sql`
+   - `get_vdp_export_by_location.sql`
+   - `get_vdp_export_by_make.sql`
+   - `get_vdp_export_by_model.sql`
+   - `get_vdp_export_by_condition.sql`
+   - `get_all_tab_export.sql`
+4. Restart Next dev server / redeploy app.
+5. Verify with `npm run build`.
+
+**Dependencies:** XLSX export uses **`exceljs`** (client-side dynamic import). Server export APIs require **`SUPABASE_SERVICE_ROLE_KEY`**.
 
 **Common PostgREST error:** *"Could not choose the best candidate function"* — multiple overloads with same name; drop legacy signatures listed at top of each RPC SQL file.
 
@@ -408,7 +467,7 @@ Copy `.env.example` → `.env.local`. **Never commit real keys.** Rotate any key
 |----------|----------|--------------|-------------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Browser + server | Dashboard, auth, RPC | Supabase project URL (`https://<ref>.supabase.co`) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser + server | Dashboard, auth | Supabase anon key — used by client components and middleware session refresh |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Server only** | Admin pipeline, overview API, breakdown APIs | Bypasses RLS for pipeline + server-side dashboard reads |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Server only** | Admin pipeline, overview API, breakdown APIs, **VDP/All XLSX export APIs** | Bypasses RLS for pipeline + server-side dashboard reads |
 | `GCP_SERVICE_ACCOUNT_JSON` | **Server only** | Pipeline Step 1 | Minified JSON service account with GA4 Data API access |
 | `GCP_SERVICE_ACCOUNT_JSON_PATH` | **Server only** | Pipeline Step 1 (alt.) | Path to JSON key file on disk (preferred over inline JSON) |
 | `NODE_ENV` | Server | Cookie `secure` flag | `production` enables secure cookies |
@@ -571,16 +630,29 @@ erDiagram
     boolean is_active
   }
   smart_ga4_page_data {
+    bigint id PK
     text client_id FK
+    text ga4_property_id
+    text account_name
     date report_date
+    text page_location
     text page_path
+    text page_title
+    text session_campaign
     text channel
+    text source
+    text medium
+    text source_medium
     bigint views
+    bigint total_users
+    bigint sessions
+    bigint new_users
+    timestamptz created_at
     boolean vdp_conditions
+    text vdp_vehicle_condition
+    int year
     text ga4_page_type
     text cms
-    int year
-    text vdp_vehicle_condition
   }
   smart_ga4_data {
     text client_id
@@ -613,10 +685,12 @@ erDiagram
     text client_id FK
     date report_date
     text page_path
+    text page_location
+    text inv_url
     bigint views
     text inv_make
     text inv_model
-    int inv_year
+    text inv_year
     text inv_condition
     text inv_location
     text inv_type
@@ -638,11 +712,11 @@ erDiagram
 | Used by | `ClientContext`, admin dealers API, Step 2 CMS heal, Step 3 config join |
 
 #### `smart_ga4_page_data`
-| Role | **Page-grain** GA4 facts (views per page/channel/day) |
-| Key columns | `client_id`, `report_date`, `page_path`, `channel`, `views`, `vdp_conditions`, `ga4_page_type`, `cms` |
-| Written by | Step 1 (`syncGa4PageDataForDealer`) |
+| Role | **Page-grain** GA4 facts (views per page/channel/campaign/day) |
+| Key columns | See ER diagram — full export excludes only `id`, `client_id`, `ga4_property_id` |
+| Written by | Step 1 (`syncGa4PageDataForDealer` / `ga4PageSync.js`) |
 | Updated by | Step 2 (`apply_vdp_filtration`) |
-| Read by | Overview RPCs, channel/campaign breakdowns (fast path), admin stats |
+| Read by | Overview RPCs, channel/campaign breakdowns, **All tab XLSX export** |
 
 #### `smart_ga4_data`
 | Role | **Session-grain** metrics (users/sessions — not page-level) |
@@ -663,9 +737,9 @@ erDiagram
 
 #### `smart_final_data`
 | Role | **Enriched VDP rows** (page + inventory attributes) |
-| Key columns | All page metrics + `inv_*` columns + `vdp_conditions` |
+| Key columns | Page metrics + `inv_url`, `inv_make`, `inv_model`, `inv_location`, `inv_condition`, `inv_type`, `page_location`, `hoot_url` |
 | Written by | Step 3 (`build_smart_final_data`) |
-| Read by | VDP filters, make/model/year/condition/location breakdowns, filtered daily series |
+| Read by | VDP filters, make/model/year/condition/location breakdowns, filtered daily series, **VDP XLSX export** |
 
 ### 17.3 ID mapping cheat sheet
 
@@ -706,10 +780,60 @@ flowchart LR
 | Dashboard layout | `src/app/dashboard/page.jsx` |
 | Global dashboard state | `src/components/dashboard/overview/OverviewDataContext.jsx` |
 | Admin pipeline UI | `src/components/dashboard/admin/DealerPipelineCard.jsx` |
+| VDP XLSX export | `src/lib/api/vdpExport.js`, `src/app/api/dashboard/vdp-export/route.js` |
+| All tab XLSX export | `src/lib/api/allExport.js`, `src/app/api/dashboard/all-export/route.js` |
 | RPC SQL deploy | `supabase/rpc/*.sql` |
 | Env template | `.env.example` |
 | Auth middleware | `src/middleware.js` |
 | Superadmin accounts | `src/lib/auth/superadmin.js` |
+
+---
+
+## 19. XLSX exports (VDP + All tabs)
+
+### 19.1 VDP tab export
+
+**Trigger:** `VdpExportButton` in `OverviewFilters.jsx` (visible on **VDP tab only**).  
+**API:** `GET /api/dashboard/vdp-export?clientId&from&to` + VDP filter query params.  
+**Client:** Dynamic import `@/lib/api/vdpExport` → **ExcelJS** workbook.
+
+**Sheets (5):**
+
+| Sheet | Columns | Data source |
+|-------|---------|-------------|
+| By Channel | Date, URL, Views, Channel | `get_vdp_export_by_channel` |
+| By Location | Date, URL, Views, Location | `get_vdp_export_by_location` |
+| By Make | Date, URL, Views, Make | `get_vdp_export_by_make` |
+| By Model | Date, URL, Views, Model | `get_vdp_export_by_model` |
+| By Condition | Date, URL, Views, Condition | `get_vdp_export_by_condition` |
+
+**URL column:** Full dealer VDP URL from `smart_final_data.inv_url` (fallback `page_location`; never `hoot_url`).  
+**Date fill:** Every day in selected range × each URL+dimension combo; **0 views** on missing days.  
+**Styling:** Green header row; **Date** column highlighted on data rows; **Total** row at bottom (views sum).  
+**Filters:** Respects active VDP inventory filters (`vdpRpcExtraParams`).
+
+### 19.2 All tab export
+
+**Trigger:** `AllExportButton` in `OverviewFilters.jsx` (visible on **All tab only**).  
+**API:** `GET /api/dashboard/all-export?clientId&from&to` (chunked via `rpcByDateChunks`).  
+**Client:** Dynamic import `@/lib/api/allExport` → **ExcelJS** workbook.
+
+**Sheet:** `All Page Data` — one row per page/channel/campaign combo per day (after date fill).
+
+**Columns exported (20):**  
+`account_name`, `report_date`, `page_location`, `page_path`, `page_title`, `session_campaign`, `channel`, `source`, `medium`, `source_medium`, `views`, `total_users`, `sessions`, `new_users`, `created_at`, `vdp_conditions`, `vdp_vehicle_condition`, `year`, `ga4_page_type`, `cms`
+
+**Excluded:** `id`, `client_id`, `ga4_property_id` (dealer still filtered by `client_id` in SQL `WHERE`).
+
+**Rules:**
+
+- Includes rows with **0 views** from DB and from date zero-fill.
+- `report_date` written as **ISO text** (`yyyy-mm-dd`) — avoids Excel date column bleed into `page_location`.
+- `page_location`: `COALESCE(page_location, page_path)` in SQL; explicit cell write in Excel builder.
+- Highlighted columns: `report_date`, `page_location`, `views`, `ga4_page_type` (+ full header row).
+- Total row sums `views`, `total_users`, `sessions`, `new_users`.
+
+**Filename pattern:** `all-export_{dealerSlug}_{from}_to_{to}.xlsx` / `vdp-export_{dealerSlug}_{from}_to_{to}.xlsx`
 
 ---
 

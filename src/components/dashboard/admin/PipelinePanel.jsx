@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchPipelineDealers } from '@/lib/api/adminPipeline';
 import DealerPipelineCard from '@/components/dashboard/admin/DealerPipelineCard';
+import {
+  readStoredAdminDealerId,
+  writeStoredAdminDealerId,
+} from '@/lib/dashboard/dashboardPrefs';
 
 export default function PipelinePanel() {
   const [dealers, setDealers] = useState([]);
@@ -19,8 +23,13 @@ export default function PipelinePanel() {
         const list = await fetchPipelineDealers();
         if (!cancelled) {
           setDealers(list);
+          const storedId = readStoredAdminDealerId();
+          const storedMatch = storedId
+            ? list.find((d) => String(d.id) === String(storedId) && d.ga4CustomerId)
+            : null;
           const first = list.find((d) => d.ga4CustomerId);
-          if (first) setSelectedId(String(first.id));
+          const nextId = storedMatch?.id ?? first?.id;
+          if (nextId != null) setSelectedId(String(nextId));
         }
       } catch (e) {
         if (!cancelled) setError(e?.message || 'Failed to load dealers.');
@@ -48,7 +57,11 @@ export default function PipelinePanel() {
             <select
               className="ga4-count-select"
               value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setSelectedId(nextId);
+                if (nextId) writeStoredAdminDealerId(nextId);
+              }}
               disabled={loading || dealers.length === 0}
             >
               <option value="">Select dealer…</option>

@@ -2,6 +2,8 @@
 
 import FilterDropdown from '../FilterDropdown';
 import CalendarRangePicker from '../CalendarRangePicker';
+import VdpExportButton from './VdpExportButton';
+import AllExportButton from './AllExportButton';
 import { useClient } from '../ClientContext';
 import { useOverview } from './OverviewDataContext';
 
@@ -107,7 +109,13 @@ export default function OverviewFilters() {
               onChange={(v) => setVdpFilter('location', v)}
             />
           )}
+          <VdpExportButton />
         </>
+      )}
+      {tab === 'all' && (
+        <div className="filters-export-slot">
+          <AllExportButton />
+        </div>
       )}
       <div className="f-right">
         {showDataUpdating && (

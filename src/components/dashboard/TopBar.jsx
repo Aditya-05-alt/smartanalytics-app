@@ -6,7 +6,6 @@ import { useMemo, useState, useEffect } from 'react';
 import { useClient } from './ClientContext';
 import { useDropdown } from './useDropdown';
 import { CATEGORIES } from '@/lib/data/categories';
-import { signOutAction } from '@/lib/auth/actions';
 import { createClient } from '@/lib/supabase/client';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
@@ -185,6 +184,11 @@ function UserAccountMenu() {
 
   const initials = useMemo(() => userInitials(displayName), [displayName]);
 
+  const handleSignOut = () => {
+    close();
+    window.location.href = '/api/auth/signout';
+  };
+
   return (
     <div ref={ref} className="tb-user-menu">
       <button
@@ -201,16 +205,14 @@ function UserAccountMenu() {
       {open && (
         <div className="tb-user-dropdown animate-fade-in" role="menu">
           <div className="tb-user-dropdown-label">{displayName}</div>
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="tb-user-dropdown-item"
-              role="menuitem"
-              onClick={close}
-            >
-              Sign out
-            </button>
-          </form>
+          <button
+            type="button"
+            className="tb-user-dropdown-item"
+            role="menuitem"
+            onClick={handleSignOut}
+          >
+            Sign out
+          </button>
         </div>
       )}
     </div>

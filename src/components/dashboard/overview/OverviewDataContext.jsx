@@ -27,6 +27,10 @@ import {
   periodMonthLabel,
 } from '@/lib/overview/comparePeriod';
 import { useClient } from '../ClientContext';
+import {
+  readStoredOverviewTab,
+  writeStoredOverviewTab,
+} from '@/lib/dashboard/dashboardPrefs';
 
 const OverviewDataContext = createContext(null);
 
@@ -172,7 +176,11 @@ function chartDateListAndSeries(dateList, seriesByTab) {
 export function OverviewProvider({ children }) {
   const { client } = useClient();
 
-  const [tab, setTab] = useState('vdp');
+  const [tab, setTabState] = useState(() => readStoredOverviewTab() || 'vdp');
+  const setTab = useCallback((nextTab) => {
+    setTabState(nextTab);
+    writeStoredOverviewTab(nextTab);
+  }, []);
   const [dateRange, setDateRange] = useState(DEFAULT_RANGE);
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [compareDateRange, setCompareDateRange] = useState(null);

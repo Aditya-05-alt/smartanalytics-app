@@ -6,6 +6,8 @@ import {
   rpcByDateChunks,
 } from '@/lib/api/chunkedRpc';
 
+export const maxDuration = 120;
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get('clientId')?.trim();
@@ -29,34 +31,23 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const chunkOpts = {
-    clientId,
-    from,
-    to,
-    chunkDays: RPC_CHUNK_DAYS,
-    concurrency: RPC_CHUNK_CONCURRENCY,
-  };
-
   try {
-    const rows = await rpcByDateChunks(supabase, 'get_ga4_overview', chunkOpts);
-
-    let userTotalsRows = [];
-    try {
-      userTotalsRows = await rpcByDateChunks(supabase, 'get_ga4_user_totals', chunkOpts);
-    } catch (userErr) {
-      console.warn('[overview] get_ga4_user_totals unavailable:', userErr?.message);
-    }
+    const rows = await rpcByDateChunks(supabase, 'get_all_tab_export', {
+      clientId,
+      from,
+      to,
+      chunkDays: RPC_CHUNK_DAYS,
+      concurrency: RPC_CHUNK_CONCURRENCY,
+    });
 
     return NextResponse.json({
       rows: rows || [],
-      userTotalsRows: userTotalsRows || [],
-      meta: { source: 'chunked-rpc', chunkDays: RPC_CHUNK_DAYS },
+      meta: { from, to, clientId, source: 'chunked-rpc' },
     });
   } catch (err) {
-    const message = err?.message || 'Failed to load overview data';
-    const hint = /timeout|canceling statement/i.test(message)
-      ? ' Data is loaded in 5-day batches; retry or add indexes on smart_ga4_page_data (report_date, client_id).'
-      : '';
-    return NextResponse.json({ error: message + hint }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || 'Failed to load All tab export data' },
+      { status: 500 }
+    );
   }
 }

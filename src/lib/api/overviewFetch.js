@@ -27,10 +27,15 @@ async function fetchOverviewViaClient({ clientId, from, to, onCancelCheck }) {
 
   const chunkOpts = { clientId, from, to, onCancelCheck };
 
-  const [rows, userTotalsRows] = await Promise.all([
-    rpcByDateChunks(supabase, 'get_ga4_overview', chunkOpts),
-    rpcByDateChunks(supabase, 'get_ga4_user_totals', chunkOpts),
-  ]);
+  const rows = await rpcByDateChunks(supabase, 'get_ga4_overview', chunkOpts);
+  if (onCancelCheck?.()) return null;
+
+  let userTotalsRows = [];
+  try {
+    userTotalsRows = await rpcByDateChunks(supabase, 'get_ga4_user_totals', chunkOpts);
+  } catch {
+    userTotalsRows = [];
+  }
 
   if (onCancelCheck?.()) return null;
 

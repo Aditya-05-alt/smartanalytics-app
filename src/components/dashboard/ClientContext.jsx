@@ -10,6 +10,11 @@ import {
 } from 'react';
 import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
+import {
+  readStoredDealerId,
+  resolveDealerFromList,
+  writeStoredDealerId,
+} from '@/lib/dashboard/dashboardPrefs';
 
 const ClientContext = createContext(null);
 
@@ -67,12 +72,17 @@ export function ClientProvider({ children }) {
         .filter((r) => r && r.customer_name)
         .map(normalizeRow);
 
-      const skyRiver = list.find((d) =>
-        /sky\s*river/i.test(d.name)
-      );
+      const storedId = readStoredDealerId();
+      const initialClient = resolveDealerFromList(list, storedId);
 
       setDealers(list);
-      setClient((prev) => prev || skyRiver || list[0] || null);
+      setClient((prev) => {
+        if (prev) {
+          const stillValid = list.find((d) => d.id === prev.id);
+          return stillValid || initialClient;
+        }
+        return initialClient;
+      });
       setLoading(false);
     }
 
@@ -82,7 +92,10 @@ export function ClientProvider({ children }) {
     };
   }, []);
 
-  const pickClient = useCallback((c) => setClient(c), []);
+  const pickClient = useCallback((c) => {
+    setClient(c);
+    if (c?.id != null) writeStoredDealerId(c.id);
+  }, []);
 
   const config = useMemo(() => {
     const key = client?.category || FALLBACK_CATEGORY;
