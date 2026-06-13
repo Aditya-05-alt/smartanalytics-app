@@ -88,9 +88,9 @@ export function daysBackFromRange(fromIso, toIso) {
 }
 
 /**
- * Step 2 — apply_vdp_filtration uses:
+ * Legacy cron RPC apply_vdp_filtration uses:
  *   report_date >= (CURRENT_DATE - p_days_back)
- * So p_days_back = calendar days from selected `from` through today (0 = today only).
+ * Admin Step 2 uses apply_vdp_filtration_range(p_from, p_to) instead.
  */
 export function daysBackForVdpFiltration(fromIso, toIso) {
   const today = todayISO();

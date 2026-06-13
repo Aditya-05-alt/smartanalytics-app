@@ -1,7 +1,7 @@
 # SmartAnalytics — Knowledge Base
 
 Technical reference for RPCs, data sources, pipeline steps, dashboard data flow, and XLSX exports.  
-Last updated: May 2026 — overview resilience, VDP/All XLSX exports, compare table (MoM + YoY), channel groups.
+Last updated: May 2026 — `apply_vdp_filtration_range` (admin Step 2), VDP/All XLSX exports, overview resilience, compare table (MoM + YoY), channel groups, dealer/tab persistence, sign-out route.
 
 ### Contents
 
@@ -23,7 +23,8 @@ Last updated: May 2026 — overview resilience, VDP/All XLSX exports, compare ta
 16. [Authentication & authorization](#16-authentication--authorization)  
 17. [Entity-relationship model](#17-entity-relationship-model)  
 18. [Related files index](#18-related-files-index)  
-19. [XLSX exports (VDP + All tabs)](#19-xlsx-exports-vdp--all-tabs)
+19. [XLSX exports (VDP + All tabs)](#19-xlsx-exports-vdp--all-tabs)  
+20. [UI persistence (localStorage)](#20-ui-persistence-localstorage)
 
 ---
 
@@ -32,7 +33,8 @@ Last updated: May 2026 — overview resilience, VDP/All XLSX exports, compare ta
 ```
 GA4 API  ──► Step 1 (Node) ──► smart_ga4_page_data
                                       │
-Step 2 RPC apply_vdp_filtration ──────┤  sets vdp_conditions, ga4_page_type, year, etc.
+Admin Step 2: apply_vdp_filtration_range (exact From→To) ──┤  vdp_conditions, ga4_page_type, year, …
+Cron Step 2: apply_vdp_filtration (p_days_back from today) ┘
                                       │
 Step 3 RPC build_smart_final_data ───► smart_final_data  (inventory-enriched VDP rows)
                                       │
@@ -65,20 +67,35 @@ SQL definitions live under `supabase/rpc/*.sql`. Deploy in Supabase SQL Editor w
 
 ### 3.1 Admin pipeline
 
-#### `apply_vdp_filtration(p_client_id text, p_days_back integer)`
+#### `apply_vdp_filtration_range(p_client_id, p_from, p_to)` — **Admin Step 2**
+
+| Param | Meaning |
+|-------|---------|
+| `p_client_id` | GA4 customer ID (optional `NULL` = all dealers in range). Admin UI always passes a single dealer. |
+| `p_from` / `p_to` | **Required.** Inclusive `report_date` window: `BETWEEN p_from AND p_to`. |
+
+**What it does:** Same classification logic as `apply_vdp_filtration` — self-heals `cms` from Hoot; sets `vdp_conditions`, `ga4_page_type`, `vdp_vehicle_condition`, `year` using `smart_vdp_logic` regex on `page_path` — but **only within the selected date range**.
+
+**Returns:** `(out_account_name, out_cms, out_updated_rows)` grouped by account/CMS.
+
+**Frontend caller:** `runVdpFiltration()` → `src/lib/pipeline/pipelineRpc.js`  
+**API:** `POST /api/admin/pipeline/filtration` (requires `clientId`, `from`, `to`)  
+**SQL file:** `supabase/rpc/apply_vdp_filtration_range.sql`
+
+---
+
+#### `apply_vdp_filtration(p_client_id text, p_days_back integer)` — **Cron / edge jobs only**
 
 | Param | Meaning |
 |-------|---------|
 | `p_client_id` | GA4 customer ID (single dealer). |
 | `p_days_back` | Rows where `report_date >= CURRENT_DATE - p_days_back`. `NULL` = all history. `0` = today only. |
 
-**What it does:** Self-heals `cms` from Hoot; sets `vdp_conditions`, `ga4_page_type`, `vdp_vehicle_condition`, `year` using `smart_vdp_logic` regex on `page_path`.
+**What it does:** Same CMS heal + page classification as range RPC.
 
-**Important:** Filter is **from today backward**, not `p_date_to`. Upper bound is always **today**.
+**Important:** Filter is **from today backward**, not `p_date_to`. Upper bound is always **today**. Not used by the admin pipeline UI.
 
-**Frontend caller:** `runVdpFiltration()` → `src/lib/pipeline/pipelineRpc.js`  
-**API:** `POST /api/admin/pipeline/filtration`  
-**`p_days_back` calculation:** `daysBackForVdpFiltration(from, to)` in `src/lib/pipeline/dates.js` — calendar days from selected **From** date to **today** (ignores To for the RPC window).
+**Caller:** Deno edge function / scheduled cron (default `days_back = 2`).
 
 **Legacy:** Drop 1-arg overload `apply_vdp_filtration(text)` — see `supabase/rpc/apply_vdp_filtration.sql`.
 
@@ -216,14 +233,16 @@ UI: `/dashboard/admin/pipeline` → `DealerPipelineCard.jsx`
 | Step | Action | Backend | Target table |
 |------|--------|---------|--------------|
 | **1** | GA4 page sync | `POST /api/admin/pipeline/sync-page` → `syncGa4PageDataForDealer()` (`ga4PageSync.js`) | `smart_ga4_page_data` |
-| **2** | GA4 filtration | `POST /api/admin/pipeline/filtration` → `runVdpFiltration()` | Updates flags on `smart_ga4_page_data` |
+| **2** | GA4 filtration | `POST /api/admin/pipeline/filtration` → `runVdpFiltration()` → **`apply_vdp_filtration_range`** | Updates flags on `smart_ga4_page_data` |
 | **3** | Final VDP sync | `POST /api/admin/pipeline/final-sync` → `runFinalVdpSync()` | `smart_final_data` |
 
-**Date range:** Admin picker `From` / `To` passed on every step. Step 2 maps to `p_days_back` (see §3.1).
+**Date range:** Admin picker **From / To** passed on every step. Step 2 uses exact `p_from` / `p_to` (not `p_days_back`).
+
+**Dealer picker persistence:** Selected admin pipeline dealer restored from `localStorage` key `sa_admin_pipeline_dealer_id` — see §20.
 
 **Stats:** `GET /api/admin/pipeline/stats?clientId&from&to` — coverage counts per step.
 
-**Edge function (Deno):** Separate cron can call `apply_vdp_filtration` with `client_id` + `days_back` (default 2). Same RPC as Step 2.
+**Edge function (Deno):** Cron calls **`apply_vdp_filtration`** with `client_id` + `days_back` (default 2). **Not** the admin range RPC.
 
 ---
 
@@ -233,7 +252,9 @@ UI: `/dashboard/admin/pipeline` → `DealerPipelineCard.jsx`
 **State:** `OverviewProvider` → `src/components/dashboard/overview/OverviewDataContext.jsx`
 
 **Tab order:** VDP → SRP → Homepage → **All** → Other  
-**Default tab:** `vdp`
+**Default tab:** `vdp` (or last selected tab from `localStorage` — see §20)
+
+**Dealer picker:** Top bar `ClientPicker` — selection persisted across refresh (§20).
 
 **Page layout order (top → bottom):**
 
@@ -254,7 +275,7 @@ UI: `/dashboard/admin/pipeline` → `DealerPipelineCard.jsx`
 | **Download XLSX** | **All tab** | `AllExportButton.jsx` → full page data |
 | Campaign donut | *(commented out in `page.jsx`)* | `TopCampaigns.jsx` |
 
-**Top bar:** User avatar opens dropdown with Sign out (`TopBar.jsx`).
+**Top bar:** User avatar opens dropdown with **Sign out** → `GET /api/auth/signout` (`TopBar.jsx`).
 
 ---
 
@@ -347,6 +368,12 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | `/api/dashboard/vdp-export` | GET | VDP XLSX data (5 RPCs in parallel) |
 | `/api/dashboard/all-export` | GET | All tab XLSX data (`get_all_tab_export`, chunked) |
 
+### Auth
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/auth/signout` | GET | Sign out Supabase session + clear `sa_demo_session` → redirect `/login` |
+
 ### Admin
 
 | Route | Method | Purpose |
@@ -354,7 +381,7 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | `/api/admin/pipeline/dealers` | GET | Dealer list |
 | `/api/admin/pipeline/stats` | GET | Pipeline coverage stats |
 | `/api/admin/pipeline/sync-page` | POST | Step 1 |
-| `/api/admin/pipeline/filtration` | POST | Step 2 |
+| `/api/admin/pipeline/filtration` | POST | Step 2 (`apply_vdp_filtration_range`) |
 | `/api/admin/pipeline/final-sync` | POST | Step 3 |
 | `/api/admin/vdp-logics` | GET/POST | List/create VDP logic rules |
 | `/api/admin/vdp-logics/[id]` | PATCH/DELETE | Update/delete rule |
@@ -384,8 +411,9 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | `src/lib/ga4/channelBreakdownMerge.js` | Merge chunked channel rows |
 | `src/lib/ga4/channelDisplay.js` | Colors + `channelRowsToDonutData()` |
 | `src/lib/ga4/pageType.js` | Map `ga4_page_type` → tab id |
-| `src/lib/pipeline/dates.js` | Date coercion, `daysBackForVdpFiltration`, `daysBackForFinalSync` |
-| `src/lib/pipeline/pipelineRpc.js` | Step 2 & 3 RPC wrappers |
+| `src/lib/dashboard/dashboardPrefs.js` | localStorage keys for dealer, tab, admin pipeline dealer |
+| `src/lib/pipeline/dates.js` | Date coercion, `coerceDateRange`, `daysBackForFinalSync` (legacy Step 3 fallback) |
+| `src/lib/pipeline/pipelineRpc.js` | Step 2 (`apply_vdp_filtration_range`) & Step 3 RPC wrappers |
 | `src/lib/pipeline/ga4PageSync.js` | Step 1 GA4 → Supabase insert |
 | `src/lib/pipeline/syncLogFormat.js` | Admin step log formatting |
 | `src/lib/data/channelBreakdownCache.js` | In-memory breakdown cache |
@@ -424,16 +452,17 @@ UI chunk size: `BREAKDOWN_UI_CHUNK_DAYS` in `src/lib/api/rpcChunkPlan.js`.
 When RPC signatures change:
 
 1. Run updated `.sql` in Supabase SQL Editor (drop old overloads if PostgREST reports ambiguity).
-2. Run `apply_vdp_filtration.sql` grant/drop if 1-arg overload exists.
-3. **Export RPCs** (deploy when export behavior changes):
+2. **Step 2 range RPC:** `apply_vdp_filtration_range.sql` (admin pipeline).
+3. **Cron Step 2:** `apply_vdp_filtration.sql` grant/drop if 1-arg overload exists.
+4. **Export RPCs** (deploy when export behavior changes):
    - `get_vdp_export_by_channel.sql`
    - `get_vdp_export_by_location.sql`
    - `get_vdp_export_by_make.sql`
    - `get_vdp_export_by_model.sql`
    - `get_vdp_export_by_condition.sql`
    - `get_all_tab_export.sql`
-4. Restart Next dev server / redeploy app.
-5. Verify with `npm run build`.
+5. Restart Next dev server / redeploy app.
+6. Verify with `npm run build`.
 
 **Dependencies:** XLSX export uses **`exceljs`** (client-side dynamic import). Server export APIs require **`SUPABASE_SERVICE_ROLE_KEY`**.
 
@@ -441,10 +470,11 @@ When RPC signatures change:
 
 ---
 
-## 14. Quick reference — `p_days_back` examples
+## 14. Quick reference — `p_days_back` examples (cron only)
 
-SQL: `report_date >= CURRENT_DATE - p_days_back`  
-Frontend: `daysBackForVdpFiltration(from, to)` (Step 2 only).
+Used by **`apply_vdp_filtration`** (cron/edge). Admin Step 2 uses **`apply_vdp_filtration_range(p_from, p_to)`** instead — exact UI range, no lookback-from-today math.
+
+SQL (cron): `report_date >= CURRENT_DATE - p_days_back`
 
 | Selected From → To (today = Jun 10) | `p_days_back` | Approx. dates touched |
 |-------------------------------------|---------------|------------------------|
@@ -453,7 +483,7 @@ Frontend: `daysBackForVdpFiltration(from, to)` (Step 2 only).
 | Jun 2 – Jun 10 | 8 | Jun 2 – Jun 10 |
 | Apr 1 – Apr 3 (historical) | ~70 | Apr 1 – **today** (not capped at Apr 3) |
 
-**Note:** RPC has no `p_date_to`; historical ranges still extend to today unless SQL is extended.
+**Note:** Cron RPC has no `p_date_to`; historical ranges still extend to today. Admin range RPC respects both `p_from` and `p_to`.
 
 ---
 
@@ -528,7 +558,7 @@ Unauthenticated users redirect to `/login` (dashboard) or `/admin/login` (admin)
 
 Sign-up: `signUpAction()` → Supabase Auth (demo mode returns simulated message only).
 
-Sign-out: clears Supabase session or demo cookie.
+**Sign-out (dealer dashboard):** Top bar → `GET /api/auth/signout` (`src/app/api/auth/signout/route.js`). Clears Supabase auth cookies on the redirect response and deletes `sa_demo_session`, then redirects to `/login`. Legacy `signOutAction()` in `actions.js` still exists but UI uses the route handler for reliability.
 
 ### 16.3 Superadmin / admin panel (`/admin/login`)
 
@@ -556,12 +586,14 @@ Dashboard **API routes** (`/api/dashboard/*`) use **service role** on the server
 
 ### 16.5 Client / dealer selection (not auth)
 
-**File:** `src/components/dashboard/ClientContext.jsx`
+**File:** `src/components/dashboard/ClientContext.jsx` + `src/lib/dashboard/dashboardPrefs.js`
 
 Logged-in users pick a dealer from `smart_hoot_config` (active rows).  
 Dashboard queries use `client.ga4CustomerId` as `client_id` / `p_client_id`.
 
 Admin pipeline uses the same ID from dealer picker (`ga4_customer_id`).
+
+**Persistence:** See §20 — dealer and tab selections survive page refresh.
 
 ### 16.6 Auth flow diagram
 
@@ -715,7 +747,7 @@ erDiagram
 | Role | **Page-grain** GA4 facts (views per page/channel/campaign/day) |
 | Key columns | See ER diagram — full export excludes only `id`, `client_id`, `ga4_property_id` |
 | Written by | Step 1 (`syncGa4PageDataForDealer` / `ga4PageSync.js`) |
-| Updated by | Step 2 (`apply_vdp_filtration`) |
+| Updated by | Step 2 (`apply_vdp_filtration_range` admin · `apply_vdp_filtration` cron) |
 | Read by | Overview RPCs, channel/campaign breakdowns, **All tab XLSX export** |
 
 #### `smart_ga4_data`
@@ -762,7 +794,7 @@ smart_vdp_logic.dealer_id
 ```mermaid
 flowchart LR
   GA4[Google GA4 API] -->|Step 1 Node| PAGE[smart_ga4_page_data]
-  LOGIC[smart_vdp_logic] -->|Step 2 RPC| PAGE
+  LOGIC[smart_vdp_logic] -->|Step 2 range/cron RPC| PAGE
   HOOT_CFG[smart_hoot_config] -->|Step 2 CMS heal| PAGE
   PAGE -->|Step 3 RPC| FINAL[smart_final_data]
   INV[smart_hoot_inventory] -->|Step 3 URL match| FINAL
@@ -779,7 +811,11 @@ flowchart LR
 |-------|------------|
 | Dashboard layout | `src/app/dashboard/page.jsx` |
 | Global dashboard state | `src/components/dashboard/overview/OverviewDataContext.jsx` |
+| UI persistence (localStorage) | `src/lib/dashboard/dashboardPrefs.js` |
+| Sign out route | `src/app/api/auth/signout/route.js` |
 | Admin pipeline UI | `src/components/dashboard/admin/DealerPipelineCard.jsx` |
+| Step 2 range RPC SQL | `supabase/rpc/apply_vdp_filtration_range.sql` |
+| Cron Step 2 RPC SQL | `supabase/rpc/apply_vdp_filtration.sql` |
 | VDP XLSX export | `src/lib/api/vdpExport.js`, `src/app/api/dashboard/vdp-export/route.js` |
 | All tab XLSX export | `src/lib/api/allExport.js`, `src/app/api/dashboard/all-export/route.js` |
 | RPC SQL deploy | `supabase/rpc/*.sql` |
@@ -834,6 +870,20 @@ flowchart LR
 - Total row sums `views`, `total_users`, `sessions`, `new_users`.
 
 **Filename pattern:** `all-export_{dealerSlug}_{from}_to_{to}.xlsx` / `vdp-export_{dealerSlug}_{from}_to_{to}.xlsx`
+
+---
+
+## 20. UI persistence (localStorage)
+
+Selections survive browser refresh via `src/lib/dashboard/dashboardPrefs.js`.
+
+| Key | Stored value | Written by | Read by | Fallback |
+|-----|--------------|------------|---------|----------|
+| `sa_selected_dealer_id` | `smart_hoot_config.id` | `ClientContext.pickClient()` | `ClientContext` on dealer load | Sky River dealer, else first active dealer |
+| `sa_overview_tab` | Tab id: `vdp`, `srp`, `home`, `all`, `other` | `OverviewDataContext.setTab()` | `OverviewDataContext` initial state | `vdp` |
+| `sa_admin_pipeline_dealer_id` | Dealer id from pipeline dropdown | `PipelinePanel` onChange | `PipelinePanel` on load | First dealer with `ga4CustomerId` |
+
+**Not persisted:** Date range, compare period, VDP inventory filters — reset to defaults on refresh.
 
 ---
 

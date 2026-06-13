@@ -277,7 +277,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
     setError(null);
     setStepLog(2, [
       logLine('Step 2 — GA4 filtration started'),
-      logLine('Running apply_vdp_filtration…'),
+      logLine('Running apply_vdp_filtration_range…'),
     ]);
     try {
       const res = await runPipelineFiltration({ clientId, from, to });
@@ -427,7 +427,8 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
             </span>
           </div>
           <p className="pipeline-step-desc">
-            Runs apply_vdp_filtration — sets vdp_conditions on smart_ga4_page_data
+            Runs apply_vdp_filtration_range — sets vdp_conditions on smart_ga4_page_data
+            for the selected From → To range
             (VDP URL patterns).
           </p>
           {!wf.canRunStep2 && (

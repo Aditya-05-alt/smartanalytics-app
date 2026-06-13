@@ -1,24 +1,24 @@
-import { daysBackForFinalSync, daysBackForVdpFiltration } from '@/lib/pipeline/dates';
+import { coerceDateRange, daysBackForFinalSync } from '@/lib/pipeline/dates';
 
-/** Step 2 — apply_vdp_filtration(p_client_id, p_days_back) */
-export async function runVdpFiltration(
-  supabase,
-  clientId,
-  { from, to, daysBack } = {}
-) {
-  const p_days_back =
-    daysBack ?? (from && to ? daysBackForVdpFiltration(from, to) : null);
+/** Step 2 — apply_vdp_filtration_range(p_client_id, p_from, p_to) */
+export async function runVdpFiltration(supabase, clientId, { from, to } = {}) {
+  if (!from || !to) {
+    throw new Error('from and to are required for Step 2 filtration.');
+  }
 
-  const { data, error } = await supabase.rpc('apply_vdp_filtration', {
+  const { from: rangeFrom, to: rangeTo } = coerceDateRange(from, to);
+
+  const { data, error } = await supabase.rpc('apply_vdp_filtration_range', {
     p_client_id: clientId,
-    p_days_back,
+    p_from: rangeFrom,
+    p_to: rangeTo,
   });
 
   if (error) {
-    const hint = /could not choose the best candidate/i.test(error.message || '')
-      ? ' Run supabase/rpc/apply_vdp_filtration.sql in Supabase to drop the legacy 1-arg overload.'
-      : '';
-    throw new Error((error.message || 'apply_vdp_filtration failed') + hint);
+    throw new Error(
+      error.message ||
+        'apply_vdp_filtration_range failed. Deploy supabase/rpc/apply_vdp_filtration_range.sql in Supabase.'
+    );
   }
 
   const processed = (data || []).map((row) => ({
@@ -30,7 +30,7 @@ export async function runVdpFiltration(
   const totalRowsUpdated = processed.reduce((s, r) => s + r.rowsUpdated, 0);
 
   const log = [
-    `apply_vdp_filtration(p_client_id=${clientId}, p_days_back=${p_days_back ?? 'ALL'})`,
+    `apply_vdp_filtration_range(p_client_id=${clientId}, p_from=${rangeFrom}, p_to=${rangeTo})`,
     `Rows updated: ${totalRowsUpdated.toLocaleString()}`,
     ...processed.map(
       (r) =>
@@ -41,7 +41,8 @@ export async function runVdpFiltration(
   return {
     success: true,
     clientId,
-    daysBack: p_days_back,
+    from: rangeFrom,
+    to: rangeTo,
     totalRowsUpdated,
     processed,
     log,

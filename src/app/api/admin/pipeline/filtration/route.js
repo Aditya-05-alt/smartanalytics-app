@@ -18,10 +18,13 @@ export async function POST(request) {
   if (!clientId) {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 });
   }
+  if (!from || !to) {
+    return NextResponse.json({ error: 'Missing from or to date' }, { status: 400 });
+  }
 
   try {
     const result = await runVdpFiltration(auth.supabase, clientId, { from, to });
-    return NextResponse.json({ step: 2, table: 'smart_ga4_data', ...result });
+    return NextResponse.json({ step: 2, table: 'smart_ga4_page_data', ...result });
   } catch (err) {
     return NextResponse.json(
       { error: err?.message || 'Filtration failed' },

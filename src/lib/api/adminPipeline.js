@@ -28,7 +28,7 @@ export async function runPipelinePageSync({ clientId, from, to }) {
   return json;
 }
 
-/** Step 2 — apply_vdp_filtration RPC */
+/** Step 2 — apply_vdp_filtration_range RPC */
 export async function runPipelineFiltration({ clientId, from, to }) {
   const res = await fetch('/api/admin/pipeline/filtration', {
     method: 'POST',
