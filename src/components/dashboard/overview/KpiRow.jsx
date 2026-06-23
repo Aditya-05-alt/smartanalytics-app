@@ -103,11 +103,12 @@ export default function KpiRow() {
   const {
     tab,
     totals,
+    compareTotals,
+    lyTotals,
     loading,
     seriesByTab,
     dateList,
     compareEnabled,
-    compareTotals,
     compareSeriesByTab,
     compareDateList,
     compareLoading,
@@ -117,6 +118,8 @@ export default function KpiRow() {
 
   const views = totals?.[tab] || 0;
   const compareViews = compareTotals?.[tab] || 0;
+  const mom = pctChange(views, compareViews);
+  const yoy = pctChange(views, lyTotals?.[tab] || 0);
   const series = useMemo(() => seriesByTab?.[tab] || [], [seriesByTab, tab]);
   const compareSeries = useMemo(
     () => compareSeriesByTab?.[tab] || [],
@@ -139,6 +142,8 @@ export default function KpiRow() {
       compareEnabled={compareEnabled}
       currentPeriodLabel={currentPeriodLabel}
       comparePeriodLabel={comparePeriodLabel}
+      mom={mom}
+      yoy={yoy}
     />
   );
 }
@@ -157,6 +162,8 @@ function KpiRowChart({
   compareEnabled,
   currentPeriodLabel,
   comparePeriodLabel,
+  mom,
+  yoy,
 }) {
   const [chartMode, setChartMode] = useState('bar');
   const totalDelta = pctChange(views, compareViews);
@@ -222,7 +229,7 @@ function KpiRowChart({
         </div>
       ) : (
         <div className="kpi-row">
-          <KpiCard label={viewsLabel} value={viewsDisplay} mom={0} yoy={0} color="var(--acc)" />
+          <KpiCard label={viewsLabel} value={viewsDisplay} mom={mom} yoy={yoy} color="var(--acc)" />
         </div>
       )}
 
@@ -285,11 +292,6 @@ function KpiRowChart({
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                style={
-                  isDenseChart && !isSingleDay
-                    ? { minWidth: `${Math.max(chartSeries.length * (compareEnabled ? 44 : 34), 100)}px` }
-                    : undefined
-                }
               >
                 <div
                   className={[

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createAdminDealer,
   deleteAdminDealer,
@@ -102,10 +102,34 @@ function formatCell(key, row) {
   return String(val);
 }
 
+function filterDealers(rows, { search = '', platform = '' } = {}) {
+  const q = String(search || '').trim().toLowerCase();
+  const platformFilter = String(platform || '').trim();
+
+  return (rows || []).filter((row) => {
+    if (platformFilter && String(row.websitePlatform || '').trim() !== platformFilter) {
+      return false;
+    }
+    if (!q) return true;
+    const hay = [
+      row.customerName,
+      row.ga4CustomerId,
+      row.hootId,
+      row.websitePlatform,
+      row.hootUrl,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(q);
+  });
+}
+
 export default function DealersPanel() {
   const [search, setSearch] = useState('');
+  const [platform, setPlatform] = useState('');
   const [showInactive, setShowInactive] = useState(true);
-  const [rows, setRows] = useState([]);
+  const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
@@ -121,21 +145,34 @@ export default function DealersPanel() {
     try {
       const json = await fetchAdminDealers({
         activeOnly: !showInactive,
-        search,
       });
-      setRows(json.rows || []);
+      setAllRows(json.rows || []);
     } catch (e) {
       setError(e?.message || 'Failed to load dealers.');
-      setRows([]);
+      setAllRows([]);
     } finally {
       setLoading(false);
     }
-  }, [search, showInactive]);
+  }, [showInactive]);
 
   useEffect(() => {
-    const t = setTimeout(load, search ? 280 : 0);
-    return () => clearTimeout(t);
-  }, [load, search]);
+    load();
+  }, [load]);
+
+  const rows = useMemo(
+    () => filterDealers(allRows, { search, platform }),
+    [allRows, search, platform]
+  );
+
+  const platformOptions = useMemo(
+    () =>
+      [...new Set(allRows.map((row) => row.websitePlatform).filter(Boolean))].sort((a, b) =>
+        String(a).localeCompare(String(b))
+      ),
+    [allRows]
+  );
+
+  const hasFilters = Boolean(search.trim() || platform);
 
   const openCreate = () => setModal({ open: true, mode: 'create', row: null });
   const openEdit = (row) => setModal({ open: true, mode: 'edit', row });
@@ -241,6 +278,22 @@ export default function DealersPanel() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
+          <label className="admin-date-field ga4-count-dealer-field">
+            <span className="admin-date-label">Platform</span>
+            <select
+              className="ga4-count-select"
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">All platforms</option>
+              {platformOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="admin-date-field ga4-count-dealer-field dealers-filter-check">
             <span className="admin-date-label">Inactive</span>
             <select
@@ -295,8 +348,10 @@ export default function DealersPanel() {
         {!loading && !error && message && <span>{message}</span>}
         {!loading && !error && !message && (
           <>
-            {rows.length.toLocaleString()} dealer{rows.length === 1 ? '' : 's'} · writes{' '}
-            <code>smart_hoot_config</code> + <code>smart_ga4_config</code>
+            {hasFilters
+              ? `${rows.length.toLocaleString()} of ${allRows.length.toLocaleString()} dealer${allRows.length === 1 ? '' : 's'}`
+              : `${allRows.length.toLocaleString()} dealer${allRows.length === 1 ? '' : 's'}`}{' '}
+            · writes <code>smart_hoot_config</code> + <code>smart_ga4_config</code>
           </>
         )}
       </p>
@@ -318,7 +373,7 @@ export default function DealersPanel() {
         </div>
       )}
 
-      {!loading && !error && rows.length > 0 && (
+      {!loading && !error && allRows.length > 0 && (
         <div className="ga4-count-scroll vdp-logics-scroll">
           <table className="ga4-count-table vdp-logics-table dealers-table-layout">
             <colgroup>
@@ -345,8 +400,9 @@ export default function DealersPanel() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className={row.isActive ? '' : 'dealers-row--inactive'}>
+              {rows.length > 0 ? (
+                rows.map((row) => (
+                  <tr key={row.id} className={row.isActive ? '' : 'dealers-row--inactive'}>
                   <td className="ga4-count-sticky-col vdp-logics-actions-col">
                     <div className="vdp-logics-actions-inner dealers-actions-inner">
                       <button
@@ -397,13 +453,20 @@ export default function DealersPanel() {
                     </td>
                   ))}
                 </tr>
-              ))}
+                ))
+              ) : (
+                <tr className="dealers-empty-row">
+                  <td colSpan={COLUMNS.length + 1} className="dealers-empty-cell">
+                    No dealers match your search or platform filter.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       )}
 
-      {!loading && !error && rows.length === 0 && (
+      {!loading && !error && allRows.length === 0 && (
         <p className="ga4-count-meta">
           No dealers found. Use <strong>Add dealer</strong> to create{' '}
           <code>smart_hoot_config</code> + <code>smart_ga4_config</code> rows.

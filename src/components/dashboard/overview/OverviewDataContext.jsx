@@ -25,6 +25,7 @@ import { enumerateDatesInclusive, toCalendarISO } from '@/lib/ga4/dateRange';
 import {
   previousMonthAlignedRange,
   periodMonthLabel,
+  sameMonthLastYearRange,
 } from '@/lib/overview/comparePeriod';
 import { useClient } from '../ClientContext';
 import {
@@ -151,6 +152,19 @@ function pageTypeToTab(raw) {
   return 'other';
 }
 
+function totalsFromOverviewRows(rows) {
+  const totals = { all: 0, vdp: 0, srp: 0, home: 0, other: 0 };
+  for (const r of rows || []) {
+    const views = Number(r.views) || 0;
+    const date = normalizeReportDate(r.report_date);
+    if (!date || views === 0) continue;
+    const tabKey = pageTypeToTab(r.ga4_page_type);
+    totals.all += views;
+    totals[tabKey] += views;
+  }
+  return totals;
+}
+
 /** Drop trailing chart days with no views on any tab (e.g. today before pipeline runs). */
 function chartDateListAndSeries(dateList, seriesByTab) {
   if (!dateList.length) return { dateList, seriesByTab };
@@ -186,6 +200,7 @@ export function OverviewProvider({ children }) {
   const [compareDateRange, setCompareDateRange] = useState(null);
   const [compareRows, setCompareRows] = useState([]);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [lyRows, setLyRows] = useState([]);
   const [vdpFilters, setVdpFilters] = useState(DEFAULT_VDP_FILTERS);
   const [vdpFilterOptions, setVdpFilterOptions] = useState(EMPTY_VDP_FILTER_OPTIONS);
   const [vdpFilteredDaily, setVdpFilteredDaily] = useState(null);
@@ -232,6 +247,11 @@ export function OverviewProvider({ children }) {
   const comparePeriodLabel = useMemo(
     () => periodMonthLabel(compareFrom, compareTo),
     [compareFrom, compareTo]
+  );
+
+  const { lyFrom, lyTo } = useMemo(
+    () => sameMonthLastYearRange(from, to),
+    [from, to]
   );
 
   const toggleCompareEnabled = useCallback(() => {
@@ -339,9 +359,9 @@ export function OverviewProvider({ children }) {
     };
   }, [clientKey, from, to]);
 
-  // ── compare period overview (previous month, same day span) ──
+  // ── previous-month overview (MoM baseline + compare chart) ──
   useEffect(() => {
-    if (!compareEnabled || !clientKey || !compareFrom || !compareTo) {
+    if (!clientKey || !compareFrom || !compareTo) {
       setCompareRows([]);
       setCompareLoading(false);
       return undefined;
@@ -381,7 +401,52 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [compareEnabled, clientKey, compareFrom, compareTo]);
+  }, [clientKey, compareFrom, compareTo]);
+
+  // ── same period last year (YoY baseline for KPI) ──
+  useEffect(() => {
+    if (!clientKey || !lyFrom || !lyTo) {
+      setLyRows([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const cached = getOverviewCache(clientKey, lyFrom, lyTo);
+    if (cached) {
+      setLyRows(cached.rows || []);
+    } else {
+      setLyRows([]);
+    }
+
+    if (cached) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      try {
+        const bundle = await fetchOverviewBundle({
+          clientId: clientKey,
+          from: lyFrom,
+          to: lyTo,
+          onCancelCheck: () => cancelled,
+        });
+        if (cancelled || !bundle) return;
+        setLyRows(bundle.rows || []);
+        setOverviewCache(clientKey, lyFrom, lyTo, {
+          rows: bundle.rows || [],
+          userTotalsRows: bundle.userTotalsRows || [],
+        });
+      } catch {
+        if (!cancelled) setLyRows([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientKey, lyFrom, lyTo]);
 
   // ── VDP filter dropdown options (from inventory in range) ──
   useEffect(() => {
@@ -538,7 +603,7 @@ export function OverviewProvider({ children }) {
   );
 
   const compareDerived = useMemo(() => {
-    const totals = { all: 0, vdp: 0, srp: 0, home: 0, other: 0 };
+    const totals = totalsFromOverviewRows(compareRows);
     const daily = { all: {}, vdp: {}, srp: {}, home: {}, other: {} };
 
     for (const r of compareRows) {
@@ -546,15 +611,14 @@ export function OverviewProvider({ children }) {
       const date = normalizeReportDate(r.report_date);
       if (!date || views === 0) continue;
       const tabKey = pageTypeToTab(r.ga4_page_type);
-
-      totals.all += views;
       daily.all[date] = (daily.all[date] || 0) + views;
-      totals[tabKey] += views;
       daily[tabKey][date] = (daily[tabKey][date] || 0) + views;
     }
 
     return { totals, daily };
   }, [compareRows]);
+
+  const lyTotals = useMemo(() => totalsFromOverviewRows(lyRows), [lyRows]);
 
   const compareSeriesByTabRaw = useMemo(() => {
     if (!compareEnabled) return {};
@@ -609,6 +673,7 @@ export function OverviewProvider({ children }) {
       currentPeriodLabel,
       comparePeriodLabel,
       compareTotals: compareDerived.totals,
+      lyTotals,
       compareDateList,
       compareSeriesByTab: compareSeriesTrimmed,
       compareLoading,
@@ -645,6 +710,7 @@ export function OverviewProvider({ children }) {
       currentPeriodLabel,
       comparePeriodLabel,
       compareDerived.totals,
+      lyTotals,
       compareDateList,
       compareSeriesTrimmed,
       compareLoading,
