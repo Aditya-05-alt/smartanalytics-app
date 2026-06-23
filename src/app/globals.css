@@ -1362,6 +1362,44 @@ body {
   overflow: auto;
   isolation: isolate;
 }
+.vdp-logics-page .vdp-logics-table-layout {
+  width: 100%;
+  min-width: 1942px;
+  table-layout: fixed;
+}
+.vdp-logics-page .vdp-logics-table-layout .ga4-count-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.vdp-logics-page .vdp-logics-table-layout .vdp-logics-cell--wide {
+  max-width: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+  font-size: 12px;
+  vertical-align: middle;
+}
+.vdp-logics-page .vdp-logics-table-layout .vdp-logics-cell--wide .vdp-logics-link {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vdp-logics-page .vdp-logics-table-layout .vdp-logics-dealer-col {
+  min-width: 0;
+  max-width: none;
+}
+.vdp-logics-empty-row .vdp-logics-empty-cell {
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: var(--t3);
+  font-size: 13px;
+  white-space: normal;
+}
 .vdp-logics-table {
   min-width: max-content;
   border-collapse: separate;
@@ -1596,6 +1634,80 @@ body {
   background: var(--acc2);
   color: var(--acc);
   border-color: rgba(200, 232, 122, 0.35);
+}
+.admin-confirm-modal {
+  width: min(460px, 100%);
+  overflow: hidden;
+}
+.admin-confirm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--bd);
+}
+.admin-confirm-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--t);
+  line-height: 1.3;
+}
+.admin-confirm-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--t3);
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.admin-confirm-close:hover:not(:disabled) {
+  color: var(--t);
+  background: var(--s2);
+}
+.admin-confirm-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.admin-confirm-content {
+  padding: 1.25rem 1.5rem;
+}
+.admin-confirm-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--t2);
+}
+.admin-confirm-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid var(--bd);
+  background: var(--s1);
+}
+.admin-confirm-foot .ga4-count-export-btn {
+  min-width: 88px;
+  padding: 8px 16px;
+}
+.vdp-logics-btn-danger {
+  background: rgba(248, 113, 113, 0.15) !important;
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  color: #f87171 !important;
+}
+.vdp-logics-btn-danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.25) !important;
 }
 
 @media (max-width: 900px) {
@@ -4203,6 +4315,168 @@ body {
 }
 .hf-sort:hover { border-color: var(--bd2); color: var(--t); }
 .hf-sort.active { background: var(--acc2); border-color: rgba(200,232,122,.3); color: var(--acc); }
+
+/* ── ADMIN DEALERS (same layout as VDP Logics) ── */
+.dealers-page {
+  flex: 1;
+  min-height: 0;
+}
+.dealers-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--t1);
+}
+.dealers-notice p {
+  margin: 0;
+}
+.dealers-notice-link {
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dealers-notice-link:hover {
+  color: var(--t1);
+}
+.dealers-notice-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--t3);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.dealers-notice-dismiss:hover {
+  color: var(--t1);
+}
+/* Fixed layout fills full width — avoids huge gap after sticky dealer column */
+.dealers-page .dealers-table-layout {
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+.dealers-page .dealers-table-layout .vdp-logics-actions-col {
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+}
+.dealers-page .dealers-table-layout .vdp-logics-actions-inner.dealers-actions-inner {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 4px;
+}
+.dealers-page .vdp-logics-action-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  flex-shrink: 0;
+}
+.dealers-page .dealers-table-layout .ga4-count-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dealers-page .dealers-table-layout .vdp-logics-cell--wide {
+  max-width: none;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dealers-page .dealers-table-layout .vdp-logics-cell--wide .vdp-logics-link {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dealers-page .dealers-table-layout .vdp-logics-dealer-col {
+  left: 108px;
+  min-width: 0;
+  max-width: none;
+}
+.dealers-page .dealers-table-layout .ga4-count-client {
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dealers-filter-check {
+  min-width: 140px;
+  max-width: 160px;
+}
+.dealers-modal {
+  width: min(640px, 100%);
+}
+.dealers-modal-hint {
+  margin: 0 0 1rem;
+  font-size: 12px;
+  color: var(--t3);
+  line-height: 1.45;
+}
+.dealers-modal-hint code {
+  font-size: 11px;
+}
+.dealers-section-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--t3);
+}
+.dealers-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dealers-field--wide {
+  grid-column: 1 / -1;
+}
+.dealers-field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+}
+.dealers-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.dealers-badge--ok {
+  background: var(--gd);
+  color: var(--green);
+}
+.dealers-badge--warn {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+.dealers-row--inactive .ga4-count-cell,
+.dealers-row--inactive .vdp-logics-dealer-col,
+.dealers-row--inactive .vdp-logics-actions-col {
+  opacity: 0.55;
+}
+.dealers-message {
+  color: var(--green);
+}
 
 /* ── RESPONSIVE ── */
 @media (max-width: 1280px) {

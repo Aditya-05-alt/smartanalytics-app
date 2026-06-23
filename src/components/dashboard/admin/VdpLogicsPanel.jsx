@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   createVdpLogic,
   deleteVdpLogic,
@@ -11,21 +12,55 @@ import {
 } from '@/lib/api/vdpLogics';
 import { EXAMPLE_ROW } from '@/lib/vdpLogics/fields';
 import VdpLogicsFormModal from '@/components/dashboard/admin/VdpLogicsFormModal';
+import AdminConfirmDialog from '@/components/dashboard/admin/AdminConfirmDialog';
 
 const COLUMNS = [
-  { key: 'dealerName', label: 'Dealer', sticky: true },
-  { key: 'dealerId', label: 'Dealer ID' },
-  { key: 'websiteUrl', label: 'Website' },
-  { key: 'cms', label: 'CMS' },
-  { key: 'dataSource', label: 'Data source' },
-  { key: 'hootLink', label: 'Hoot link' },
-  { key: 'scrapLink', label: 'Scrap link' },
-  { key: 'vdpLogic', label: 'VDP logic', wide: true },
-  { key: 'srpLogic', label: 'SRP logic', wide: true },
-  { key: 'homePageLogic', label: 'Home logic', wide: true },
-  { key: 'others', label: 'Others', wide: true },
-  { key: 'updatedAt', label: 'Updated' },
+  { key: 'dealerName', label: 'Dealer', sticky: true, width: 160 },
+  { key: 'dealerId', label: 'Dealer ID', width: 120 },
+  { key: 'websiteUrl', label: 'Website', width: 140 },
+  { key: 'cms', label: 'CMS', width: 100 },
+  { key: 'dataSource', label: 'Data source', width: 110 },
+  { key: 'hootLink', label: 'Hoot link', width: 140 },
+  { key: 'scrapLink', label: 'Scrap link', width: 120 },
+  { key: 'vdpLogic', label: 'VDP logic', wide: true, width: 200 },
+  { key: 'srpLogic', label: 'SRP logic', wide: true, width: 200 },
+  { key: 'homePageLogic', label: 'Home logic', wide: true, width: 180 },
+  { key: 'others', label: 'Others', wide: true, width: 180 },
+  { key: 'updatedAt', label: 'Updated', width: 160 },
 ];
+
+const ACTIONS_COL_WIDTH = 132;
+
+function filterVdpRows(rows, { search = '', cms = '', dataSource = '' } = {}) {
+  const q = String(search || '').trim().toLowerCase();
+  const cmsFilter = String(cms || '').trim();
+  const dsFilter = String(dataSource || '').trim();
+
+  return (rows || []).filter((row) => {
+    if (cmsFilter && row.cms !== cmsFilter) return false;
+    if (dsFilter && row.dataSource !== dsFilter) return false;
+    if (!q) return true;
+
+    const hay = [
+      row.dealerName,
+      row.dealerId,
+      row.websiteUrl,
+      row.cms,
+      row.dataSource,
+      row.hootLink,
+      row.scrapLink,
+      row.vdpLogic,
+      row.srpLogic,
+      row.homePageLogic,
+      row.others,
+    ]
+      .filter((v) => v != null && v !== '')
+      .join(' ')
+      .toLowerCase();
+
+    return hay.includes(q);
+  });
+}
 
 function formatCell(key, value) {
   if (value == null || value === '') return '—';
@@ -48,48 +83,81 @@ function formatCell(key, value) {
 
 export default function VdpLogicsPanel() {
   const fileInputRef = useRef(null);
+  const addHandledRef = useRef(false);
+  const hasLoadedRef = useRef(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [cms, setCms] = useState('');
   const [dataSource, setDataSource] = useState('');
-  const [rows, setRows] = useState([]);
-  const [filterOptions, setFilterOptions] = useState({ cmsOptions: [], dataSourceOptions: [] });
+  const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState({ open: false, mode: 'create', row: null });
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const json = await fetchVdpLogics({ search, cms, dataSource });
-      setRows(json.rows || []);
-      if (!search && !cms && !dataSource) {
-        setFilterOptions(json.filters || { cmsOptions: [], dataSourceOptions: [] });
-      }
-    } catch (e) {
-      setError(e?.message || 'Failed to load VDP logics.');
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [search, cms, dataSource]);
+  const [confirmRow, setConfirmRow] = useState(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(load, search ? 280 : 0);
-    return () => clearTimeout(t);
-  }, [load, search]);
+    if (addHandledRef.current) return;
+    if (searchParams.get('add') !== '1') return;
+    addHandledRef.current = true;
+
+    setModal({
+      open: true,
+      mode: 'create',
+      row: {
+        dealerName: searchParams.get('dealerName')?.trim() || '',
+        dealerId: searchParams.get('dealerId')?.trim() || '',
+        cms: searchParams.get('cms')?.trim() || '',
+        hootLink: searchParams.get('hootLink')?.trim() || '',
+        dataSource: 'GA4',
+      },
+    });
+    router.replace('/dashboard/admin/vdp-logics', { scroll: false });
+  }, [searchParams, router]);
+
+  const load = useCallback(async () => {
+    const isRefresh = hasLoadedRef.current;
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const json = await fetchVdpLogics();
+      setAllRows(json.rows || []);
+      hasLoadedRef.current = true;
+    } catch (e) {
+      setError(e?.message || 'Failed to load VDP logics.');
+      if (!isRefresh) setAllRows([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rows = useMemo(
+    () => filterVdpRows(allRows, { search, cms, dataSource }),
+    [allRows, search, cms, dataSource]
+  );
 
   const cmsOptions = useMemo(
-    () => filterOptions.cmsOptions || [],
-    [filterOptions.cmsOptions]
+    () => [...new Set(allRows.map((r) => r.cms).filter(Boolean))].sort(),
+    [allRows]
   );
   const dataSourceOptions = useMemo(
-    () => filterOptions.dataSourceOptions || [],
-    [filterOptions.dataSourceOptions]
+    () => [...new Set(allRows.map((r) => r.dataSource).filter(Boolean))].sort(),
+    [allRows]
   );
+
+  const hasFilters = Boolean(search.trim() || cms || dataSource);
+  const tableReady = !loading && !error;
 
   const openCreate = () => setModal({ open: true, mode: 'create', row: null });
   const openEdit = (row) => setModal({ open: true, mode: 'edit', row });
@@ -113,18 +181,31 @@ export default function VdpLogicsPanel() {
     }
   };
 
-  const handleDelete = async (row) => {
+  const handleDelete = (row) => {
     if (!row?.id) return;
-    const label = row.dealerName || `ID ${row.id}`;
-    if (!window.confirm(`Delete VDP logic for "${label}"?`)) return;
+    setConfirmRow(row);
+  };
+
+  const closeConfirm = () => {
+    if (confirming) return;
+    setConfirmRow(null);
+  };
+
+  const runDelete = async () => {
+    if (!confirmRow?.id) return;
+    const label = confirmRow.dealerName || `ID ${confirmRow.id}`;
+    setConfirming(true);
     setMessage(null);
     setError(null);
     try {
-      await deleteVdpLogic(row.id);
-      setMessage('Row deleted.');
+      await deleteVdpLogic(confirmRow.id);
+      setMessage(`"${label}" deleted.`);
+      setConfirmRow(null);
       load();
     } catch (e) {
       setError(e?.message || 'Delete failed.');
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -250,12 +331,15 @@ export default function VdpLogicsPanel() {
 
       <p className="ga4-count-meta vdp-logics-example-hint">
         {loading && 'Loading smart_vdp_logic…'}
-        {!loading && error && <span className="ga4-count-error-text">{error}</span>}
-        {!loading && !error && message && <span>{message}</span>}
-        {!loading && !error && !message && (
+        {refreshing && !loading && 'Refreshing…'}
+        {!loading && !refreshing && error && <span className="ga4-count-error-text">{error}</span>}
+        {!loading && !refreshing && !error && message && <span>{message}</span>}
+        {!loading && !refreshing && !error && !message && (
           <>
-            {rows.length.toLocaleString()} row{rows.length === 1 ? '' : 's'} · CSV upserts on{' '}
-            <code>dealer_name</code> + <code>website_url</code>
+            {hasFilters
+              ? `${rows.length.toLocaleString()} of ${allRows.length.toLocaleString()} row${allRows.length === 1 ? '' : 's'}`
+              : `${allRows.length.toLocaleString()} row${allRows.length === 1 ? '' : 's'}`}{' '}
+            · CSV upserts on <code>dealer_name</code> + <code>website_url</code>
           </>
         )}
       </p>
@@ -289,9 +373,15 @@ export default function VdpLogicsPanel() {
         </div>
       )}
 
-      {!loading && !error && rows.length > 0 && (
+      {!loading && !error && allRows.length > 0 && (
         <div className="ga4-count-scroll vdp-logics-scroll">
-          <table className="ga4-count-table vdp-logics-table">
+          <table className="ga4-count-table vdp-logics-table vdp-logics-table-layout">
+            <colgroup>
+              <col style={{ width: ACTIONS_COL_WIDTH }} />
+              {COLUMNS.map((col) => (
+                <col key={col.key} style={{ width: col.width }} />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 <th className="ga4-count-sticky-col vdp-logics-actions-col">Actions</th>
@@ -310,50 +400,58 @@ export default function VdpLogicsPanel() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="ga4-count-sticky-col vdp-logics-actions-col">
-                    <div className="vdp-logics-actions-inner">
-                      <button
-                        type="button"
-                        className="vdp-logics-action-btn"
-                        onClick={() => openEdit(row)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="vdp-logics-action-btn vdp-logics-action-btn--danger"
-                        onClick={() => handleDelete(row)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                  {COLUMNS.map((col) => (
-                    <td
-                      key={col.key}
-                      className={[
-                        'ga4-count-cell',
-                        col.sticky
-                          ? 'ga4-count-sticky-col ga4-count-client vdp-logics-dealer-col'
-                          : '',
-                        col.wide ? 'vdp-logics-cell--wide' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                    >
-                      {formatCell(col.key, row[col.key])}
+              {rows.length > 0 ? (
+                rows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="ga4-count-sticky-col vdp-logics-actions-col">
+                      <div className="vdp-logics-actions-inner">
+                        <button
+                          type="button"
+                          className="vdp-logics-action-btn"
+                          onClick={() => openEdit(row)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="vdp-logics-action-btn vdp-logics-action-btn--danger"
+                          onClick={() => handleDelete(row)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
-                  ))}
+                    {COLUMNS.map((col) => (
+                      <td
+                        key={col.key}
+                        className={[
+                          'ga4-count-cell',
+                          col.sticky
+                            ? 'ga4-count-sticky-col ga4-count-client vdp-logics-dealer-col'
+                            : '',
+                          col.wide ? 'vdp-logics-cell--wide' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {formatCell(col.key, row[col.key])}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                <tr className="vdp-logics-empty-row">
+                  <td colSpan={COLUMNS.length + 1} className="vdp-logics-empty-cell">
+                    No rows match your search or filters.
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
       )}
 
-      {!loading && !error && rows.length === 0 && (
+      {tableReady && allRows.length === 0 && (
         <p className="ga4-count-meta">
           No rows yet. Use <strong>Add row</strong>, <strong>Upload CSV</strong>, or download{' '}
           <strong>Example CSV</strong>.
@@ -367,6 +465,21 @@ export default function VdpLogicsPanel() {
         saving={saving}
         onClose={closeModal}
         onSave={handleSave}
+      />
+
+      <AdminConfirmDialog
+        open={Boolean(confirmRow)}
+        title="Delete VDP logic"
+        message={
+          confirmRow
+            ? `Delete VDP logic for "${confirmRow.dealerName || `ID ${confirmRow.id}`}"? This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        danger
+        loading={confirming}
+        onConfirm={runDelete}
+        onCancel={closeConfirm}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import VdpLogicsPanel from '@/components/dashboard/admin/VdpLogicsPanel';
 
 export const metadata = {
@@ -5,5 +6,9 @@ export const metadata = {
 };
 
 export default function VdpLogicsAdminPage() {
-  return <VdpLogicsPanel />;
+  return (
+    <Suspense fallback={<p className="ga4-count-meta">Loading VDP logics…</p>}>
+      <VdpLogicsPanel />
+    </Suspense>
+  );
 }

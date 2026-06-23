@@ -9,6 +9,7 @@ Last updated: May 2026 — `apply_vdp_filtration_range` (admin Step 2), VDP/All 
 2. [Database tables](#2-database-tables-main)  
 3. [Supabase RPC functions](#3-supabase-rpc-functions)  
 4. [Admin pipeline](#4-admin-pipeline-3-steps)  
+4b. [Dealer onboarding (Add / Edit / Deactivate)](#41-dealer-onboarding-add--edit--deactivate)  
 5. [Dashboard layout & tabs](#5-dashboard-page-layout--tabs)  
 6. [Overview data flow](#6-overview-data-flow)  
 7. [Compare period (MoM + YoY)](#7-compare-period-mom--yoy)  
@@ -246,6 +247,42 @@ UI: `/dashboard/admin/pipeline` → `DealerPipelineCard.jsx`
 
 ---
 
+### 4.1 Dealer onboarding (Add / Edit / Deactivate)
+
+**UI:** `/dashboard/admin/dealers` → `DealersPanel.jsx` (superadmin only).
+
+One form writes **both** config tables and keeps IDs aligned:
+
+```
+smart_ga4_config.client_id  ═══  smart_hoot_config.ga4_customer_id  ═══  dashboard clientKey
+```
+
+| Table | Fields set by form | Purpose |
+|-------|-------------------|---------|
+| `smart_hoot_config` | `customer_name`, `hoot_url`, `hoot_id`, `website_platform`, `ga4_customer_id`, `is_active` | Dashboard dealer picker, pipeline dropdown |
+| `smart_ga4_config` | `client_id`, `ga4_property_id`, `account_name`, `is_active` | Pipeline Step 1 GA4 sync |
+
+**Not written on Add Dealer:** `smart_ga4_page_data`, `smart_final_data` — filled by Pipeline Steps 1–3.
+
+**API:**
+
+| Route | Method | Behavior |
+|-------|--------|----------|
+| `/api/admin/dealers` | GET | List dealers; join GA4 config; `?activeOnly=true`, `?search=` |
+| `/api/admin/dealers` | POST | Upsert `smart_ga4_config` + insert `smart_hoot_config` |
+| `/api/admin/dealers/[id]` | PATCH | Update both; **blocks** `ga4_customer_id` change if `smart_ga4_page_data` exists (409) |
+| `/api/admin/dealers/[id]` | DELETE | **Soft delete** (`is_active=false` on both tables); `?hard=true` only if no page data |
+
+**After adding a dealer:**
+
+1. Admin → **Vdp Logics** — add `smart_vdp_logic` row (`dealer_id` = GA4 customer ID + regex).
+2. Admin → **Pipeline** — Steps 1 → 2 → 3 for the date range.
+3. Dashboard — pick dealer in top bar.
+
+Supabase trigger `auto_link_ga4_id` on `smart_hoot_config` may also link IDs; the API still sets `ga4_customer_id` explicitly.
+
+---
+
 ## 5. Dashboard page layout & tabs
 
 **Route:** `/dashboard` → `src/app/dashboard/page.jsx`  
@@ -383,6 +420,8 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | `/api/admin/pipeline/sync-page` | POST | Step 1 |
 | `/api/admin/pipeline/filtration` | POST | Step 2 (`apply_vdp_filtration_range`) |
 | `/api/admin/pipeline/final-sync` | POST | Step 3 |
+| `/api/admin/dealers` | GET/POST | Dealer CRUD list + create (`smart_hoot_config` + `smart_ga4_config`) |
+| `/api/admin/dealers/[id]` | PATCH/DELETE | Update dealer; soft-deactivate (or hard delete if no page data) |
 | `/api/admin/vdp-logics` | GET/POST | List/create VDP logic rules |
 | `/api/admin/vdp-logics/[id]` | PATCH/DELETE | Update/delete rule |
 | `/api/admin/vdp-logics/upload` | POST | CSV import |
@@ -415,7 +454,9 @@ Shown in `OverviewFilters.jsx` when any breakdown or compare fetch is in progres
 | `src/lib/pipeline/dates.js` | Date coercion, `coerceDateRange`, `daysBackForFinalSync` (legacy Step 3 fallback) |
 | `src/lib/pipeline/pipelineRpc.js` | Step 2 (`apply_vdp_filtration_range`) & Step 3 RPC wrappers |
 | `src/lib/pipeline/ga4PageSync.js` | Step 1 GA4 → Supabase insert |
-| `src/lib/pipeline/syncLogFormat.js` | Admin step log formatting |
+| `src/lib/dealers/fields.js` | Dealer form fields + validation + GA4 property ID normalize |
+| `src/lib/api/adminDealers.js` | Admin dealers API client |
+| `src/components/dashboard/admin/DealersPanel.jsx` | Add / Edit / Deactivate dealers |
 | `src/lib/data/channelBreakdownCache.js` | In-memory breakdown cache |
 | `src/components/dashboard/overview/BreakdownDonut.jsx` | Shared donut + list panel |
 | `src/components/dashboard/overview/VdpExportButton.jsx` | VDP tab Download XLSX |
@@ -813,6 +854,7 @@ flowchart LR
 | Global dashboard state | `src/components/dashboard/overview/OverviewDataContext.jsx` |
 | UI persistence (localStorage) | `src/lib/dashboard/dashboardPrefs.js` |
 | Sign out route | `src/app/api/auth/signout/route.js` |
+| Admin dealers UI | `src/app/dashboard/admin/dealers/page.jsx`, `DealersPanel.jsx` |
 | Admin pipeline UI | `src/components/dashboard/admin/DealerPipelineCard.jsx` |
 | Step 2 range RPC SQL | `supabase/rpc/apply_vdp_filtration_range.sql` |
 | Cron Step 2 RPC SQL | `supabase/rpc/apply_vdp_filtration.sql` |
