@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Panel, PanelBody, PanelHeader } from './Panel';
+import CompareBreakdownSection from './CompareBreakdownSection';
 import { fetchConditionBreakdown } from '@/lib/api/dashboardApi';
 import { useOverview } from './overview/OverviewDataContext';
+import { useBreakdownFetch } from '@/hooks/useBreakdownFetch';
 
 const CONDITION_COLOR_MAP = {
   New: '#34d399',
@@ -31,74 +33,49 @@ function normalizeRows(data) {
   }));
 }
 
-export default function ConditionBreakdown({
-  clientId: clientIdProp,
-  from: fromProp,
-  to: toProp,
-  limit = null,
-}) {
-  const { tab, vdpFilters, clientKey, from: ctxFrom, to: ctxTo } = useOverview();
-  const clientId = clientIdProp ?? clientKey;
-  const from = fromProp ?? ctxFrom;
-  const to = toProp ?? ctxTo;
+function ConditionBreakdownControls({ chartMode, setChartMode, topN, setTopN }) {
+  return (
+    <div className="make-breakdown-head-controls">
+      <div className="chart-mode" role="group" aria-label="Chart type">
+        <button
+          type="button"
+          className={`cm-btn ${chartMode === 'pie' ? 'active' : ''}`}
+          onClick={() => setChartMode('pie')}
+          aria-pressed={chartMode === 'pie'}
+        >
+          Pie
+        </button>
+        <button
+          type="button"
+          className={`cm-btn ${chartMode === 'bar' ? 'active' : ''}`}
+          onClick={() => setChartMode('bar')}
+          aria-pressed={chartMode === 'bar'}
+        >
+          Bar
+        </button>
+      </div>
+      <select
+        className="make-breakdown-select"
+        value={topN ?? 'all'}
+        onChange={(e) => {
+          const value = e.target.value;
+          setTopN(value === 'all' ? null : Number(value));
+        }}
+        aria-label="Condition breakdown limit"
+      >
+        <option value="all">All conditions</option>
+        <option value="5">Top 5</option>
+        <option value="10">Top 10</option>
+      </select>
+    </div>
+  );
+}
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [topN, setTopN] = useState(limit);
-  const [chartMode, setChartMode] = useState('pie');
-
-  const enabled = tab === 'vdp';
-
-  useEffect(() => {
-    if (!enabled) {
-      setRows([]);
-      setError(null);
-      setLoading(false);
-      return undefined;
-    }
-    if (!clientId || !from || !to) {
-      setLoading(false);
-      return undefined;
-    }
-
-    let cancelled = false;
-    if (rows.length === 0) setLoading(true);
-    setError(null);
-
-    fetchConditionBreakdown({
-      clientId,
-      from,
-      to,
-      limit: topN,
-      vdpFilters,
-      tab,
-      onCancelCheck: () => cancelled,
-    })
-      .then((data) => {
-        if (cancelled) return;
-        if (data === undefined) return;
-        setRows(normalizeRows(data));
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e?.message || 'Failed to load condition breakdown.');
-        setRows([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, clientId, from, to, topN, tab, vdpFilters]);
-
+function ConditionBreakdownBody({ rows, loading, error, chartMode, emptyMessage }) {
   const total = useMemo(
-    () => rows.reduce((sum, row) => sum + row.views, 0),
+    () => rows.reduce((sum, row) => sum + (Number(row.views) || 0), 0),
     [rows]
   );
-
   const chartData = useMemo(
     () =>
       rows.map((row, index) => ({
@@ -107,117 +84,214 @@ export default function ConditionBreakdown({
       })),
     [rows]
   );
-
   const maxViews = useMemo(() => {
     const mx = chartData.length ? Math.max(...chartData.map((r) => r.views)) : 0;
     return mx > 0 ? mx : 1;
   }, [chartData]);
 
-  if (!enabled) {
-    return null;
+  if (loading && rows.length === 0) {
+    return (
+      <div className="make-breakdown-loading">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="make-breakdown-skel" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!loading && error) {
+    return (
+      <div className="make-breakdown-error" role="alert">
+        {error}
+      </div>
+    );
+  }
+
+  if (!loading && !error && rows.length === 0) {
+    return <div className="make-breakdown-empty">{emptyMessage}</div>;
+  }
+
+  if (error || rows.length === 0) return null;
+
+  return (
+    <div className="make-breakdown-content">
+      <div className="make-breakdown-split year-breakdown-split">
+        <div className="make-breakdown-chart-col">
+          {chartMode === 'pie' ? (
+            <ConditionPieChart data={chartData} total={total} />
+          ) : (
+            <ConditionBarChart data={chartData} maxViews={maxViews} />
+          )}
+        </div>
+        <div className="make-breakdown-table-side">
+          <div className="make-breakdown-table-header">
+            <span>Condition</span>
+            <span>Views</span>
+          </div>
+          <div className="make-breakdown-table-scroll">
+            {rows.map((row, index) => (
+              <div
+                key={`${row.rank}-${row.condition_bucket}-${index}`}
+                className="make-breakdown-data-row"
+              >
+                <div className="make-breakdown-make-cell" title={row.condition_bucket}>
+                  <span
+                    className="make-breakdown-dot"
+                    style={{ backgroundColor: colorForRow(row, index) }}
+                  />
+                  <span className="make-breakdown-name">{row.condition_bucket}</span>
+                </div>
+                <span className="make-breakdown-views-cell">
+                  {row.views.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="make-breakdown-total">
+            <span>TOTAL</span>
+            <span className="make-breakdown-total-value">{total.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConditionBreakdownPane({
+  periodLabel,
+  clientId,
+  from,
+  to,
+  topN,
+  vdpFilters,
+  tab,
+  chartMode,
+  enabled,
+}) {
+  const { rows, loading, error } = useBreakdownFetch({
+    enabled,
+    clientId,
+    from,
+    to,
+    topN,
+    vdpFilters,
+    tab,
+    fetchFn: fetchConditionBreakdown,
+    normalize: normalizeRows,
+    errorMessage: 'Failed to load condition breakdown.',
+  });
+
+  return (
+    <Panel className="make-breakdown-panel make-breakdown-panel--compare">
+      <PanelHeader title={periodLabel} />
+      <PanelBody>
+        <ConditionBreakdownBody
+          rows={rows}
+          loading={loading}
+          error={error}
+          chartMode={chartMode}
+          emptyMessage="No condition data for this period."
+        />
+      </PanelBody>
+    </Panel>
+  );
+}
+
+export default function ConditionBreakdown({
+  clientId: clientIdProp,
+  from: fromProp,
+  to: toProp,
+  limit = null,
+}) {
+  const {
+    tab,
+    vdpFilters,
+    clientKey,
+    from: ctxFrom,
+    to: ctxTo,
+    compareEnabled,
+    compareFrom,
+    compareTo,
+    currentPeriodLabel,
+    comparePeriodLabel,
+  } = useOverview();
+
+  const clientId = clientIdProp ?? clientKey;
+  const from = fromProp ?? ctxFrom;
+  const to = toProp ?? ctxTo;
+
+  const [topN, setTopN] = useState(limit);
+  const [chartMode, setChartMode] = useState('pie');
+
+  const enabled = tab === 'vdp';
+  const showCompare = enabled && compareEnabled && compareFrom && compareTo;
+
+  const singleFetch = useBreakdownFetch({
+    enabled: enabled && !showCompare,
+    clientId,
+    from,
+    to,
+    topN,
+    vdpFilters,
+    tab,
+    fetchFn: fetchConditionBreakdown,
+    normalize: normalizeRows,
+    errorMessage: 'Failed to load condition breakdown.',
+  });
+
+  if (!enabled) return null;
+
+  const controls = (
+    <ConditionBreakdownControls
+      chartMode={chartMode}
+      setChartMode={setChartMode}
+      topN={topN}
+      setTopN={setTopN}
+    />
+  );
+
+  if (showCompare) {
+    return (
+      <CompareBreakdownSection title="Condition Breakdown" headerExtra={controls}>
+        <ConditionBreakdownPane
+          periodLabel={comparePeriodLabel}
+          clientId={clientId}
+          from={compareFrom}
+          to={compareTo}
+          topN={topN}
+          vdpFilters={vdpFilters}
+          tab={tab}
+          chartMode={chartMode}
+          enabled={enabled}
+        />
+        <ConditionBreakdownPane
+          periodLabel={currentPeriodLabel}
+          clientId={clientId}
+          from={from}
+          to={to}
+          topN={topN}
+          vdpFilters={vdpFilters}
+          tab={tab}
+          chartMode={chartMode}
+          enabled={enabled}
+        />
+      </CompareBreakdownSection>
+    );
   }
 
   return (
     <Panel className="make-breakdown-panel condition-breakdown-panel">
       <PanelHeader title="Condition Breakdown" subtitle="VDP Views by Condition">
-        <div className="make-breakdown-head-controls">
-          <div className="chart-mode" role="group" aria-label="Chart type">
-            <button
-              type="button"
-              className={`cm-btn ${chartMode === 'pie' ? 'active' : ''}`}
-              onClick={() => setChartMode('pie')}
-              aria-pressed={chartMode === 'pie'}
-            >
-              Pie
-            </button>
-            <button
-              type="button"
-              className={`cm-btn ${chartMode === 'bar' ? 'active' : ''}`}
-              onClick={() => setChartMode('bar')}
-              aria-pressed={chartMode === 'bar'}
-            >
-              Bar
-            </button>
-          </div>
-          <select
-            className="make-breakdown-select"
-            value={topN ?? 'all'}
-            onChange={(e) => {
-              const value = e.target.value;
-              setTopN(value === 'all' ? null : Number(value));
-            }}
-            aria-label="Condition breakdown limit"
-          >
-            <option value="all">All conditions</option>
-            <option value="5">Top 5</option>
-            <option value="10">Top 10</option>
-          </select>
-        </div>
+        {controls}
       </PanelHeader>
-
       <PanelBody>
-        {loading && rows.length === 0 && (
-          <div className="make-breakdown-loading">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="make-breakdown-skel" />
-            ))}
-          </div>
-        )}
-
-        {!loading && error && (
-          <div className="make-breakdown-error" role="alert">
-            {error}
-          </div>
-        )}
-
-        {!loading && !error && rows.length === 0 && (
-          <div className="make-breakdown-empty">No condition data for this period.</div>
-        )}
-
-        {!error && rows.length > 0 && (
-          <div className="make-breakdown-content">
-            <div className="make-breakdown-split year-breakdown-split">
-              <div className="make-breakdown-chart-col">
-                {chartMode === 'pie' ? (
-                  <ConditionPieChart data={chartData} total={total} />
-                ) : (
-                  <ConditionBarChart data={chartData} maxViews={maxViews} />
-                )}
-              </div>
-              <div className="make-breakdown-table-side">
-                <div className="make-breakdown-table-header">
-                  <span>Condition</span>
-                  <span>Views</span>
-                </div>
-                <div className="make-breakdown-table-scroll">
-                  {rows.map((row, index) => (
-                    <div
-                      key={`${row.rank}-${row.condition_bucket}-${index}`}
-                      className="make-breakdown-data-row"
-                    >
-                      <div className="make-breakdown-make-cell" title={row.condition_bucket}>
-                        <span
-                          className="make-breakdown-dot"
-                          style={{ backgroundColor: colorForRow(row, index) }}
-                        />
-                        <span className="make-breakdown-name">{row.condition_bucket}</span>
-                      </div>
-                      <span className="make-breakdown-views-cell">
-                        {row.views.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="make-breakdown-total">
-                  <span>TOTAL</span>
-                  <span className="make-breakdown-total-value">
-                    {total.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConditionBreakdownBody
+          rows={singleFetch.rows}
+          loading={singleFetch.loading}
+          error={singleFetch.error}
+          chartMode={chartMode}
+          emptyMessage="No condition data for this period."
+        />
       </PanelBody>
     </Panel>
   );

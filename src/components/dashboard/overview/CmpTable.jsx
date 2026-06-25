@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Panel, PanelHeader } from '../Panel';
+import { Panel, PanelHeader, PanelBody } from '../Panel';
 import Delta from '../Delta';
 import ChannelGroupToggle from './ChannelGroupToggle';
+import CompareBreakdownSection from '../CompareBreakdownSection';
 import { useOverview } from './OverviewDataContext';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { colorForChannel } from '@/lib/ga4/channelDisplay';
@@ -12,7 +13,7 @@ import {
   filterByExpandedGroups,
 } from '@/lib/ga4/channelGroups';
 import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
-import { vdpFilterCacheSuffix, DEFAULT_VDP_FILTERS } from '@/lib/vdp/vdpFilterParams';
+import { vdpFilterCacheSuffix, vdpFiltersActive } from '@/lib/vdp/vdpFilterParams';
 import {
   mergeChannelComparison,
   sameMonthLastYearLabel,
@@ -48,6 +49,7 @@ export default function CmpTable() {
     clientKey,
     from,
     to,
+    compareEnabled,
     compareFrom,
     compareTo,
     currentPeriodLabel,
@@ -67,9 +69,7 @@ export default function CmpTable() {
 
   const yoyEnabled = VISIBLE_TABS.has(tab);
   const pageTypeFilter = TAB_TO_PAGE_TYPE[tab] || 'ALL';
-  /** Period table ignores VDP inventory filters so MoM/YoY stay comparable. */
-  const tableVdpFilters = tab === 'vdp' ? DEFAULT_VDP_FILTERS : vdpFilters;
-  const tableFilterCacheSuffix = tab === 'vdp' ? '' : vdpFilterCacheSuffix(vdpFilters, tab);
+  const invFiltersActive = vdpFiltersActive(vdpFilters, tab);
   const panelTitle = `${TAB_TITLES[tab] || 'Page'} Views by Channel — Period Comparison`;
   const lyPeriodLabel = useMemo(
     () => sameMonthLastYearLabel(from, to),
@@ -107,18 +107,18 @@ export default function CmpTable() {
     const fetchOpts = {
       clientId: clientKey,
       pageTypeFilter,
-      vdpFilters: tableVdpFilters,
+      vdpFilters,
       tab,
       onCancelCheck: () => cancelled,
       adaptiveChunks: true,
     };
 
-    const loadPeriod = (range, { preferServer = false } = {}) =>
+    const loadPeriod = (range) =>
       fetchChannelBreakdownBundle({
         ...fetchOpts,
         from: range.from,
         to: range.to,
-        preferServer,
+        preferServer: invFiltersActive,
       });
 
     (async () => {
@@ -127,18 +127,12 @@ export default function CmpTable() {
         if (cancelled) return;
         setCurRows(current || []);
 
-        const compare = await loadPeriod(
-          { from: compareFrom, to: compareTo },
-          { preferServer: true }
-        );
+        const compare = await loadPeriod({ from: compareFrom, to: compareTo });
         if (cancelled) return;
         setCmpRows(compare || []);
 
         if (yoyEnabled && lyFrom && lyTo) {
-          const lyCurrent = await loadPeriod(
-            { from: lyFrom, to: lyTo },
-            { preferServer: true }
-          );
+          const lyCurrent = await loadPeriod({ from: lyFrom, to: lyTo });
           if (cancelled) return;
           setLyCurRows(lyCurrent || []);
         } else {
@@ -170,7 +164,8 @@ export default function CmpTable() {
     lyFrom,
     lyTo,
     pageTypeFilter,
-    tableFilterCacheSuffix,
+    vdpFilters,
+    invFiltersActive,
     beginBreakdownLoad,
     endBreakdownLoad,
   ]);
@@ -250,6 +245,125 @@ export default function CmpTable() {
 
   if (!VISIBLE_TABS.has(tab)) return null;
 
+  const showSideBySide = tab === 'vdp' && compareEnabled && compareFrom && compareTo;
+
+  const copyButton = (
+    <button
+      type="button"
+      className={`copy-btn ${copied ? 'copied' : ''}`}
+      onClick={onCopy}
+      style={{ marginLeft: 'auto' }}
+      disabled={loading || !!error}
+    >
+      {copied ? (
+        <>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Copied!
+        </>
+      ) : (
+        <>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy table
+        </>
+      )}
+    </button>
+  );
+
+  const renderPeriodTable = (periodLabel, valueKey, { showMom = false } = {}) => (
+    <Panel className="make-breakdown-panel cmp-period-pane">
+      <PanelHeader title={periodLabel} />
+      <PanelBody className="cmp-period-pane-body">
+        <div className="cmp-table-wrap">
+          <table className="cmp-tbl cmp-tbl--period-pane">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th>Views</th>
+                {showMom && <th className="col-mom">MoM</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && visibleRows.length === 0 ? (
+                <tr>
+                  <td colSpan={showMom ? 3 : 2} className="cmp-table-loading">
+                    Loading channel comparison…
+                  </td>
+                </tr>
+              ) : (
+                visibleRows.map((r) => (
+                  <tr
+                    key={`${valueKey}-${r.rowKey || r.ch}`}
+                    className={
+                      r.isGroupRollup
+                        ? 'cmp-tbl-row--group-rollup'
+                        : r.isGroupMember
+                        ? 'cmp-tbl-row--group-member'
+                        : undefined
+                    }
+                  >
+                    <td>
+                      <div
+                        className={`cmp-channel-cell${r.isGroupMember ? ' cmp-channel-cell--member' : ''}`}
+                      >
+                        {showGroupColumn && (
+                          r.isGroupRollup && r.collapsible ? (
+                            <ChannelGroupToggle
+                              expanded={isExpanded(r.groupKey)}
+                              onToggle={() => toggle(r.groupKey)}
+                              label={r.ch}
+                            />
+                          ) : (
+                            <span className="cmp-channel-toggle-spacer" aria-hidden />
+                          )
+                        )}
+                        <div
+                          className="cmp-channel-dot"
+                          style={{ background: r.color }}
+                        />
+                        <span>{r.ch}</span>
+                      </div>
+                    </td>
+                    <td>{(r[valueKey] ?? 0).toLocaleString()}</td>
+                    {showMom && (
+                      <td className="col-mom">
+                        <Delta value={r.delta} />
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+              {!loading && visibleRows.length > 0 && (
+                <tr className="cmp-tbl-total-row">
+                  <td>Total VDP</td>
+                  <td>{(totals[valueKey] ?? 0).toLocaleString()}</td>
+                  {showMom && (
+                    <td className="col-mom">
+                      <Delta value={totals.delta} />
+                    </td>
+                  )}
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </PanelBody>
+    </Panel>
+  );
+
+  if (showSideBySide) {
+    return (
+      <CompareBreakdownSection title={panelTitle} headerExtra={copyButton}>
+        {renderPeriodTable(comparePeriodLabel, 'cmp')}
+        {renderPeriodTable(currentPeriodLabel, 'cur', { showMom: true })}
+      </CompareBreakdownSection>
+    );
+  }
+
   return (
     <Panel className="cmp-table-panel">
       <PanelHeader
@@ -259,30 +373,7 @@ export default function CmpTable() {
         <span className="cmp-table-head-note">
           {`${currentPeriodLabel} · ${comparePeriodLabel} · ${lyPeriodLabel} · MoM · YoY`}
         </span>
-        <button
-          type="button"
-          className={`copy-btn ${copied ? 'copied' : ''}`}
-          onClick={onCopy}
-          style={{ marginLeft: 'auto' }}
-          disabled={loading || !!error}
-        >
-          {copied ? (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Copied!
-            </>
-          ) : (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              Copy table
-            </>
-          )}
-        </button>
+        {copyButton}
       </PanelHeader>
 
       {error ? (
@@ -385,7 +476,6 @@ export default function CmpTable() {
         {lyPeriodLabel}
         <span className="cmp-table-foot-note">
           {`MoM: ${currentPeriodLabel} vs ${comparePeriodLabel} · YoY: ${currentPeriodLabel} vs ${lyPeriodLabel}`}
-          {tab === 'vdp' ? ' · Inventory filters do not apply to this table' : ''}
         </span>
       </div>
     </Panel>

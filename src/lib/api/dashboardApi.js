@@ -3,12 +3,17 @@ import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
 import { aggregateLocationBuckets } from '@/lib/api/locationBreakdownAggregate';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
+import { fetchVdpKpiFiltered } from '@/lib/api/vdpKpiFetch';
 import {
-  vdpFiltersActive,
+  getVdpDailyCache,
+  setVdpDailyCache,
+} from '@/lib/data/vdpDailyCache';
+import {
   vdpRpcExtraParams,
+  vdpFilterCacheSuffix,
   appendInvParamsToSearchParams,
+  appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
-import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
 
 const FINAL_DATA_TABLE = 'smart_final_data';
 const LOCATION_PAGE_SIZE = 5000;
@@ -63,8 +68,41 @@ export async function fetchChannelBreakdown({
   });
 }
 
+async function fetchVdpFilterOptionsViaApi({ clientId, from, to, onCancelCheck }) {
+  if (typeof window === 'undefined') return null;
+  if (onCancelCheck?.()) return null;
+
+  const qs = new URLSearchParams({
+    clientId: String(clientId).trim(),
+    from: toDateOnly(from),
+    to: toDateOnly(to),
+  });
+  const res = await fetch(`/api/dashboard/vdp-filter-options?${qs}`, {
+    credentials: 'same-origin',
+  });
+  const json = await res.json().catch(() => ({}));
+
+  if (onCancelCheck?.()) return null;
+  if (!res.ok) {
+    if (res.status === 503) return null;
+    throw new Error(json.error || `VDP filter options request failed (${res.status})`);
+  }
+
+  return json;
+}
+
 /** Distinct VDP filter dropdown values for dealer + date range. */
 export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck }) {
+  if (!clientId || !from || !to) return null;
+  if (onCancelCheck?.()) return null;
+
+  try {
+    const viaApi = await fetchVdpFilterOptionsViaApi({ clientId, from, to, onCancelCheck });
+    if (viaApi) return viaApi;
+  } catch {
+    // fall through to direct RPC
+  }
+
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
@@ -92,6 +130,39 @@ export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck 
   };
 }
 
+async function fetchVdpDailyFilteredViaApi({
+  clientId,
+  from,
+  to,
+  vdpFilters,
+  tab,
+  onCancelCheck,
+}) {
+  if (typeof window === 'undefined') return null;
+  if (onCancelCheck?.()) return null;
+
+  const qs = new URLSearchParams({
+    clientId: String(clientId).trim(),
+    from: toDateOnly(from),
+    to: toDateOnly(to),
+  });
+  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
+
+  const res = await fetch(`/api/dashboard/vdp-daily?${qs}`, { credentials: 'same-origin' });
+  const json = await res.json().catch(() => ({}));
+
+  if (onCancelCheck?.()) return null;
+  if (!res.ok) {
+    if (res.status === 503) return null;
+    throw new Error(json.error || `VDP daily request failed (${res.status})`);
+  }
+
+  return {
+    daily: json.daily || {},
+    total: Number(json.total) || 0,
+  };
+}
+
 /** Daily VDP views from smart_final_data (combined inventory filters). */
 export async function fetchVdpDailyFiltered({
   clientId,
@@ -100,31 +171,69 @@ export async function fetchVdpDailyFiltered({
   vdpFilters,
   tab = 'vdp',
   onCancelCheck,
+  onProgress,
+  skipCache = false,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
-  const inv = vdpRpcExtraParams(vdpFilters, tab);
-  if (!vdpFiltersActive(vdpFilters, tab)) return null;
+  if (!clientId || !from || !to) return null;
   if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('build_date_wise_final_data', {
-    p_date_from: toDateOnly(from),
-    p_date_to: toDateOnly(to),
-    p_client_id: String(clientId).trim(),
-    ...inv,
-  });
+  const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
 
-  if (error) throw new Error(error.message || 'Failed to load VDP daily views.');
-  const daily = {};
-  let total = 0;
-  for (const row of data || []) {
-    const day = normalizeReportDate(row.report_date);
-    const views = Number(row.views) || 0;
-    if (!day || views === 0) continue;
-    daily[day] = (daily[day] || 0) + views;
-    total += views;
+  if (!skipCache) {
+    const cached = getVdpDailyCache(clientId, from, to, cacheSuffix);
+    if (cached) {
+      onProgress?.(cached, { completed: 1, total: 1, fromCache: true });
+      return cached;
+    }
   }
-  return { daily, total };
+
+  const inv = vdpRpcExtraParams(vdpFilters, tab);
+
+  const supabase = createClient();
+  if (supabase) {
+    try {
+      const result = await fetchVdpKpiFiltered(supabase, {
+        clientId,
+        from,
+        to,
+        invParams: inv,
+        onCancelCheck,
+        onProgress,
+      });
+
+      if (onCancelCheck?.()) return null;
+      if (result) {
+        if (!skipCache) {
+          setVdpDailyCache(clientId, from, to, cacheSuffix, result);
+        }
+        return result;
+      }
+    } catch {
+      // fall through to server API
+    }
+  }
+
+  try {
+    const viaApi = await fetchVdpDailyFilteredViaApi({
+      clientId,
+      from,
+      to,
+      vdpFilters,
+      tab,
+      onCancelCheck,
+    });
+    if (viaApi) {
+      onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
+      if (!skipCache) {
+        setVdpDailyCache(clientId, from, to, cacheSuffix, viaApi);
+      }
+      return viaApi;
+    }
+  } catch {
+    // exhausted fallbacks
+  }
+
+  throw new Error('Failed to load VDP daily views.');
 }
 
 /** @deprecated use fetchVdpDailyFiltered */

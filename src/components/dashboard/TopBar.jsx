@@ -18,14 +18,11 @@ const NAV = [
   { id: 'admin', href: '/dashboard/admin/pipeline', label: 'Admin' },
 ];
 
-const PAGE_SIZE = 5;
-
 function ClientPicker() {
   const { client, pickClient, dealers, loading, error } = useClient();
   const { open, toggle, close, ref } = useDropdown();
 
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -33,23 +30,8 @@ function ClientPicker() {
     return dealers.filter((d) => d.name.toLowerCase().includes(q));
   }, [dealers, query]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-
-  const pageItems = useMemo(() => {
-    const start = safePage * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, safePage]);
-
   useEffect(() => {
-    setPage(0);
-  }, [query]);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery('');
-      setPage(0);
-    }
+    if (!open) setQuery('');
   }, [open]);
 
   const currentColor =
@@ -87,7 +69,7 @@ function ClientPicker() {
             )}
             {!loading &&
               !error &&
-              pageItems.map((c) => {
+              filtered.map((c) => {
                 const selected = client?.id === c.id;
                 return (
                   <div
@@ -112,31 +94,6 @@ function ClientPicker() {
                 );
               })}
           </div>
-
-          {!loading && !error && filtered.length > PAGE_SIZE && (
-            <div className="cd-pager">
-              <button
-                type="button"
-                className="cd-pg-btn"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={safePage === 0}
-              >
-                ‹ Prev
-              </button>
-              <span className="cd-pg-info">
-                {safePage + 1} / {totalPages}
-                <span className="cd-pg-count">· {filtered.length} dealers</span>
-              </span>
-              <button
-                type="button"
-                className="cd-pg-btn"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={safePage >= totalPages - 1}
-              >
-                Next ›
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

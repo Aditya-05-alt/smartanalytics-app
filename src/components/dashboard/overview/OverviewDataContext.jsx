@@ -13,9 +13,12 @@ import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
 import { fetchVdpDailyFiltered, fetchVdpFilterOptions } from '@/lib/api/dashboardApi';
 import {
   DEFAULT_VDP_FILTERS,
-  vdpFiltersActive,
   normalizeVdpFilters,
+  vdpFilterCacheSuffix,
 } from '@/lib/vdp/vdpFilterParams';
+import {
+  getVdpDailyCache,
+} from '@/lib/data/vdpDailyCache';
 import {
   getOverviewCache,
   setOverviewCache,
@@ -204,6 +207,8 @@ export function OverviewProvider({ children }) {
   const [vdpFilters, setVdpFilters] = useState(DEFAULT_VDP_FILTERS);
   const [vdpFilterOptions, setVdpFilterOptions] = useState(EMPTY_VDP_FILTER_OPTIONS);
   const [vdpFilteredDaily, setVdpFilteredDaily] = useState(null);
+  const [compareVdpFilteredDaily, setCompareVdpFilteredDaily] = useState(null);
+  const [lyVdpFilteredDaily, setLyVdpFilteredDaily] = useState(null);
   const [vdpFiltersLoading, setVdpFiltersLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [userTotalsRows, setUserTotalsRows] = useState([]);
@@ -281,7 +286,12 @@ export function OverviewProvider({ children }) {
     setVdpFilters((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const clearVdpFilters = useCallback(() => {
+    setVdpFilters(DEFAULT_VDP_FILTERS);
+  }, []);
+
   const breakdownLoadsRef = useRef(0);
+  const vdpFilteredDailyRef = useRef(null);
   const [breakdownUpdating, setBreakdownUpdating] = useState(false);
   const [breakdownChunkProgress, setBreakdownChunkProgress] = useState(null);
 
@@ -303,7 +313,15 @@ export function OverviewProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    vdpFilteredDailyRef.current = vdpFilteredDaily;
+  }, [vdpFilteredDaily]);
+
+  useEffect(() => {
     setVdpFilters(DEFAULT_VDP_FILTERS);
+    setVdpFilteredDaily(null);
+    setCompareVdpFilteredDaily(null);
+    setLyVdpFilteredDaily(null);
+    vdpFilteredDailyRef.current = null;
   }, [clientKey, from, to]);
 
   useEffect(() => {
@@ -478,16 +496,24 @@ export function OverviewProvider({ children }) {
     };
   }, [clientKey, from, to]);
 
-  // ── VDP daily views when any inventory filter is active ──
+  // ── VDP daily views for KPI + chart (current period — priority) ──
   useEffect(() => {
-    if (!clientKey || !from || !to || !vdpFiltersActive(vdpFilters, 'vdp')) {
+    if (!clientKey || !from || !to) {
       setVdpFilteredDaily(null);
       setVdpFiltersLoading(false);
       return undefined;
     }
 
+    const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, 'vdp');
+    const cached = getVdpDailyCache(clientKey, from, to, cacheSuffix);
+    if (cached) {
+      setVdpFilteredDaily(cached);
+      setVdpFiltersLoading(false);
+      return undefined;
+    }
+
     let cancelled = false;
-    setVdpFiltersLoading(true);
+    if (!vdpFilteredDailyRef.current) setVdpFiltersLoading(true);
 
     fetchVdpDailyFiltered({
       clientId: clientKey,
@@ -496,12 +522,14 @@ export function OverviewProvider({ children }) {
       vdpFilters,
       tab: 'vdp',
       onCancelCheck: () => cancelled,
+      onProgress: (partial) => {
+        if (cancelled || !partial) return;
+        setVdpFilteredDaily(partial);
+        setVdpFiltersLoading(false);
+      },
     })
       .then((result) => {
-        if (!cancelled) setVdpFilteredDaily(result);
-      })
-      .catch(() => {
-        if (!cancelled) setVdpFilteredDaily({ daily: {}, total: 0 });
+        if (!cancelled && result) setVdpFilteredDaily(result);
       })
       .finally(() => {
         if (!cancelled) setVdpFiltersLoading(false);
@@ -511,6 +539,80 @@ export function OverviewProvider({ children }) {
       cancelled = true;
     };
   }, [clientKey, from, to, vdpFilters]);
+
+  // ── VDP daily views for compare period (only when compare is on) ──
+  useEffect(() => {
+    if (!compareEnabled || !clientKey || !compareFrom || !compareTo) {
+      setCompareVdpFilteredDaily(null);
+      return undefined;
+    }
+
+    const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, 'vdp');
+    const cached = getVdpDailyCache(clientKey, compareFrom, compareTo, cacheSuffix);
+    if (cached) {
+      setCompareVdpFilteredDaily(cached);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    fetchVdpDailyFiltered({
+      clientId: clientKey,
+      from: compareFrom,
+      to: compareTo,
+      vdpFilters,
+      tab: 'vdp',
+      onCancelCheck: () => cancelled,
+      onProgress: (partial) => {
+        if (!cancelled && partial) setCompareVdpFilteredDaily(partial);
+      },
+    })
+      .then((result) => {
+        if (!cancelled && result) setCompareVdpFilteredDaily(result);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [compareEnabled, clientKey, compareFrom, compareTo, vdpFilters]);
+
+  // ── VDP daily views for YoY baseline (background) ──
+  useEffect(() => {
+    if (!clientKey || !lyFrom || !lyTo) {
+      setLyVdpFilteredDaily(null);
+      return undefined;
+    }
+
+    const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, 'vdp');
+    const cached = getVdpDailyCache(clientKey, lyFrom, lyTo, cacheSuffix);
+    if (cached) {
+      setLyVdpFilteredDaily(cached);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    fetchVdpDailyFiltered({
+      clientId: clientKey,
+      from: lyFrom,
+      to: lyTo,
+      vdpFilters,
+      tab: 'vdp',
+      onCancelCheck: () => cancelled,
+      onProgress: (partial) => {
+        if (!cancelled && partial) setLyVdpFilteredDaily(partial);
+      },
+    })
+      .then((result) => {
+        if (!cancelled && result) setLyVdpFilteredDaily(result);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientKey, lyFrom, lyTo, vdpFilters]);
 
   // ── derived: totals + daily-by-date map per tab + raw page-type histogram ──
   const derived = useMemo(() => {
@@ -570,13 +672,19 @@ export function OverviewProvider({ children }) {
   }, [rows, userTotalsRows]);
 
   const adjustedDerived = useMemo(() => {
-    if (!vdpFiltersActive(vdpFilters, 'vdp') || !vdpFilteredDaily) return derived;
+    if (!vdpFilteredDaily) {
+      return {
+        ...derived,
+        totals: { ...derived.totals, vdp: 0 },
+        daily: { ...derived.daily, vdp: {} },
+      };
+    }
     return {
       ...derived,
       totals: { ...derived.totals, vdp: vdpFilteredDaily.total || 0 },
       daily: { ...derived.daily, vdp: vdpFilteredDaily.daily || {} },
     };
-  }, [derived, vdpFilters, vdpFilteredDaily]);
+  }, [derived, vdpFilteredDaily]);
 
   // ── derived: continuous daily series (zero-fills missing days) ──
   const fullDateList = useMemo(
@@ -618,16 +726,32 @@ export function OverviewProvider({ children }) {
     return { totals, daily };
   }, [compareRows]);
 
+  const adjustedCompareDerived = useMemo(() => {
+    if (!compareVdpFilteredDaily) return compareDerived;
+    return {
+      ...compareDerived,
+      totals: { ...compareDerived.totals, vdp: compareVdpFilteredDaily.total || 0 },
+      daily: { ...compareDerived.daily, vdp: compareVdpFilteredDaily.daily || {} },
+    };
+  }, [compareDerived, compareVdpFilteredDaily]);
+
   const lyTotals = useMemo(() => totalsFromOverviewRows(lyRows), [lyRows]);
+
+  const adjustedLyTotals = useMemo(() => {
+    if (!lyVdpFilteredDaily) return lyTotals;
+    return { ...lyTotals, vdp: lyVdpFilteredDaily.total || 0 };
+  }, [lyTotals, lyVdpFilteredDaily]);
 
   const compareSeriesByTabRaw = useMemo(() => {
     if (!compareEnabled) return {};
     const out = {};
     for (const key of TAB_IDS) {
-      out[key] = compareFullDateList.map((d) => compareDerived.daily[key]?.[d] || 0);
+      out[key] = compareFullDateList.map(
+        (d) => adjustedCompareDerived.daily[key]?.[d] || 0
+      );
     }
     return out;
-  }, [compareEnabled, compareFullDateList, compareDerived]);
+  }, [compareEnabled, compareFullDateList, adjustedCompareDerived]);
 
   const { dateList: compareDateList, seriesByTab: compareSeriesTrimmed } = useMemo(
     () => chartDateListAndSeries(compareFullDateList, compareSeriesByTabRaw),
@@ -644,6 +768,7 @@ export function OverviewProvider({ children }) {
       setDateRange,
       vdpFilters,
       setVdpFilter,
+      clearVdpFilters,
       vdpFilterOptions,
       vdpFiltersLoading,
       breakdownUpdating,
@@ -672,8 +797,8 @@ export function OverviewProvider({ children }) {
       compareTo,
       currentPeriodLabel,
       comparePeriodLabel,
-      compareTotals: compareDerived.totals,
-      lyTotals,
+      compareTotals: adjustedCompareDerived.totals,
+      lyTotals: adjustedLyTotals,
       compareDateList,
       compareSeriesByTab: compareSeriesTrimmed,
       compareLoading,
@@ -683,6 +808,7 @@ export function OverviewProvider({ children }) {
       dateRange,
       vdpFilters,
       setVdpFilter,
+      clearVdpFilters,
       vdpFilterOptions,
       vdpFiltersLoading,
       breakdownUpdating,
@@ -710,7 +836,8 @@ export function OverviewProvider({ children }) {
       currentPeriodLabel,
       comparePeriodLabel,
       compareDerived.totals,
-      lyTotals,
+      adjustedCompareDerived.totals,
+      adjustedLyTotals,
       compareDateList,
       compareSeriesTrimmed,
       compareLoading,

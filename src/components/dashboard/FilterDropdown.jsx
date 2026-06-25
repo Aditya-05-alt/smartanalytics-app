@@ -27,6 +27,7 @@ export default function FilterDropdown({
   pageSize = DEFAULT_PAGE_SIZE,
   className = '',
   disabled = false,
+  clearable = false,
 }) {
   const { open, toggle, close, ref } = useDropdown();
   const [search, setSearch] = useState('');
@@ -102,6 +103,14 @@ export default function FilterDropdown({
     close();
   };
 
+  const showClear = clearable && !isAll && !disabled;
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    onChange(defaultAll);
+    close();
+  };
+
   return (
     <div ref={ref} style={{ position: 'relative' }} className={className}>
       <div
@@ -114,7 +123,18 @@ export default function FilterDropdown({
         aria-expanded={open}
         title={disabled ? 'Coming soon' : undefined}
       >
-        <span>{current.label}</span>
+        <span className="fc-label">{current.label}</span>
+        {showClear && (
+          <button
+            type="button"
+            className="fc-clear"
+            onClick={handleClear}
+            aria-label="Clear filter"
+            title="Clear filter"
+          >
+            ×
+          </button>
+        )}
         <span className="arr">▾</span>
       </div>
       {open && !disabled && (

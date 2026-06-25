@@ -29,7 +29,8 @@ const TAB_PAGE_TYPE = {
 };
 
 function OverviewBody() {
-  const { tab, error, clientKey, from, to } = useOverview();
+  const { tab, error, clientKey, from, to, compareEnabled } = useOverview();
+  const vdpCompareLayout = tab === 'vdp' && compareEnabled;
 
   return (
     <>
@@ -40,20 +41,34 @@ function OverviewBody() {
         <KpiRow />
 
         {tab === 'vdp' ? (
-          <div className="g2">
-            <ChannelDonut
-              clientId={clientKey}
-              from={from}
-              to={to}
-              pageType={TAB_PAGE_TYPE[tab]}
-            />
-            <LocationDonut
-              clientId={clientKey}
-              from={from}
-              to={to}
-              pageType={TAB_PAGE_TYPE[tab]}
-            />
-          </div>
+          <>
+            <div className={vdpCompareLayout ? 'dashboard-full-row' : 'g2'}>
+              <ChannelDonut
+                clientId={clientKey}
+                from={from}
+                to={to}
+                pageType={TAB_PAGE_TYPE[tab]}
+              />
+              {!vdpCompareLayout && (
+                <LocationDonut
+                  clientId={clientKey}
+                  from={from}
+                  to={to}
+                  pageType={TAB_PAGE_TYPE[tab]}
+                />
+              )}
+            </div>
+            {vdpCompareLayout && (
+              <div className="dashboard-full-row">
+                <LocationDonut
+                  clientId={clientKey}
+                  from={from}
+                  to={to}
+                  pageType={TAB_PAGE_TYPE[tab]}
+                />
+              </div>
+            )}
+          </>
         ) : (
           <div className="dashboard-full-row">
             <ChannelDonut
@@ -67,24 +82,45 @@ function OverviewBody() {
 
         {tab === 'vdp' && (
           <>
-            <div className="dashboard-vdp-half-grid">
-              <div className="dashboard-half-row">
-                <YearBreakdown
-                  clientId={clientKey}
-                  from={from}
-                  to={to}
-                  limit={null}
-                />
+            {vdpCompareLayout ? (
+              <>
+                <div className="dashboard-full-row">
+                  <YearBreakdown
+                    clientId={clientKey}
+                    from={from}
+                    to={to}
+                    limit={null}
+                  />
+                </div>
+                <div className="dashboard-full-row">
+                  <ConditionBreakdown
+                    clientId={clientKey}
+                    from={from}
+                    to={to}
+                    limit={null}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="dashboard-vdp-half-grid">
+                <div className="dashboard-half-row">
+                  <YearBreakdown
+                    clientId={clientKey}
+                    from={from}
+                    to={to}
+                    limit={null}
+                  />
+                </div>
+                <div className="dashboard-half-row">
+                  <ConditionBreakdown
+                    clientId={clientKey}
+                    from={from}
+                    to={to}
+                    limit={null}
+                  />
+                </div>
               </div>
-              <div className="dashboard-half-row">
-                <ConditionBreakdown
-                  clientId={clientKey}
-                  from={from}
-                  to={to}
-                  limit={null}
-                />
-              </div>
-            </div>
+            )}
             <div className="dashboard-full-row">
               <MakeBreakdown
                 clientId={clientKey}

@@ -17,6 +17,7 @@ import {
   attachCompareValuesForGrouping,
 } from '@/lib/ga4/channelGroups';
 import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
+import CompareBreakdownSection from '../CompareBreakdownSection';
 import { useOverview } from './OverviewDataContext';
 import BreakdownDonut from './BreakdownDonut';
 
@@ -332,9 +333,9 @@ function ChannelDonutCompare({
   );
 
   return (
-    <div className="compare-donut-section">
-      <div className="compare-donut-head">
-        <div className="compare-donut-title">Channel Breakdown</div>
+    <CompareBreakdownSection
+      title="Channel Breakdown"
+      headerExtra={
         <div className="make-breakdown-head-controls">
           <ChartTopNSelect
             value={chartTopN}
@@ -342,31 +343,30 @@ function ChannelDonutCompare({
             ariaLabel="Channel chart limit"
           />
         </div>
-      </div>
-      <div className="compare-donut-grid">
-        <ChannelDonutDisplay
-          rows={compareFetch.rows}
-          loading={compareFetch.loading}
-          error={compareFetch.error}
-          clientId={clientId}
-          periodLabel={comparePeriodLabel}
-          centerLabel={centerLabel}
-          chartTopN={chartTopN}
-          overviewLoading={overviewLoading}
-        />
-        <ChannelDonutDisplay
-          rows={currentFetch.rows}
-          loading={currentFetch.loading}
-          error={currentFetch.error}
-          clientId={clientId}
-          periodLabel={currentPeriodLabel}
-          centerLabel={centerLabel}
-          chartTopN={chartTopN}
-          overviewLoading={overviewLoading}
-          baselineDonutData={compareAllData}
-        />
-      </div>
-    </div>
+      }
+    >
+      <ChannelDonutDisplay
+        rows={compareFetch.rows}
+        loading={compareFetch.loading}
+        error={compareFetch.error}
+        clientId={clientId}
+        periodLabel={comparePeriodLabel}
+        centerLabel={centerLabel}
+        chartTopN={chartTopN}
+        overviewLoading={overviewLoading}
+      />
+      <ChannelDonutDisplay
+        rows={currentFetch.rows}
+        loading={currentFetch.loading}
+        error={currentFetch.error}
+        clientId={clientId}
+        periodLabel={currentPeriodLabel}
+        centerLabel={centerLabel}
+        chartTopN={chartTopN}
+        overviewLoading={overviewLoading}
+        baselineDonutData={compareAllData}
+      />
+    </CompareBreakdownSection>
   );
 }
 
@@ -480,7 +480,7 @@ export default function ChannelDonut({
   const tabId = resolveTabId(pageTypeProp, tab);
   const pageTypeFilter = TAB_TO_FILTER[tabId] || 'ALL';
   const centerLabel = CENTER_LABEL[tabId] || 'ALL VIEWS';
-  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
+  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tabId);
 
   const clientId = clientIdProp ?? clientKey;
   const from = fromProp ?? ctxFrom;
@@ -497,7 +497,7 @@ export default function ChannelDonut({
         compareFrom={compareFrom}
         compareTo={compareTo}
         pageTypeFilter={pageTypeFilter}
-        tab={tab}
+        tab={tabId}
         vdpFilters={vdpFilters}
         filterCacheSuffix={filterCacheSuffix}
         currentPeriodLabel={currentPeriodLabel}
@@ -517,7 +517,7 @@ export default function ChannelDonut({
       from={from}
       to={to}
       pageTypeFilter={pageTypeFilter}
-      tab={tab}
+      tab={tabId}
       vdpFilters={vdpFilters}
       filterCacheSuffix={filterCacheSuffix}
       centerLabel={centerLabel}

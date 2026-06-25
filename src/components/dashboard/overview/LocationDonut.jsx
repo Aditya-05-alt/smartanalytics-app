@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fetchLocationBreakdown } from '@/lib/api/dashboardApi';
+import CompareBreakdownSection from '../CompareBreakdownSection';
 import { useOverview } from './OverviewDataContext';
 import BreakdownDonut from './BreakdownDonut';
 
@@ -28,7 +29,6 @@ function colorForRank(rank) {
   return LOCATION_COLORS[Math.min(r - 1, LOCATION_COLORS.length - 1)];
 }
 
-/** Map RPC rows to chart display — no aggregation; render server output as-is. */
 function rpcRowsToDisplay(rows) {
   return rows.map((row) => {
     const fullName = String(row.location_bucket ?? '');
@@ -42,55 +42,21 @@ function rpcRowsToDisplay(rows) {
   });
 }
 
-/**
- * Location Breakdown — get_location_breakdown RPC output.
- * Fetches only on All / VDP tabs.
- */
-export default function LocationDonut({
-  clientId: clientIdProp,
-  from: fromProp,
-  to: toProp,
-  pageType: pageTypeProp,
-}) {
-  const {
-    tab,
-    vdpFilters,
-    clientKey,
-    from: ctxFrom,
-    to: ctxTo,
-    loading: overviewLoading,
-  } = useOverview();
-
-  const pageType = pageTypeProp || TAB_TO_PAGE_TYPE[tab] || 'All';
-  const enabled = VDP_ENABLED_TABS.has(pageType);
-
-  const clientId = clientIdProp ?? clientKey;
-  const from = fromProp ?? ctxFrom;
-  const to = toProp ?? ctxTo;
-
+function useLocationRows({ clientId, from, to, enabled, vdpFilters, tab }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !clientId || !from || !to) {
       setRows([]);
       setError(null);
       setLoading(false);
       return undefined;
     }
 
-    if (!clientId || !from || !to) {
-      setRows([]);
-      setLoading(false);
-      return undefined;
-    }
-
     let cancelled = false;
-    let requestId = 0;
-    const thisRequest = ++requestId;
-
-    if (rows.length === 0) setLoading(true);
+    setLoading(true);
     setError(null);
 
     fetchLocationBreakdown({
@@ -102,47 +68,44 @@ export default function LocationDonut({
       onCancelCheck: () => cancelled,
     })
       .then((data) => {
-        if (cancelled || thisRequest !== requestId) return;
+        if (cancelled) return;
         if (data === undefined) return;
-        setRows(data);
+        setRows(data || []);
       })
       .catch((e) => {
-        if (cancelled || thisRequest !== requestId) return;
+        if (cancelled) return;
         setError(e?.message || 'Failed to load location breakdown.');
         setRows([]);
       })
       .finally(() => {
-        if (cancelled || thisRequest !== requestId) return;
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [clientId, from, to, pageType, enabled, vdpFilters, tab]);
+  }, [clientId, from, to, enabled, vdpFilters, tab]);
 
+  return { rows, loading, error };
+}
+
+function LocationDonutDisplay({
+  rows,
+  loading,
+  error,
+  clientId,
+  periodLabel,
+  overviewLoading,
+  from,
+  to,
+}) {
   const data = useMemo(() => rpcRowsToDisplay(rows), [rows]);
-
-  const badge = { label: 'Local', bg: 'var(--od)', color: 'var(--orange)' };
-
-  if (!enabled) {
-    return (
-      <BreakdownDonut
-        title="Location Breakdown"
-        badge={badge}
-        centerLabel="LOCAL VISITORS"
-        disabled
-        disabledMessage="VDP data only"
-        disabledSubtext="Available on All and VDP tabs only. Location data is sourced from VDP-matched inventory."
-      />
-    );
-  }
-
   const emptyAfterLoad = !loading && !error && rows.length === 0;
+  const badge = { label: 'Local', bg: 'var(--od)', color: 'var(--orange)' };
 
   return (
     <BreakdownDonut
-      title="Location Breakdown"
+      title={periodLabel}
       badge={badge}
       data={data}
       centerLabel="LOCAL VISITORS"
@@ -156,6 +119,116 @@ export default function LocationDonut({
       }
       skeletonRows={6}
       pctDecimals={2}
+    />
+  );
+}
+
+export default function LocationDonut({
+  clientId: clientIdProp,
+  from: fromProp,
+  to: toProp,
+  pageType: pageTypeProp,
+}) {
+  const {
+    tab,
+    vdpFilters,
+    clientKey,
+    from: ctxFrom,
+    to: ctxTo,
+    loading: overviewLoading,
+    compareEnabled,
+    compareFrom,
+    compareTo,
+    currentPeriodLabel,
+    comparePeriodLabel,
+  } = useOverview();
+
+  const pageType = pageTypeProp || TAB_TO_PAGE_TYPE[tab] || 'All';
+  const enabled = VDP_ENABLED_TABS.has(pageType);
+
+  const clientId = clientIdProp ?? clientKey;
+  const from = fromProp ?? ctxFrom;
+  const to = toProp ?? ctxTo;
+
+  const showCompare = enabled && compareEnabled && compareFrom && compareTo;
+
+  const compareFetch = useLocationRows({
+    clientId,
+    from: compareFrom,
+    to: compareTo,
+    enabled: enabled && showCompare,
+    vdpFilters,
+    tab,
+  });
+
+  const currentFetch = useLocationRows({
+    clientId,
+    from,
+    to,
+    enabled: enabled && showCompare,
+    vdpFilters,
+    tab,
+  });
+
+  const singleFetch = useLocationRows({
+    clientId,
+    from,
+    to,
+    enabled: enabled && !showCompare,
+    vdpFilters,
+    tab,
+  });
+
+  if (!enabled) {
+    return (
+      <BreakdownDonut
+        title="Location Breakdown"
+        badge={{ label: 'Local', bg: 'var(--od)', color: 'var(--orange)' }}
+        centerLabel="LOCAL VISITORS"
+        disabled
+        disabledMessage="VDP data only"
+        disabledSubtext="Available on All and VDP tabs only. Location data is sourced from VDP-matched inventory."
+      />
+    );
+  }
+
+  if (showCompare) {
+    return (
+      <CompareBreakdownSection title="Location Breakdown">
+        <LocationDonutDisplay
+          rows={compareFetch.rows}
+          loading={compareFetch.loading}
+          error={compareFetch.error}
+          clientId={clientId}
+          periodLabel={comparePeriodLabel}
+          overviewLoading={overviewLoading}
+          from={compareFrom}
+          to={compareTo}
+        />
+        <LocationDonutDisplay
+          rows={currentFetch.rows}
+          loading={currentFetch.loading}
+          error={currentFetch.error}
+          clientId={clientId}
+          periodLabel={currentPeriodLabel}
+          overviewLoading={overviewLoading}
+          from={from}
+          to={to}
+        />
+      </CompareBreakdownSection>
+    );
+  }
+
+  return (
+    <LocationDonutDisplay
+      rows={singleFetch.rows}
+      loading={singleFetch.loading}
+      error={singleFetch.error}
+      clientId={clientId}
+      periodLabel="Location Breakdown"
+      overviewLoading={overviewLoading}
+      from={from}
+      to={to}
     />
   );
 }

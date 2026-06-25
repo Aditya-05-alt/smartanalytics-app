@@ -6,6 +6,7 @@ import VdpExportButton from './VdpExportButton';
 import AllExportButton from './AllExportButton';
 import { useClient } from '../ClientContext';
 import { useOverview } from './OverviewDataContext';
+import { vdpFiltersActive } from '@/lib/vdp/vdpFilterParams';
 
 const CONDITION_OPTIONS = ['All', 'Used + New', 'Used', 'New'];
 
@@ -41,6 +42,7 @@ export default function OverviewFilters() {
     tab,
     vdpFilters,
     setVdpFilter,
+    clearVdpFilters,
     vdpFilterOptions,
     breakdownUpdating,
     breakdownChunkProgress,
@@ -72,38 +74,57 @@ export default function OverviewFilters() {
     preset: 'custom',
   };
 
+  const hasActiveVdpFilters = vdpFiltersActive(vdpFilters, 'vdp');
+
   return (
     <div className="filters">
       {showVdpFilters && (
         <>
           <span className="f-label">Filter</span>
+          {hasActiveVdpFilters && (
+            <button
+              type="button"
+              className="filter-clear-all"
+              onClick={clearVdpFilters}
+              aria-label="Clear all filters"
+              title="Clear all filters"
+            >
+              ×
+            </button>
+          )}
           <FilterDropdown
+            clearable
             options={conditionOpts}
             value={vdpFilters.condition}
             onChange={(v) => setVdpFilter('condition', v)}
           />
           <FilterDropdown
+            clearable
             options={toOpts(vdpFilterOptions.years, 'All Years')}
             value={vdpFilters.year}
             onChange={(v) => setVdpFilter('year', v)}
           />
           <FilterDropdown
+            clearable
             options={toOpts(vdpFilterOptions.makes, 'All Makes')}
             value={vdpFilters.make}
             onChange={(v) => setVdpFilter('make', v)}
           />
           <FilterDropdown
+            clearable
             options={toOpts(vdpFilterOptions.models, 'All Models')}
             value={vdpFilters.model}
             onChange={(v) => setVdpFilter('model', v)}
           />
           <FilterDropdown
+            clearable
             options={toOpts(typeValues, `All ${config.typeH || 'Types'}`)}
             value={vdpFilters.type}
             onChange={(v) => setVdpFilter('type', v)}
           />
           {config.showLoc !== false && (
             <FilterDropdown
+              clearable
               options={toOpts(vdpFilterOptions.locations, 'All Locations')}
               value={vdpFilters.location}
               onChange={(v) => setVdpFilter('location', v)}

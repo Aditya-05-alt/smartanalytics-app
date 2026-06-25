@@ -112,6 +112,7 @@ export default function KpiRow() {
     compareSeriesByTab,
     compareDateList,
     compareLoading,
+    vdpFiltersLoading,
     currentPeriodLabel,
     comparePeriodLabel,
   } = useOverview();
@@ -126,6 +127,8 @@ export default function KpiRow() {
     [compareSeriesByTab, tab]
   );
   const viewsLabel = `${TAB_LABELS[tab] || 'Page'} Views`;
+  const kpiLoading = loading || (tab === 'vdp' && vdpFiltersLoading);
+  const kpiCompareLoading = compareLoading || (tab === 'vdp' && vdpFiltersLoading);
 
   return (
     <KpiRowChart
@@ -133,8 +136,8 @@ export default function KpiRow() {
       viewsLabel={viewsLabel}
       views={views}
       compareViews={compareViews}
-      loading={loading}
-      compareLoading={compareLoading}
+      loading={kpiLoading}
+      compareLoading={kpiCompareLoading}
       dateList={dateList}
       compareDateList={compareDateList}
       series={series}
