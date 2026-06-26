@@ -105,6 +105,8 @@ export default function KpiRow() {
     totals,
     compareTotals,
     lyTotals,
+    vdpChannelComparison,
+    vdpChannelLoading,
     loading,
     seriesByTab,
     dateList,
@@ -117,17 +119,29 @@ export default function KpiRow() {
     comparePeriodLabel,
   } = useOverview();
 
-  const views = totals?.[tab] || 0;
+  const vdpChannelTotals = vdpChannelComparison?.totals;
+  const views =
+    tab === 'vdp' && vdpChannelTotals
+      ? vdpChannelTotals.cur
+      : totals?.[tab] || 0;
   const compareViews = compareTotals?.[tab] || 0;
-  const mom = pctChange(views, compareViews);
-  const yoy = pctChange(views, lyTotals?.[tab] || 0);
+  const mom =
+    tab === 'vdp' && vdpChannelTotals
+      ? vdpChannelTotals.delta
+      : pctChange(views, compareViews);
+  const yoy =
+    tab === 'vdp' && vdpChannelTotals
+      ? vdpChannelTotals.curYoyDelta
+      : pctChange(views, lyTotals?.[tab] || 0);
   const series = useMemo(() => seriesByTab?.[tab] || [], [seriesByTab, tab]);
   const compareSeries = useMemo(
     () => compareSeriesByTab?.[tab] || [],
     [compareSeriesByTab, tab]
   );
   const viewsLabel = `${TAB_LABELS[tab] || 'Page'} Views`;
-  const kpiLoading = loading || (tab === 'vdp' && vdpFiltersLoading);
+  const kpiLoading =
+    loading
+    || (tab === 'vdp' && (vdpFiltersLoading || (vdpChannelLoading && !vdpChannelTotals)));
   const kpiCompareLoading = compareLoading || (tab === 'vdp' && vdpFiltersLoading);
 
   return (

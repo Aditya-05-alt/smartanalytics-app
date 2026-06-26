@@ -13,20 +13,11 @@ import {
   filterByExpandedGroups,
 } from '@/lib/ga4/channelGroups';
 import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
-import { vdpFilterCacheSuffix, vdpFiltersActive } from '@/lib/vdp/vdpFilterParams';
 import {
   mergeChannelComparison,
   sameMonthLastYearLabel,
   sameMonthLastYearRange,
 } from '@/lib/overview/comparePeriod';
-
-const TAB_TO_PAGE_TYPE = {
-  all: 'ALL',
-  vdp: 'VDP',
-  srp: 'SRP',
-  home: 'Home',
-  other: 'Other',
-};
 
 const TAB_TITLES = {
   all: 'All Pages',
@@ -57,19 +48,23 @@ export default function CmpTable() {
     vdpFilters,
     beginBreakdownLoad,
     endBreakdownLoad,
+    vdpChannelCurRows,
+    vdpChannelCmpRows,
+    vdpChannelLyRows,
+    vdpChannelLoading,
+    vdpChannelError,
+    vdpChannelComparison,
   } = useOverview();
 
-  const [curRows, setCurRows] = useState([]);
-  const [cmpRows, setCmpRows] = useState([]);
-  const [lyCurRows, setLyCurRows] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [allCurRows, setAllCurRows] = useState([]);
+  const [allCmpRows, setAllCmpRows] = useState([]);
+  const [allLyCurRows, setAllLyCurRows] = useState(null);
+  const [allLoading, setAllLoading] = useState(false);
+  const [allError, setAllError] = useState(null);
   const [copied, setCopied] = useState(false);
   const { expanded, isExpanded, toggle } = useChannelGroupExpansion(false);
 
   const yoyEnabled = VISIBLE_TABS.has(tab);
-  const pageTypeFilter = TAB_TO_PAGE_TYPE[tab] || 'ALL';
-  const invFiltersActive = vdpFiltersActive(vdpFilters, tab);
   const panelTitle = `${TAB_TITLES[tab] || 'Page'} Views by Channel — Period Comparison`;
   const lyPeriodLabel = useMemo(
     () => sameMonthLastYearLabel(from, to),
@@ -83,32 +78,32 @@ export default function CmpTable() {
 
   useEffect(() => {
     if (
-      !VISIBLE_TABS.has(tab)
+      tab !== 'all'
       || !clientKey
       || !from
       || !to
       || !compareFrom
       || !compareTo
     ) {
-      setCurRows([]);
-      setCmpRows([]);
-      setLyCurRows(null);
-      setLoading(false);
+      setAllCurRows([]);
+      setAllCmpRows([]);
+      setAllLyCurRows(null);
+      setAllLoading(false);
       return undefined;
     }
 
     let cancelled = false;
     let loadTracked = false;
-    setLoading(true);
-    setError(null);
+    setAllLoading(true);
+    setAllError(null);
     beginBreakdownLoad();
     loadTracked = true;
 
     const fetchOpts = {
       clientId: clientKey,
-      pageTypeFilter,
+      pageTypeFilter: 'ALL',
       vdpFilters,
-      tab,
+      tab: 'all',
       onCancelCheck: () => cancelled,
       adaptiveChunks: true,
     };
@@ -118,35 +113,34 @@ export default function CmpTable() {
         ...fetchOpts,
         from: range.from,
         to: range.to,
-        preferServer: invFiltersActive,
       });
 
     (async () => {
       try {
         const current = await loadPeriod({ from, to });
         if (cancelled) return;
-        setCurRows(current || []);
+        setAllCurRows(current || []);
 
         const compare = await loadPeriod({ from: compareFrom, to: compareTo });
         if (cancelled) return;
-        setCmpRows(compare || []);
+        setAllCmpRows(compare || []);
 
         if (yoyEnabled && lyFrom && lyTo) {
           const lyCurrent = await loadPeriod({ from: lyFrom, to: lyTo });
           if (cancelled) return;
-          setLyCurRows(lyCurrent || []);
+          setAllLyCurRows(lyCurrent || []);
         } else {
-          setLyCurRows(null);
+          setAllLyCurRows(null);
         }
       } catch (fetchError) {
         if (cancelled) return;
-        setError(fetchError?.message || 'Failed to load comparison data.');
-        setCurRows([]);
-        setCmpRows([]);
-        setLyCurRows(null);
+        setAllError(fetchError?.message || 'Failed to load comparison data.');
+        setAllCurRows([]);
+        setAllCmpRows([]);
+        setAllLyCurRows(null);
       } finally {
         if (loadTracked) endBreakdownLoad();
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setAllLoading(false);
       }
     })();
 
@@ -163,17 +157,23 @@ export default function CmpTable() {
     compareTo,
     lyFrom,
     lyTo,
-    pageTypeFilter,
     vdpFilters,
-    invFiltersActive,
     beginBreakdownLoad,
     endBreakdownLoad,
   ]);
 
-  const { rows, totals } = useMemo(
-    () => mergeChannelComparison(curRows, cmpRows, lyCurRows),
-    [curRows, cmpRows, lyCurRows]
-  );
+  const curRows = tab === 'vdp' ? vdpChannelCurRows : allCurRows;
+  const cmpRows = tab === 'vdp' ? vdpChannelCmpRows : allCmpRows;
+  const lyCurRows = tab === 'vdp' ? vdpChannelLyRows : allLyCurRows;
+  const loading = tab === 'vdp' ? vdpChannelLoading : allLoading;
+  const error = tab === 'vdp' ? vdpChannelError : allError;
+
+  const { rows, totals } = useMemo(() => {
+    if (tab === 'vdp' && vdpChannelComparison) {
+      return vdpChannelComparison;
+    }
+    return mergeChannelComparison(curRows, cmpRows, lyCurRows);
+  }, [tab, vdpChannelComparison, curRows, cmpRows, lyCurRows]);
 
   const rowsWithColors = useMemo(() => {
     const colored = rows.map((r, i) => ({ ...r, color: colorForChannel(r.ch, i) }));

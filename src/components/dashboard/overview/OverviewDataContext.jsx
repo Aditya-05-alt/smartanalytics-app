@@ -10,11 +10,13 @@ import {
   useState,
 } from 'react';
 import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
+import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchVdpDailyFiltered, fetchVdpFilterOptions } from '@/lib/api/dashboardApi';
 import {
   DEFAULT_VDP_FILTERS,
   normalizeVdpFilters,
   vdpFilterCacheSuffix,
+  vdpFiltersActive,
 } from '@/lib/vdp/vdpFilterParams';
 import {
   getVdpDailyCache,
@@ -29,6 +31,7 @@ import {
   previousMonthAlignedRange,
   periodMonthLabel,
   sameMonthLastYearRange,
+  mergeChannelComparison,
 } from '@/lib/overview/comparePeriod';
 import { useClient } from '../ClientContext';
 import {
@@ -210,6 +213,11 @@ export function OverviewProvider({ children }) {
   const [compareVdpFilteredDaily, setCompareVdpFilteredDaily] = useState(null);
   const [lyVdpFilteredDaily, setLyVdpFilteredDaily] = useState(null);
   const [vdpFiltersLoading, setVdpFiltersLoading] = useState(false);
+  const [vdpChannelCurRows, setVdpChannelCurRows] = useState([]);
+  const [vdpChannelCmpRows, setVdpChannelCmpRows] = useState([]);
+  const [vdpChannelLyRows, setVdpChannelLyRows] = useState(null);
+  const [vdpChannelLoading, setVdpChannelLoading] = useState(false);
+  const [vdpChannelError, setVdpChannelError] = useState(null);
   const [rows, setRows] = useState([]);
   const [userTotalsRows, setUserTotalsRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -614,6 +622,88 @@ export function OverviewProvider({ children }) {
     };
   }, [clientKey, lyFrom, lyTo, vdpFilters]);
 
+  // ── VDP channel breakdown (same source as Period Comparison table — KPI MoM/YoY) ──
+  useEffect(() => {
+    if (!clientKey || !from || !to || !compareFrom || !compareTo) {
+      setVdpChannelCurRows([]);
+      setVdpChannelCmpRows([]);
+      setVdpChannelLyRows(null);
+      setVdpChannelLoading(false);
+      setVdpChannelError(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let loadTracked = false;
+    setVdpChannelLoading(true);
+    setVdpChannelError(null);
+    beginBreakdownLoad();
+    loadTracked = true;
+
+    const invFiltersActive = vdpFiltersActive(vdpFilters, 'vdp');
+    const fetchOpts = {
+      clientId: clientKey,
+      pageTypeFilter: 'VDP',
+      vdpFilters,
+      tab: 'vdp',
+      onCancelCheck: () => cancelled,
+      adaptiveChunks: true,
+      preferServer: invFiltersActive,
+    };
+
+    const loadPeriod = (rangeFrom, rangeTo) =>
+      fetchChannelBreakdownBundle({
+        ...fetchOpts,
+        from: rangeFrom,
+        to: rangeTo,
+      });
+
+    (async () => {
+      try {
+        const current = await loadPeriod(from, to);
+        if (cancelled) return;
+        setVdpChannelCurRows(current || []);
+
+        const compare = await loadPeriod(compareFrom, compareTo);
+        if (cancelled) return;
+        setVdpChannelCmpRows(compare || []);
+
+        if (lyFrom && lyTo) {
+          const ly = await loadPeriod(lyFrom, lyTo);
+          if (cancelled) return;
+          setVdpChannelLyRows(ly || []);
+        } else {
+          setVdpChannelLyRows(null);
+        }
+      } catch (fetchError) {
+        if (!cancelled) {
+          setVdpChannelError(fetchError?.message || 'Failed to load VDP channel comparison.');
+          setVdpChannelCurRows([]);
+          setVdpChannelCmpRows([]);
+          setVdpChannelLyRows(null);
+        }
+      } finally {
+        if (loadTracked) endBreakdownLoad();
+        if (!cancelled) setVdpChannelLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clientKey,
+    from,
+    to,
+    compareFrom,
+    compareTo,
+    lyFrom,
+    lyTo,
+    vdpFilters,
+    beginBreakdownLoad,
+    endBreakdownLoad,
+  ]);
+
   // ── derived: totals + daily-by-date map per tab + raw page-type histogram ──
   const derived = useMemo(() => {
     const totals = { all: 0, vdp: 0, srp: 0, home: 0, other: 0 };
@@ -758,6 +848,11 @@ export function OverviewProvider({ children }) {
     [compareFullDateList, compareSeriesByTabRaw]
   );
 
+  const vdpChannelComparison = useMemo(
+    () => mergeChannelComparison(vdpChannelCurRows, vdpChannelCmpRows, vdpChannelLyRows),
+    [vdpChannelCurRows, vdpChannelCmpRows, vdpChannelLyRows]
+  );
+
   const rowCount = rows.length;
 
   const value = useMemo(
@@ -802,6 +897,12 @@ export function OverviewProvider({ children }) {
       compareDateList,
       compareSeriesByTab: compareSeriesTrimmed,
       compareLoading,
+      vdpChannelComparison,
+      vdpChannelCurRows,
+      vdpChannelCmpRows,
+      vdpChannelLyRows,
+      vdpChannelLoading,
+      vdpChannelError,
     }),
     [
       tab,
@@ -841,6 +942,12 @@ export function OverviewProvider({ children }) {
       compareDateList,
       compareSeriesTrimmed,
       compareLoading,
+      vdpChannelComparison,
+      vdpChannelCurRows,
+      vdpChannelCmpRows,
+      vdpChannelLyRows,
+      vdpChannelLoading,
+      vdpChannelError,
     ]
   );
 
