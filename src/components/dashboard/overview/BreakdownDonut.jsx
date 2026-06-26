@@ -6,6 +6,7 @@ import Delta from '../Delta';
 import ChannelGroupToggle from './ChannelGroupToggle';
 import { filterByExpandedGroups } from '@/lib/ga4/channelGroups';
 import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
+import { formatViewsK } from '@/lib/format/viewsK';
 
 /**
  * Reusable donut + breakdown list panel.
@@ -18,16 +19,11 @@ import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
  *   badge         — { label, bg, color } chip on the panel header
  *   data          — [{ name, color, value, pct }, ...]
  *   centerValue   — (optional) big number in the donut hole. If omitted,
- *                   computed from data.value sum (compact-formatted).
+ *                   computed from data.value sum (K-formatted, rounded up).
  *   centerLabel   — small caps label below it (e.g. "VDP VIEWS")
  *   totalLabel    — caption for the total row at the bottom of the list
  *   size, stroke  — donut sizing (defaults sized for a 50% column)
  */
-
-const COMPACT = new Intl.NumberFormat('en', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
 
 function DonutSkeleton({ size = 200, rowCount = 5 }) {
   return (
@@ -97,14 +93,12 @@ export default function BreakdownDonut({
   const center =
     centerValue !== undefined
       ? centerValue
-      : grandTotal > 0
-      ? COMPACT.format(grandTotal)
-      : '0';
+      : formatViewsK(grandTotal);
 
   let offset = 0;
 
   return (
-    <Panel>
+    <Panel className="breakdown-donut-panel">
       <PanelHeader title={title} badge={badge}>
         {headerExtra}
       </PanelHeader>
@@ -217,7 +211,7 @@ export default function BreakdownDonut({
 
           {/* ── Breakdown (rows scroll; total stays fixed when listScrollable) ── */}
           <div
-            className={`donut-lg-list-col${listScrollable ? ' donut-lg-list-col--scroll' : ''}${totalDelta != null ? ' donut-lg-list-col--compare' : ''}`}
+            className={`donut-lg-list-col${listScrollable ? ' donut-lg-list-col--scroll' : ''}${totalDelta != null ? ' donut-lg-list-col--compare' : ''}${showGroupColumn ? ' donut-lg-list-col--with-toggle-col' : ''}`}
           >
             {totalDelta != null && (
               <div className="donut-lg-list-header" aria-hidden>
@@ -237,6 +231,7 @@ export default function BreakdownDonut({
                   key={`${s.groupKey || 'solo'}-${s.name}`}
                   className={[
                     'donut-lg-row',
+                    showGroupColumn ? 'donut-lg-row--with-toggle-col' : '',
                     s.delta != null ? 'donut-lg-row--compare' : '',
                     s.isGroupRollup ? 'donut-lg-row--group-rollup' : '',
                     s.isGroupMember ? 'donut-lg-row--group-member' : '',
@@ -281,11 +276,11 @@ export default function BreakdownDonut({
             </div>
 
             <div
-              className={`donut-lg-total donut-lg-total--fixed${totalDelta != null ? ' donut-lg-total--compare' : ''}`}
+              className={`donut-lg-total donut-lg-total--fixed${totalDelta != null ? ' donut-lg-total--compare' : ''}${showGroupColumn ? ' donut-lg-total--with-toggle-col' : ''}`}
             >
               <span className="donut-lg-total-label">{totalLabel}</span>
               <span className="donut-lg-total-value">
-                {grandTotal.toLocaleString()}
+                {(Number(grandTotal) || 0).toLocaleString()}
               </span>
               {totalDelta != null && (
                 <span className="donut-lg-total-delta">

@@ -101,12 +101,10 @@ function LocationDonutDisplay({
 }) {
   const data = useMemo(() => rpcRowsToDisplay(rows), [rows]);
   const emptyAfterLoad = !loading && !error && rows.length === 0;
-  const badge = { label: 'Local', bg: 'var(--od)', color: 'var(--orange)' };
 
   return (
     <BreakdownDonut
       title={periodLabel}
-      badge={badge}
       data={data}
       centerLabel="LOCAL VISITORS"
       totalLabel="Total"
@@ -117,7 +115,8 @@ function LocationDonutDisplay({
           ? `No location data for ${from} → ${to} (client ${clientId}).`
           : null
       }
-      skeletonRows={6}
+      skeletonRows={8}
+      listScrollable
       pctDecimals={2}
     />
   );
@@ -183,7 +182,6 @@ export default function LocationDonut({
     return (
       <BreakdownDonut
         title="Location Breakdown"
-        badge={{ label: 'Local', bg: 'var(--od)', color: 'var(--orange)' }}
         centerLabel="LOCAL VISITORS"
         disabled
         disabledMessage="VDP data only"

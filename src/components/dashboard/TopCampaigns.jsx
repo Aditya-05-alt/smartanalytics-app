@@ -9,6 +9,7 @@ import {
 } from '@/lib/data/topCampaignsCache';
 import { vdpFilterCacheSuffix } from '@/lib/vdp/vdpFilterParams';
 import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
+import { formatViewsK } from '@/lib/format/viewsK';
 import { useOverview } from './overview/OverviewDataContext';
 import BreakdownDonut from '@/components/dashboard/overview/BreakdownDonut';
 
@@ -213,13 +214,7 @@ function TopCampaignsDisplay({
     [dataWithDelta]
   );
 
-  const centerDisplay =
-    displayedTotal > 0
-      ? new Intl.NumberFormat('en', {
-          notation: 'compact',
-          maximumFractionDigits: 1,
-        }).format(displayedTotal)
-      : '0';
+  const centerDisplay = formatViewsK(displayedTotal);
 
   const showSkeleton = loading && rows.length === 0;
 
@@ -372,13 +367,7 @@ function TopCampaignsSingle({
     [displayData]
   );
 
-  const centerDisplay =
-    displayedTotal > 0
-      ? new Intl.NumberFormat('en', {
-          notation: 'compact',
-          maximumFractionDigits: 1,
-        }).format(displayedTotal)
-      : '0';
+  const centerDisplay = formatViewsK(displayedTotal);
 
   const showSkeleton = loading && rows.length === 0;
 

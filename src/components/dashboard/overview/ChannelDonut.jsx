@@ -17,6 +17,7 @@ import {
   attachCompareValuesForGrouping,
 } from '@/lib/ga4/channelGroups';
 import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
+import { formatViewsK } from '@/lib/format/viewsK';
 import CompareBreakdownSection from '../CompareBreakdownSection';
 import { useOverview } from './OverviewDataContext';
 import BreakdownDonut from './BreakdownDonut';
@@ -204,13 +205,7 @@ function ChannelDonutDisplay({
     [chartData]
   );
 
-  const centerDisplay =
-    chartTotal > 0
-      ? new Intl.NumberFormat('en', {
-          notation: 'compact',
-          maximumFractionDigits: 1,
-        }).format(chartTotal)
-      : '0';
+  const centerDisplay = formatViewsK(chartTotal);
 
   const showSkeleton = loading && rows.length === 0;
 
@@ -418,13 +413,7 @@ function ChannelDonutSingle({
     [chartData]
   );
 
-  const centerDisplay =
-    chartTotal > 0
-      ? new Intl.NumberFormat('en', {
-          notation: 'compact',
-          maximumFractionDigits: 1,
-        }).format(chartTotal)
-      : '0';
+  const centerDisplay = formatViewsK(chartTotal);
 
   const showSkeleton = loading && rows.length === 0;
 
