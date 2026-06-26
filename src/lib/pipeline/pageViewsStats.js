@@ -9,6 +9,8 @@ const DAY_CONCURRENCY = 6;
 const GA4_DATE_WISE_RPC = 'build_date_wise_ga4_data';
 const FINAL_DATE_WISE_RPC = 'build_date_wise_final_data';
 const HOOT_MATCH_RPC = 'build_date_wise_hoot_match';
+/** Admin pipeline — all 4 bottom-table metrics in one DB round trip */
+export const PIPELINE_RANGE_VIEWS_RPC = 'build_pipeline_range_views';
 
 function dayKey(reportDate) {
   return String(reportDate).split('T')[0];
@@ -109,6 +111,75 @@ async function sumHootMatchViaRpc(supabase, clientId, days) {
     }
   }
   return daily;
+}
+
+function mapsFromPipelineRangeRows(data) {
+  const allPageViews = {};
+  const vdpPageViews = {};
+  const finalViews = {};
+  const hootMatch = {};
+
+  for (const row of data || []) {
+    const day = dayKey(row.report_date);
+    const ga4 = Number(row.ga4_page_views) || 0;
+    const filter = Number(row.ga4_filter_views) || 0;
+    const final = Number(row.final_vdp_views) || 0;
+    const matched = Number(row.hoot_matched) || 0;
+    const nonMatched = Number(row.hoot_non_matched) || 0;
+
+    if (ga4 > 0) allPageViews[day] = ga4;
+    if (filter > 0) vdpPageViews[day] = filter;
+    if (final > 0) finalViews[day] = final;
+    if (matched > 0 || nonMatched > 0) {
+      hootMatch[day] = { matched, nonMatched };
+    }
+  }
+
+  return { allPageViews, vdpPageViews, finalViews, hootMatch };
+}
+
+/**
+ * Single RPC for admin pipeline tables (page, filter, final, hoot) per day.
+ * Scans smart_ga4_page_data once and smart_final_data once.
+ */
+async function sumPipelineRangeViewsViaRpc(supabase, clientId, days) {
+  if (!clientId || !days?.length) return null;
+
+  const from = days[0];
+  const to = days[days.length - 1];
+  const { data, error } = await supabase.rpc(PIPELINE_RANGE_VIEWS_RPC, {
+    p_date_from: from,
+    p_date_to: to,
+    p_client_id: clientId,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (/function.*does not exist|schema cache|Could not find/i.test(msg)) {
+      return null;
+    }
+    throw new Error(error.message);
+  }
+
+  return mapsFromPipelineRangeRows(data);
+}
+
+/**
+ * All four admin pipeline table metrics for the given days.
+ * Prefers build_pipeline_range_views (1 RPC); falls back to legacy 4-call path.
+ */
+export async function sumPipelineRangeViewsByDate(supabase, clientId, days) {
+  const viaRpc = await sumPipelineRangeViewsViaRpc(supabase, clientId, days);
+  if (viaRpc != null) return viaRpc;
+
+  const [allPageViews, vdpPageViews, finalViews, hootMatch] = await Promise.all([
+    sumPageTableViewsByDate(supabase, clientId, days, { vdpOnly: false }),
+    sumPageTableViewsByDate(supabase, clientId, days, { vdpOnly: true }),
+    sumFinalTableViewsByDate(supabase, clientId, days),
+    sumHootUrlMatchByDate(supabase, clientId, days),
+  ]);
+
+  return { allPageViews, vdpPageViews, finalViews, hootMatch };
 }
 
 async function mapPool(items, limit, fn) {

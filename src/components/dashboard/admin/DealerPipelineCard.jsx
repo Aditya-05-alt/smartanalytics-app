@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  fetchPipelineStats,
+  fetchPipelineViewsChunk,
+  fetchPipelineWorkflow,
+  mergePipelineRangeViews,
   runPipelineFiltration,
   runPipelineFinalSync,
   runPipelinePageSync,
 } from '@/lib/api/adminPipeline';
-import { chunkDates, coerceDateRange, daysAgoISO, todayISO } from '@/lib/pipeline/dates';
+import { chunkDates, coerceDateRange } from '@/lib/pipeline/dates';
 import PipelineSyncLog from '@/components/dashboard/admin/PipelineSyncLog';
 import {
   formatStep1BatchProgressLog,
@@ -22,15 +24,32 @@ import {
 
 const PAUSE_BETWEEN_BATCHES_MS = 2000;
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Temporarily hide day-by-day bottom tables — set true to re-enable. */
+const SHOW_PIPELINE_TABLES = false;
+
+function PipelineSpinner({ size = 18, className = '' }) {
+  return (
+    <svg
+      className={`pipeline-data-spinner ${className}`.trim()}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
+      <path
+        d="M22 12a10 10 0 0 1-10 10"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
-function initialPipelineRange(defaultFrom) {
-  const to = todayISO();
-  const candidate =
-    defaultFrom && defaultFrom <= to ? defaultFrom : daysAgoISO(7, to);
-  return coerceDateRange(candidate, to);
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const TABLES = [
@@ -117,25 +136,20 @@ function StepResultPanel({ title, result }) {
   );
 }
 
-export default function DealerPipelineCard({ dealer, defaultFrom }) {
-  const [from, setFrom] = useState(() => {
-    const { from: f } = initialPipelineRange(defaultFrom);
-    return f;
-  });
-  const [to, setTo] = useState(() => {
-    const { to: t } = initialPipelineRange(defaultFrom);
-    return t;
-  });
+export default function DealerPipelineCard({ dealer, from, to }) {
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingWorkflow, setLoadingWorkflow] = useState(false);
+  const [loadingViews, setLoadingViews] = useState(false);
+  const [loadedViewDates, setLoadedViewDates] = useState(() => new Set());
+  const [viewsChunkProgress, setViewsChunkProgress] = useState(null);
   const [busyStep, setBusyStep] = useState(null);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [step1Result, setStep1Result] = useState(null);
   const [step2Result, setStep2Result] = useState(null);
   const [step3Result, setStep3Result] = useState(null);
-  const [filtrationDone, setFiltrationDone] = useState(false);
   const [stepLogs, setStepLogs] = useState({ 1: [], 2: [], 3: [] });
+  const loadAbortRef = useRef(null);
 
   const clientId = dealer.ga4CustomerId;
 
@@ -150,33 +164,135 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
     }));
   }, []);
   const wf = stats?.workflow || {};
-  const canRunStep3 =
-    wf.canRunStep3 || filtrationDone || (step2Result?.totalRowsUpdated ?? 0) > 0;
 
-  const loadStats = useCallback(async () => {
+  const loadPipelineData = useCallback(async () => {
     if (!clientId || !from || !to) return;
-    setLoading(true);
+
+    loadAbortRef.current?.abort();
+    const ac = new AbortController();
+    loadAbortRef.current = ac;
+
+    setLoadingWorkflow(true);
     setError(null);
+    if (SHOW_PIPELINE_TABLES) {
+      setLoadingViews(true);
+      setLoadedViewDates(new Set());
+      setViewsChunkProgress(null);
+      setStats((prev) =>
+        prev && prev.from === from && prev.to === to && prev.clientId === clientId
+          ? { ...prev, rangeViews: {} }
+          : null
+      );
+    }
+
+    const { dates } = coerceDateRange(from, to);
+
+    const loaded = new Set();
+    const dayErrors = [];
+
+    const loadViewDays = async () => {
+      if (!SHOW_PIPELINE_TABLES || !dates.length) {
+        setLoadingViews(false);
+        return;
+      }
+
+      setViewsChunkProgress({ current: 0, total: dates.length, day: dates[0] });
+
+      for (let i = 0; i < dates.length; i += 1) {
+        if (ac.signal.aborted) return;
+
+        const day = dates[i];
+        setViewsChunkProgress({ current: i, total: dates.length, day });
+
+        try {
+          const chunk = await fetchPipelineViewsChunk({
+            clientId,
+            from: day,
+            to: day,
+            signal: ac.signal,
+          });
+          if (ac.signal.aborted) return;
+
+          loaded.add(day);
+          setLoadedViewDates(new Set(loaded));
+          setStats((prev) => ({
+            ...(prev || { clientId, from, to }),
+            rangeViews: mergePipelineRangeViews(prev?.rangeViews, chunk),
+          }));
+
+          setViewsChunkProgress({ current: i + 1, total: dates.length, day });
+        } catch (dayErr) {
+          if (dayErr?.name === 'AbortError') return;
+          dayErrors.push(`${day}: ${dayErr?.message || 'failed'}`);
+          setViewsChunkProgress({ current: i + 1, total: dates.length, day });
+        }
+      }
+
+      if (dayErrors.length && !ac.signal.aborted) {
+        setError(
+          dayErrors.length === dates.length
+            ? dayErrors[0]
+            : `Some days failed (${dayErrors.length}/${dates.length}). ${dayErrors[0]}`
+        );
+      }
+    };
+
     try {
-      const data = await fetchPipelineStats({ clientId, from, to });
-      setStats(data);
+      if (SHOW_PIPELINE_TABLES) {
+        const [workflowResult] = await Promise.allSettled([
+          fetchPipelineWorkflow({ clientId, from, to, signal: ac.signal }),
+          loadViewDays(),
+        ]);
+
+        if (ac.signal.aborted) return;
+
+        if (workflowResult.status === 'fulfilled') {
+          setStats((prev) => ({
+            ...workflowResult.value,
+            rangeViews: prev?.rangeViews ?? {},
+          }));
+          setLoadingWorkflow(false);
+        } else if (workflowResult.reason?.name !== 'AbortError') {
+          throw workflowResult.reason;
+        }
+      } else {
+        const workflow = await fetchPipelineWorkflow({
+          clientId,
+          from,
+          to,
+          signal: ac.signal,
+        });
+        if (ac.signal.aborted) return;
+        setStats((prev) => ({
+          ...workflow,
+          rangeViews: prev?.rangeViews ?? {},
+        }));
+        setLoadingWorkflow(false);
+      }
     } catch (e) {
-      setError(e?.message || 'Failed to load stats.');
-      setStats(null);
+      if (e?.name === 'AbortError') return;
+      setError(e?.message || 'Failed to load pipeline stats.');
+      setStats((prev) => (prev?.rangeViews && Object.keys(prev.rangeViews).length ? prev : null));
     } finally {
-      setLoading(false);
+      if (!ac.signal.aborted) {
+        setLoadingWorkflow(false);
+        setLoadingViews(false);
+        setViewsChunkProgress(null);
+      }
     }
   }, [clientId, from, to]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadStats();
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [loadStats]);
+      loadPipelineData();
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      loadAbortRef.current?.abort();
+    };
+  }, [loadPipelineData]);
 
   useEffect(() => {
-    setFiltrationDone(false);
     setStep1Result(null);
     setStep2Result(null);
     setStep3Result(null);
@@ -256,7 +372,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
           ? `Applied ${from} → ${to} — ${merged.rowsInserted.toLocaleString()} rows (${batches.length} batches).`
           : `Partial — ${ok}/${dates.length} days OK · ${merged.rowsInserted.toLocaleString()} rows · see log.`
       );
-      await loadStats();
+      await loadPipelineData();
     } catch (e) {
       const partial = mergeStep1PageSyncResults(batchResults, from, to);
       if (partial.dayResults?.length) {
@@ -282,12 +398,11 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
     try {
       const res = await runPipelineFiltration({ clientId, from, to });
       setStep2Result(res);
-      if ((res.totalRowsUpdated ?? 0) > 0) setFiltrationDone(true);
       setStepLog(2, formatStep2Log(clientId, res, from, to));
       setMessage(
         `Step 2 complete — ${res.totalRowsUpdated.toLocaleString()} rows updated (vdp_conditions on smart_ga4_page_data).`
       );
-      await loadStats();
+      await loadPipelineData();
     } catch (e) {
       appendStepLog(2, logLine(`Error: ${e?.message || 'Filtration failed.'}`));
       setError(e?.message || 'Filtration failed.');
@@ -310,7 +425,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
       setStep3Result(res);
       setStepLog(3, formatStep3DayByDayLog(from, to, res));
       setMessage(`Step 3 complete via ${res.rpcUsed}.`);
-      await loadStats();
+      await loadPipelineData();
     } catch (e) {
       appendStepLog(3, logLine(`Error: ${e?.message || 'Final sync failed.'}`));
       setError(e?.message || 'Final sync failed.');
@@ -334,14 +449,6 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
             {dealer.websitePlatform ? ` · ${dealer.websitePlatform}` : ''}
           </p>
         </div>
-        <button
-          type="button"
-          className="ga4-count-page-btn"
-          onClick={loadStats}
-          disabled={loading || !clientId}
-        >
-          Refresh
-        </button>
       </header>
 
       {!clientId && (
@@ -351,29 +458,6 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
         </p>
       )}
 
-      <div className="admin-date-range pipeline-card-dates">
-        <label className="admin-date-field">
-          <span className="admin-date-label">From</span>
-          <input
-            type="date"
-            className="admin-date-input"
-            value={from}
-            max={to}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-        </label>
-        <label className="admin-date-field">
-          <span className="admin-date-label">To</span>
-          <input
-            type="date"
-            className="admin-date-input"
-            value={to}
-            min={from}
-            onChange={(e) => setTo(e.target.value)}
-          />
-        </label>
-      </div>
-
       <div className="pipeline-steps">
         <div className="pipeline-step">
           <div className="pipeline-step-head">
@@ -382,9 +466,13 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
             <span
               className={`pipeline-badge ${
                 wf.hasPageData ? 'pipeline-badge--ok' : 'pipeline-badge--pending'
-              }`}
+              }${loadingWorkflow ? ' pipeline-badge--loading' : ''}`}
             >
-              {wf.hasPageData ? 'Has data' : 'Empty'}
+              {loadingWorkflow && !stats
+                ? 'Checking…'
+                : wf.hasPageData
+                  ? 'Has data'
+                  : 'Empty'}
             </span>
           </div>
           <p className="pipeline-step-desc">
@@ -412,18 +500,20 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
           <StepResultPanel title="Step 1 — sync summary" result={step1Result} />
         </div>
 
-        <div
-          className={`pipeline-step ${!wf.canRunStep2 ? 'pipeline-step--locked' : ''}`}
-        >
+        <div className="pipeline-step">
           <div className="pipeline-step-head">
             <span className="pipeline-step-num">2</span>
             <span>GA4 filtration</span>
             <span
               className={`pipeline-badge ${
                 wf.hasFilterData ? 'pipeline-badge--ok' : 'pipeline-badge--pending'
-              }`}
+              }${loadingWorkflow ? ' pipeline-badge--loading' : ''}`}
             >
-              {!wf.canRunStep2 ? 'Locked' : wf.hasFilterData ? 'Has data' : 'Ready'}
+              {loadingWorkflow && !stats
+                ? 'Checking…'
+                : wf.hasFilterData
+                  ? 'Has data'
+                  : 'Ready'}
             </span>
           </div>
           <p className="pipeline-step-desc">
@@ -431,10 +521,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
             for the selected From → To range
             (VDP URL patterns).
           </p>
-          {!wf.canRunStep2 && (
-            <p className="pipeline-step-meta">Complete Step 1 first (page data required).</p>
-          )}
-          {wf.canRunStep2 && stats?.coverage?.ga4Filter && (
+          {stats?.coverage?.ga4Filter && (
             <p className="pipeline-step-meta">
               {(stats.coverage.ga4Filter.rowCountInRange ?? stats.coverage.ga4Filter.rowCount ?? 0).toLocaleString()}{' '}
               classified in range
@@ -451,7 +538,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
           <button
             type="button"
             className="ga4-count-export-btn"
-            disabled={!wf.canRunStep2 || busyStep != null}
+            disabled={!clientId || busyStep != null}
             onClick={runStep2}
           >
             {busyStep === 2 ? 'Running filtration…' : 'Run GA4 filtration'}
@@ -460,29 +547,26 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
           <StepResultPanel title="Step 2 — filtration result" result={step2Result} />
         </div>
 
-        <div
-          className={`pipeline-step ${!canRunStep3 ? 'pipeline-step--locked' : ''}`}
-        >
+        <div className="pipeline-step">
           <div className="pipeline-step-head">
             <span className="pipeline-step-num">3</span>
             <span>Final VDP table</span>
             <span
               className={`pipeline-badge ${
                 wf.hasFinalData ? 'pipeline-badge--ok' : 'pipeline-badge--pending'
-              }`}
+              }${loadingWorkflow ? ' pipeline-badge--loading' : ''}`}
             >
-              {!canRunStep3 ? 'Locked' : wf.hasFinalData ? 'Has data' : 'Ready'}
+              {loadingWorkflow && !stats
+                ? 'Checking…'
+                : wf.hasFinalData
+                  ? 'Has data'
+                  : 'Ready'}
             </span>
           </div>
           <p className="pipeline-step-desc">
             Syncs VDP rows into smart_final_data (inventory match).
           </p>
-          {!canRunStep3 && (
-            <p className="pipeline-step-meta">
-              Complete Step 2 first (filtration data required).
-            </p>
-          )}
-          {canRunStep3 && stats?.coverage?.finalVdp && (
+          {stats?.coverage?.finalVdp && (
             <p className="pipeline-step-meta">
               {(stats.coverage.finalVdp.rowCount || 0).toLocaleString()} rows in
               smart_final_data
@@ -491,7 +575,7 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
           <button
             type="button"
             className="ga4-count-export-btn"
-            disabled={!canRunStep3 || busyStep != null}
+            disabled={!clientId || busyStep != null}
             onClick={runStep3}
           >
             {busyStep === 3 ? 'Syncing final…' : 'Add to Final VDP'}
@@ -501,23 +585,46 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
         </div>
       </div>
 
-      {loading && (
-        <div className="ga4-count-skeleton" aria-hidden="true">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="ga4-count-skeleton-row" />
-          ))}
-        </div>
-      )}
+      <div className="pipeline-refresh-row">
+        <button
+          type="button"
+          className="ga4-count-page-btn"
+          onClick={loadPipelineData}
+          disabled={loadingWorkflow || (SHOW_PIPELINE_TABLES && loadingViews) || !clientId}
+        >
+          {loadingWorkflow ? (
+            <>
+              <PipelineSpinner size={14} />
+              Refreshing…
+            </>
+          ) : (
+            'Refresh'
+          )}
+        </button>
+        <p className="pipeline-step-meta pipeline-refresh-hint">
+          Updates step badges and coverage after sync — date range above.
+        </p>
+      </div>
 
       {error && <p className="pipeline-card-error">{error}</p>}
       {message && !error && <p className="pipeline-card-msg">{message}</p>}
 
-      {clientId && rangeDates.length > 0 && (
+      {/* Bottom day-by-day tables — temporarily disabled (SHOW_PIPELINE_TABLES) */}
+      {SHOW_PIPELINE_TABLES && clientId && rangeDates.length > 0 && (
         <div className="pipeline-tables">
           <h3 className="pipeline-tables-title">
-            {selectedRange.from} → {selectedRange.to} — {rangeDates.length} day
-            {rangeDates.length === 1 ? '' : 's'} (same as date range above)
-            {loading && <span className="pipeline-tables-loading"> (loading…)</span>}
+            <span>
+              {selectedRange.from} → {selectedRange.to} — {rangeDates.length} day
+              {rangeDates.length === 1 ? '' : 's'} (same as date range above)
+            </span>
+            {loadingViews && (
+              <span className="pipeline-tables-loading" role="status" aria-live="polite">
+                <PipelineSpinner size={16} />
+                {viewsChunkProgress
+                  ? `Loading day ${Math.min(viewsChunkProgress.current + 1, viewsChunkProgress.total)}/${viewsChunkProgress.total}${viewsChunkProgress.day ? ` · ${viewsChunkProgress.day}` : ''}`
+                  : 'Loading data…'}
+              </span>
+            )}
           </h3>
           {TABLES.map((table) => (
             <div key={table.key} className="pipeline-mini-wrap">
@@ -539,9 +646,13 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
                       </th>
                       {rangeDates.map((d) => (
                         <td key={d} className="ga4-count-cell">
-                          {loading && !stats
-                            ? '…'
-                            : formatCell(views[table.key]?.[d])}
+                          {loadingViews && !loadedViewDates.has(d) ? (
+                            <span className="pipeline-cell-loading" aria-hidden="true">
+                              <PipelineSpinner size={12} />
+                            </span>
+                          ) : (
+                            formatCell(views[table.key]?.[d])
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -578,7 +689,13 @@ export default function DealerPipelineCard({ dealer, defaultFrom }) {
                     </th>
                     {rangeDates.map((d) => (
                       <td key={d} className="ga4-count-cell ga4-count-cell--hoot">
-                        {loading && !stats ? '…' : formatHootCell(views.hootMatch?.[d])}
+                        {loadingViews && !loadedViewDates.has(d) ? (
+                          <span className="pipeline-cell-loading" aria-hidden="true">
+                            <PipelineSpinner size={12} />
+                          </span>
+                        ) : (
+                          formatHootCell(views.hootMatch?.[d])
+                        )}
                       </td>
                     ))}
                   </tr>

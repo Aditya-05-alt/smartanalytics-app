@@ -71,6 +71,9 @@ export function coerceDateRange(fromRaw, toRaw) {
   return { from: start, to: end, dates };
 }
 
+/** Days per pipeline stats views request (avoids Supabase RPC timeout). */
+export const STATS_VIEWS_CHUNK_SIZE = 5;
+
 /** Split inclusive date list into chunks (e.g. 5 days per Step 1 API call). */
 export function chunkDates(dates, chunkSize = 5) {
   if (!dates?.length || chunkSize < 1) return [];

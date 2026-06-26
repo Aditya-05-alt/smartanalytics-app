@@ -134,6 +134,39 @@ function triggerLabelFor(value, presets) {
 const POP_W = 680;
 const POP_H = 420;
 
+/** Resolve preset id or range object to { start, end, preset }. */
+export function resolveRangePickerValue(value) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const presets = presetsFor(today);
+
+  if (typeof value === 'string') {
+    const p = presets.find((x) => x.id === value);
+    if (!p?.from || !p?.to) return null;
+    return { start: p.from, end: p.to, preset: value };
+  }
+
+  if (typeof value === 'object' && value?.start && value?.end) {
+    return {
+      start: value.start,
+      end: value.end,
+      preset: value.preset || findMatchingPreset(presets, value.start, value.end) || 'custom',
+    };
+  }
+
+  return null;
+}
+
+/** Build picker value from ISO from/to (shows matching preset label when possible). */
+export function rangePickerValueFromISO(from, to) {
+  if (!from || !to) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const presets = presetsFor(today);
+  const preset = findMatchingPreset(presets, from, to) || 'custom';
+  return { start: from, end: to, preset };
+}
+
 export default function CalendarRangePicker({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const [popPos, setPopPos] = useState({ top: 0, left: 0 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { Panel, PanelHeader } from '@/components/dashboard/Panel';
 import AdminDateRange from '@/components/dashboard/admin/AdminDateRange';
 import { getDefaultGa4DateRange, GA4_DEFAULT_DAYS } from '@/lib/ga4/dateRange';
@@ -25,12 +25,6 @@ export default function AdminProvidersPage() {
   const [dateFrom, setDateFrom] = useState(defaultRange.from);
   const [dateTo, setDateTo] = useState(defaultRange.to);
 
-  const applyLastDays = useCallback((days) => {
-    const range = getDefaultGa4DateRange(days);
-    setDateFrom(range.from);
-    setDateTo(range.to);
-  }, []);
-
   return (
     <div className="admin-page-simple">
       <AdminDateRange
@@ -38,7 +32,6 @@ export default function AdminProvidersPage() {
         to={dateTo}
         onFromChange={setDateFrom}
         onToChange={setDateTo}
-        onApplyLastDays={applyLastDays}
       />
       <p className="ga4-count-meta" style={{ marginTop: '0.65rem' }}>
         Provider list for {dateFrom} → {dateTo} (date range ready for Supabase)

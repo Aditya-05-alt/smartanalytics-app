@@ -785,6 +785,18 @@ body {
 .admin-date-input:focus {
   border-color: var(--bd2);
 }
+.admin-date-range--picker {
+  padding: 0;
+  background: transparent;
+  border: none;
+  margin-bottom: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.admin-date-range--picker .cdr-wrap {
+  min-width: 12rem;
+}
 .admin-date-presets {
   display: flex;
   align-items: center;
@@ -1020,6 +1032,21 @@ body {
 .pipeline-page {
   overflow: auto;
 }
+.pipeline-page .ga4-count-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 1rem 1.25rem;
+}
+.pipeline-page .pipeline-filters {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 12px;
+  width: auto;
+  margin: 0;
+}
 .pipeline-dealer-pick {
   justify-content: flex-end;
   margin-left: auto;
@@ -1197,16 +1224,64 @@ body {
   color: #f87171;
 }
 
+.pipeline-refresh-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--bd);
+}
+.pipeline-refresh-row .ga4-count-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pipeline-refresh-hint {
+  margin: 0;
+}
 .pipeline-tables {
   margin-top: 0.5rem;
 }
 .pipeline-tables-title {
   margin: 0 0 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--t3);
+}
+.pipeline-tables-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--acc);
+}
+.pipeline-data-spinner {
+  flex-shrink: 0;
+  animation: pipeline-spinner-rotate 0.75s linear infinite;
+  color: var(--acc);
+}
+.pipeline-cell-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  color: var(--t3);
+}
+@keyframes pipeline-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .pipeline-mini-wrap {
   margin-bottom: 0.85rem;

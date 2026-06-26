@@ -57,12 +57,6 @@ export default function DailySyncPanel() {
     load();
   }, [load]);
 
-  const applyLastDays = (n) => {
-    const end = todayISO();
-    setTo(end);
-    setFrom(daysAgoISO(n - 1, end));
-  };
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
@@ -90,14 +84,7 @@ export default function DailySyncPanel() {
       <header className="ga4-count-toolbar">
         <h1 className="ga4-count-title">Daily Sync</h1>
         <div className="ga4-count-filters-row daily-sync-filters">
-          <AdminDateRange
-            from={from}
-            to={to}
-            onFromChange={setFrom}
-            onToChange={setTo}
-            onApplyLastDays={applyLastDays}
-            presets={[7, 14, 30]}
-          />
+          <AdminDateRange from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
           <label className="admin-date-field ga4-count-dealer-field daily-sync-search">
             <span className="admin-date-label">Search</span>
             <input
