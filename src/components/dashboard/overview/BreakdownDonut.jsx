@@ -107,7 +107,7 @@ export default function BreakdownDonut({
           {error}
         </div>
       )}
-      <PanelBody style={{ padding: '1.5rem 1.5rem' }}>
+      <PanelBody className="breakdown-donut-body">
         {disabled ? (
           <div className="donut-disabled">
             <div className="donut-disabled-title">{disabledMessage}</div>
