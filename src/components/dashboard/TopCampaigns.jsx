@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
 import {
@@ -106,6 +106,8 @@ function useTopCampaignsRows({
       )
   );
   const [error, setError] = useState(null);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   useEffect(() => {
     if (!clientId || !from || !to) {
@@ -129,7 +131,7 @@ function useTopCampaignsRows({
     }
 
     let cancelled = false;
-    const initialLoad = rows.length === 0;
+    const initialLoad = rowsRef.current.length === 0;
     if (initialLoad) setLoading(true);
     setError(null);
     if (trackBreakdownLoad && initialLoad) beginBreakdownLoad?.();

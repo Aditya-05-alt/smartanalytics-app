@@ -157,6 +157,19 @@ export default function VdpInventoryDonut({
     errorMessage,
   });
 
+  const singleFetch = useBreakdownFetch({
+    enabled: enabled && !showCompare,
+    clientId,
+    from,
+    to,
+    topN,
+    vdpFilters,
+    tab,
+    fetchFn,
+    normalize,
+    errorMessage,
+  });
+
   const compareAllData = useMemo(
     () => (compareFetch.rows || []).map(toDonutRow),
     [compareFetch.rows, toDonutRow]
@@ -205,19 +218,6 @@ export default function VdpInventoryDonut({
       </CompareBreakdownSection>
     );
   }
-
-  const singleFetch = useBreakdownFetch({
-    enabled,
-    clientId,
-    from,
-    to,
-    topN,
-    vdpFilters,
-    tab,
-    fetchFn,
-    normalize,
-    errorMessage,
-  });
 
   return (
     <InventoryDonutDisplay

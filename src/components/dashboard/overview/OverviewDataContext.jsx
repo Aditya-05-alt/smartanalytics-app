@@ -906,6 +906,7 @@ export function OverviewProvider({ children }) {
     }),
     [
       tab,
+      setTab,
       dateRange,
       vdpFilters,
       setVdpFilter,
@@ -936,7 +937,6 @@ export function OverviewProvider({ children }) {
       compareTo,
       currentPeriodLabel,
       comparePeriodLabel,
-      compareDerived.totals,
       adjustedCompareDerived.totals,
       adjustedLyTotals,
       compareDateList,
