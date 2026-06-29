@@ -1710,6 +1710,54 @@ body {
   color: var(--acc);
   border-color: rgba(200, 232, 122, 0.35);
 }
+.vdp-logics-vdp-patterns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vdp-logics-vdp-patterns-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vdp-logics-vdp-patterns-hint {
+  font-size: 11px;
+  color: var(--t3);
+  line-height: 1.35;
+}
+.vdp-logics-pattern-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: start;
+}
+.vdp-logics-pattern-input {
+  min-height: 56px;
+}
+.vdp-logics-pattern-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+.vdp-logics-pattern-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--t1);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.vdp-logics-pattern-btn:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+.vdp-logics-pattern-btn--add {
+  background: rgba(200, 232, 122, 0.08);
+}
 .admin-confirm-modal {
   width: min(460px, 100%);
   overflow: hidden;

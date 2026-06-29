@@ -28,10 +28,10 @@ BEGIN
   WITH updated_data AS (
     UPDATE smart_ga4_page_data g
     SET
-      vdp_conditions = (g.page_path ~* sl.vdp_logic),
+      vdp_conditions = public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic),
 
       ga4_page_type = CASE
-        WHEN g.page_path ~* sl.vdp_logic THEN 'VDP'
+        WHEN public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic) THEN 'VDP'
         WHEN sl.home_page_logic IS NOT NULL AND sl.home_page_logic <> ''
              AND LOWER(sl.home_page_logic) NOT IN ('true','false')
              AND g.page_path ~* sl.home_page_logic THEN 'Home page'
@@ -42,7 +42,7 @@ BEGIN
       END,
 
       vdp_vehicle_condition = CASE
-        WHEN g.page_path ~* sl.vdp_logic THEN
+        WHEN public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic) THEN
           CASE
             WHEN g.page_path ILIKE '%new%'  THEN 'New'
             WHEN g.page_path ILIKE '%used%' THEN 'Used'
@@ -52,7 +52,8 @@ BEGIN
       END,
 
       year = CASE
-        WHEN g.page_path ~* sl.vdp_logic AND g.page_path ~* '\d{4}'
+        WHEN public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic)
+             AND g.page_path ~* '\d{4}'
         THEN SUBSTRING(g.page_path FROM '(\d{4})')::INTEGER
         ELSE NULL
       END
@@ -62,8 +63,15 @@ BEGIN
       AND g.client_id = sl.dealer_id
       AND sl.vdp_logic IS NOT NULL
       AND sl.vdp_logic <> ''
-      AND LOWER(sl.vdp_logic) NOT IN ('true','false')
-      AND LENGTH(sl.vdp_logic) >= 5
+      AND EXISTS (
+        SELECT 1
+        FROM unnest(
+          regexp_split_to_array(sl.vdp_logic, E'\\s+OR\\s+', 'i')
+        ) AS pat
+        WHERE btrim(pat) <> ''
+          AND lower(btrim(pat)) NOT IN ('true', 'false')
+          AND length(btrim(pat)) >= 5
+      )
       AND (p_client_id IS NULL OR g.client_id = p_client_id)
     RETURNING g.account_name, g.cms
   )

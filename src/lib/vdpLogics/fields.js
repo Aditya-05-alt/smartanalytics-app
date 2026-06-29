@@ -37,7 +37,7 @@ const FORM_FIELDS = [
   { key: 'dataSource', db: 'data_source', label: 'Data source' },
   { key: 'hootLink', db: 'hoot_link', label: 'Hoot link' },
   { key: 'scrapLink', db: 'scrap_link', label: 'Scrap link' },
-  { key: 'vdpLogic', db: 'vdp_logic', label: 'VDP logic', wide: true },
+  { key: 'vdpLogic', db: 'vdp_logic', label: 'VDP logic', wide: true, multiPattern: true },
   { key: 'srpLogic', db: 'srp_logic', label: 'SRP logic', wide: true },
   { key: 'homePageLogic', db: 'home_page_logic', label: 'Home page logic', wide: true },
   { key: 'others', db: 'others', label: 'Others', wide: true },
@@ -45,15 +45,39 @@ const FORM_FIELDS = [
 
 export { FORM_FIELDS };
 
+/** Split stored vdp_logic into editable patterns (` OR ` between entries). */
+export function splitVdpLogicPatterns(value) {
+  const s = String(value ?? '').trim();
+  if (!s) return [''];
+  const parts = s.split(/\s+OR\s+/i).map((p) => p.trim()).filter(Boolean);
+  return parts.length ? parts : [''];
+}
+
+/** Join UI patterns for smart_vdp_logic.vdp_logic (pipeline Step 2 understands ` OR `). */
+export function joinVdpLogicPatterns(patterns) {
+  return (patterns || [])
+    .map((p) => String(p ?? '').trim())
+    .filter(Boolean)
+    .join(' OR ');
+}
+
 export function emptyFormState() {
-  return Object.fromEntries(FORM_FIELDS.map((f) => [f.key, '']));
+  const state = Object.fromEntries(
+    FORM_FIELDS.filter((f) => !f.multiPattern).map((f) => [f.key, ''])
+  );
+  state.vdpLogicPatterns = [''];
+  return state;
 }
 
 export function rowToFormState(row) {
   const state = emptyFormState();
   if (!row) return state;
   for (const f of FORM_FIELDS) {
-    state[f.key] = row[f.key] ?? '';
+    if (f.multiPattern) {
+      state.vdpLogicPatterns = splitVdpLogicPatterns(row.vdpLogic ?? row.vdp_logic);
+    } else {
+      state[f.key] = row[f.key] ?? '';
+    }
   }
   return state;
 }
@@ -80,10 +104,18 @@ export function normalizeRow(row) {
 export function bodyToDbRecord(body) {
   const record = {};
   for (const f of FORM_FIELDS) {
+    if (f.multiPattern) continue;
     const v = body?.[f.key];
     if (v === undefined) continue;
     const s = v == null ? null : String(v).trim();
     record[f.db] = s === '' ? null : s;
+  }
+  if (body?.vdpLogicPatterns !== undefined) {
+    const joined = joinVdpLogicPatterns(body.vdpLogicPatterns);
+    record.vdp_logic = joined === '' ? null : joined;
+  } else if (body?.vdpLogic !== undefined) {
+    const s = body.vdpLogic == null ? null : String(body.vdpLogic).trim();
+    record.vdp_logic = s === '' ? null : s;
   }
   if (!record.dealer_name) {
     throw new Error('Dealer name is required.');
