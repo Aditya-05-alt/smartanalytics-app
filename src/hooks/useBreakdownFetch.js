@@ -14,6 +14,7 @@ export function useBreakdownFetch({
   fetchFn,
   normalize,
   errorMessage = 'Failed to load breakdown.',
+  ignoreVdpFilters = false,
 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -57,7 +58,19 @@ export function useBreakdownFetch({
     return () => {
       cancelled = true;
     };
-  }, [enabled, clientId, from, to, topN, vdpFilters, tab, fetchFn, normalize, errorMessage]);
+  }, [
+    enabled,
+    clientId,
+    from,
+    to,
+    topN,
+    ignoreVdpFilters ? null : vdpFilters,
+    tab,
+    fetchFn,
+    normalize,
+    errorMessage,
+    ignoreVdpFilters,
+  ]);
 
   return { rows, loading, error };
 }

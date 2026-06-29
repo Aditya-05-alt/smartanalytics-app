@@ -268,6 +268,32 @@ export async function fetchMakeBreakdown({
   return data || [];
 }
 
+/** Type breakdown from smart_final_data (VDP tab only). */
+export async function fetchTypeBreakdown({
+  clientId,
+  from,
+  to,
+  limit = null,
+  vdpFilters,
+  tab = 'vdp',
+  onCancelCheck,
+}) {
+  const supabase = createClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  if (onCancelCheck?.()) return null;
+
+  const { data, error } = await supabase.rpc('get_type_breakdown', {
+    p_client_id: String(clientId).trim(),
+    p_from: toDateOnly(from),
+    p_to: toDateOnly(to),
+    p_limit: limit,
+    ...vdpRpcExtraParams(vdpFilters, tab),
+  });
+
+  if (error) throw new Error(error.message || 'Failed to fetch type breakdown.');
+  return data || [];
+}
+
 /** Model breakdown from smart_final_data (VDP tab only). */
 export async function fetchModelBreakdown({
   clientId,
@@ -441,6 +467,7 @@ export async function fetchLocationBreakdown({
   clientId,
   from,
   to,
+  limit = null,
   vdpFilters,
   tab = 'vdp',
   onCancelCheck,
@@ -449,12 +476,12 @@ export async function fetchLocationBreakdown({
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return undefined;
 
-  const inv = vdpRpcExtraParams(vdpFilters, tab);
   const params = {
     p_client_id: String(clientId).trim(),
     p_from: toDateOnly(from),
     p_to: toDateOnly(to),
-    ...inv,
+    p_limit: limit,
+    ...vdpRpcExtraParams(vdpFilters, tab),
   };
 
   const { data, error } = await supabase.rpc('get_location_breakdown', params);

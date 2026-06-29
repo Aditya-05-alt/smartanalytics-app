@@ -4,8 +4,9 @@ import PageTabs from '@/components/dashboard/overview/PageTabs';
 import OverviewFilters from '@/components/dashboard/overview/OverviewFilters';
 import KpiRow from '@/components/dashboard/overview/KpiRow';
 import ChannelDonut from '@/components/dashboard/overview/ChannelDonut';
-import LocationDonut from '@/components/dashboard/overview/LocationDonut';
+import LocationBreakdown from '@/components/dashboard/LocationBreakdown';
 import MakeBreakdown from '@/components/dashboard/MakeBreakdown';
+import TypeBreakdown from '@/components/dashboard/TypeBreakdown';
 import ModelBreakdown from '@/components/dashboard/ModelBreakdown';
 import YearBreakdown from '@/components/dashboard/YearBreakdown';
 import ConditionBreakdown from '@/components/dashboard/ConditionBreakdown';
@@ -50,21 +51,19 @@ function OverviewBody() {
                 pageType={TAB_PAGE_TYPE[tab]}
               />
               {!vdpCompareLayout && (
-                <LocationDonut
+                <LocationBreakdown
                   clientId={clientKey}
                   from={from}
                   to={to}
-                  pageType={TAB_PAGE_TYPE[tab]}
                 />
               )}
             </div>
             {vdpCompareLayout && (
               <div className="dashboard-full-row">
-                <LocationDonut
+                <LocationBreakdown
                   clientId={clientKey}
                   from={from}
                   to={to}
-                  pageType={TAB_PAGE_TYPE[tab]}
                 />
               </div>
             )}
@@ -121,6 +120,13 @@ function OverviewBody() {
                 </div>
               </div>
             )}
+            <div className="dashboard-full-row">
+              <TypeBreakdown
+                clientId={clientKey}
+                from={from}
+                to={to}
+              />
+            </div>
             <div className="dashboard-full-row">
               <MakeBreakdown
                 clientId={clientKey}

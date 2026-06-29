@@ -38,7 +38,10 @@ AS $$
       AND (COALESCE(array_length(p_types, 1), 0) = 0 OR inv_type = ANY(p_types))
       AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR inv_make = ANY(p_makes))
       AND (COALESCE(array_length(p_models, 1), 0) = 0 OR inv_model = ANY(p_models))
-      AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR inv_location = ANY(p_locations))
+      AND (
+        COALESCE(array_length(p_locations, 1), 0) = 0
+        OR TRIM(inv_location) = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
+      )
       AND (
         COALESCE(array_length(p_years, 1), 0) = 0
         OR (inv_year ~ '^\d{4}$' AND inv_year::int = ANY(p_years))

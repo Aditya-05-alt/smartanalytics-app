@@ -83,6 +83,8 @@ function InventoryDonutPane({
   toDonutRow,
   emptyMessage,
   baselineDonutData,
+  ignoreVdpFilters = false,
+  centerLabel = 'VDP VIEWS',
 }) {
   const { rows, loading, error } = useBreakdownFetch({
     enabled,
@@ -95,6 +97,7 @@ function InventoryDonutPane({
     fetchFn,
     normalize,
     errorMessage,
+    ignoreVdpFilters,
   });
 
   return (
@@ -107,6 +110,7 @@ function InventoryDonutPane({
       toDonutRow={toDonutRow}
       emptyMessage={emptyMessage}
       baselineDonutData={baselineDonutData}
+      centerLabel={centerLabel}
     />
   );
 }
@@ -118,7 +122,9 @@ export default function VdpInventoryDonut({
   errorMessage,
   toDonutRow,
   emptyMessage = 'No data for this period.',
+  centerLabel = 'VDP VIEWS',
   limit = null,
+  ignoreVdpFilters = false,
   clientId: clientIdProp,
   from: fromProp,
   to: toProp,
@@ -155,6 +161,7 @@ export default function VdpInventoryDonut({
     fetchFn,
     normalize,
     errorMessage,
+    ignoreVdpFilters,
   });
 
   const singleFetch = useBreakdownFetch({
@@ -168,6 +175,7 @@ export default function VdpInventoryDonut({
     fetchFn,
     normalize,
     errorMessage,
+    ignoreVdpFilters,
   });
 
   const compareAllData = useMemo(
@@ -195,6 +203,7 @@ export default function VdpInventoryDonut({
           loading={compareFetch.loading}
           error={compareFetch.error}
           periodLabel={comparePeriodLabel}
+          centerLabel={centerLabel}
           chartTopN={topN}
           toDonutRow={toDonutRow}
           emptyMessage={emptyMessage}
@@ -214,6 +223,8 @@ export default function VdpInventoryDonut({
           toDonutRow={toDonutRow}
           emptyMessage={emptyMessage}
           baselineDonutData={compareAllData}
+          ignoreVdpFilters={ignoreVdpFilters}
+          centerLabel={centerLabel}
         />
       </CompareBreakdownSection>
     );
@@ -225,6 +236,7 @@ export default function VdpInventoryDonut({
       loading={singleFetch.loading}
       error={singleFetch.error}
       periodLabel={title}
+      centerLabel={centerLabel}
       chartTopN={topN}
       toDonutRow={toDonutRow}
       emptyMessage={emptyMessage}

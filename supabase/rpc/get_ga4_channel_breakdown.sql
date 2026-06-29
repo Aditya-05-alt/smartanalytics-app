@@ -1,6 +1,5 @@
 -- Channel breakdown: one row per GA4 session channel (no "Other" rollup).
--- Fast path when no inventory filters; VDP + filters use LEFT JOIN to smart_final_data.
--- Location match uses TRIM on both sides (dropdown values vs inv_location).
+-- Fast path when no inventory filters; VDP + filters match smart_final_data grain.
 -- Run in Supabase SQL editor.
 
 DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(text, date, date, text);
@@ -54,9 +53,10 @@ BEGIN
       p.client_id,
       p.report_date,
       p.page_path,
+      p.page_location,
       p.ga4_page_type
     FROM smart_ga4_page_data p
-    WHERE p.client_id = p_client_id
+    WHERE p.client_id::text = trim(p_client_id)
       AND p.report_date BETWEEN p_from AND p_to
       AND (
         v_page_type = 'ALL'
@@ -69,6 +69,44 @@ BEGIN
       )
       AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
            OR p.channel = ANY(p_channels))
+  ),
+  filtered_final AS (
+    SELECT DISTINCT
+      s.client_id,
+      s.report_date,
+      TRIM(s.page_path) AS page_path,
+      s.page_location
+    FROM smart_final_data s
+    WHERE s.client_id::text = trim(p_client_id)
+      AND s.report_date BETWEEN p_from AND p_to
+      AND (COALESCE(array_length(p_types, 1), 0) = 0 OR s.inv_type = ANY(p_types))
+      AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR s.inv_make = ANY(p_makes))
+      AND (COALESCE(array_length(p_models, 1), 0) = 0 OR s.inv_model = ANY(p_models))
+      AND (
+        COALESCE(array_length(p_locations, 1), 0) = 0
+        OR TRIM(s.inv_location) = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
+      )
+      AND (
+        COALESCE(array_length(p_years, 1), 0) = 0
+        OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years))
+      )
+      AND (
+        v_condition = 'BOTH'
+        OR UPPER(s.inv_condition) = v_condition
+      )
+      AND (
+        COALESCE(array_length(p_classes, 1), 0) = 0
+        OR (
+          ('Class A' = ANY(p_classes) AND s.inv_type ILIKE '%class a%') OR
+          ('Class B' = ANY(p_classes) AND s.inv_type ILIKE '%class b%') OR
+          ('Class C' = ANY(p_classes) AND s.inv_type ILIKE '%class c%') OR
+          ('Towable' = ANY(p_classes) AND (
+              s.inv_type ILIKE '%travel trailer%'
+           OR s.inv_type ILIKE '%fifth wheel%'
+           OR s.inv_type ILIKE '%toy hauler%'
+           OR s.inv_type ILIKE '%pop-up%'))
+        )
+      )
   ),
   combined AS (
     -- Branch 1: no inventory filters — return all pages directly
@@ -86,56 +124,29 @@ BEGIN
 
     UNION ALL
 
-    -- Branch 3: filters active, VDP pages — LEFT JOIN so orphaned VDPs aren't lost
+    -- Branch 3: filters active, VDP — GA4 channels for filtered smart_final_data paths
     SELECT p.channel, p.views
     FROM pages p
-    LEFT JOIN smart_final_data s
-      ON s.client_id   = p.client_id
-     AND s.report_date = p.report_date
-     AND s.page_path   = p.page_path
     WHERE v_filter_active
       AND p.ga4_page_type ILIKE 'VDP%'
-      AND (
-        COALESCE(array_length(p_locations, 1), 0) = 0
-        OR (s.client_id IS NOT NULL
-            AND TRIM(s.inv_location) = ANY(
-              SELECT TRIM(loc) FROM unnest(p_locations) AS loc
-            ))
-      )
-      AND (
-        COALESCE(array_length(p_types, 1), 0) = 0
-        OR (s.client_id IS NOT NULL AND s.inv_type = ANY(p_types))
-      )
-      AND (
-        COALESCE(array_length(p_makes, 1), 0) = 0
-        OR (s.client_id IS NOT NULL AND s.inv_make = ANY(p_makes))
-      )
-      AND (
-        COALESCE(array_length(p_models, 1), 0) = 0
-        OR (s.client_id IS NOT NULL AND s.inv_model = ANY(p_models))
-      )
-      AND (
-        COALESCE(array_length(p_years, 1), 0) = 0
-        OR (s.client_id IS NOT NULL
-            AND s.inv_year ~ '^\d{4}$'
-            AND s.inv_year::int = ANY(p_years))
-      )
-      AND (
-        v_condition = 'BOTH'
-        OR (s.client_id IS NOT NULL AND UPPER(s.inv_condition) = v_condition)
-      )
-      AND (
-        COALESCE(array_length(p_classes, 1), 0) = 0
-        OR (s.client_id IS NOT NULL AND (
-          ('Class A' = ANY(p_classes) AND s.inv_type ILIKE '%class a%') OR
-          ('Class B' = ANY(p_classes) AND s.inv_type ILIKE '%class b%') OR
-          ('Class C' = ANY(p_classes) AND s.inv_type ILIKE '%class c%') OR
-          ('Towable' = ANY(p_classes) AND (
-              s.inv_type ILIKE '%travel trailer%'
-           OR s.inv_type ILIKE '%fifth wheel%'
-           OR s.inv_type ILIKE '%toy hauler%'
-           OR s.inv_type ILIKE '%pop-up%'))
-        ))
+      AND EXISTS (
+        SELECT 1
+        FROM filtered_final f
+        WHERE f.client_id::text = p.client_id::text
+          AND f.report_date = p.report_date
+          AND (
+            TRIM(p.page_path) = f.page_path
+            OR (
+              COALESCE(TRIM(p.page_path), '') <> ''
+              AND COALESCE(f.page_path, '') <> ''
+              AND LOWER(TRIM(p.page_location)) LIKE '%' || LOWER(TRIM(p.page_path)) || '%'
+            )
+            OR (
+              COALESCE(TRIM(p.page_path), '') <> ''
+              AND COALESCE(f.page_path, '') <> ''
+              AND LOWER(TRIM(f.page_location)) LIKE '%' || LOWER(TRIM(p.page_path)) || '%'
+            )
+          )
       )
   ),
   filtered AS (

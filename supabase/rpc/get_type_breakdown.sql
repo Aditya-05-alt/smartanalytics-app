@@ -1,12 +1,9 @@
--- Frontend-safe make breakdown RPC.
--- IMPORTANT: Use SECURITY DEFINER so anon/authenticated can execute even when
--- smart_final_data is protected by RLS.
+-- Type breakdown from smart_final_data (VDP tab). Deploy in Supabase SQL editor.
 
-DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date);
-DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date, int);
-DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date, int, integer[]);
+DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date);
+DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date, int);
 
-CREATE OR REPLACE FUNCTION public.get_make_breakdown(
+CREATE OR REPLACE FUNCTION public.get_type_breakdown(
   p_client_id text,
   p_from date,
   p_to date,
@@ -19,7 +16,7 @@ CREATE OR REPLACE FUNCTION public.get_make_breakdown(
   p_condition text DEFAULT 'BOTH'
 )
 RETURNS TABLE (
-  make_bucket text,
+  type_bucket text,
   views bigint,
   pct numeric,
   rank int
@@ -31,7 +28,7 @@ SET search_path = public
 AS $$
   WITH base AS (
     SELECT
-      COALESCE(NULLIF(TRIM(inv_make), ''), 'Unknown') AS make_bucket,
+      COALESCE(NULLIF(TRIM(inv_type), ''), 'Unknown') AS type_bucket,
       COALESCE(views, 0)::bigint AS views
     FROM smart_final_data
     WHERE client_id::text = trim(p_client_id)
@@ -53,25 +50,25 @@ AS $$
       )
   ),
   agg AS (
-    SELECT make_bucket, SUM(views)::bigint AS views
+    SELECT type_bucket, SUM(views)::bigint AS views
     FROM base
-    GROUP BY make_bucket
+    GROUP BY type_bucket
   ),
   ranked AS (
     SELECT
-      make_bucket,
+      type_bucket,
       views,
-      ROW_NUMBER() OVER (ORDER BY views DESC, make_bucket) AS rn
+      ROW_NUMBER() OVER (ORDER BY views DESC, type_bucket) AS rn
     FROM agg
   ),
   top_n AS (
-    SELECT make_bucket, views, rn::int AS rank
+    SELECT type_bucket, views, rn::int AS rank
     FROM ranked
     WHERE p_limit IS NULL OR rn <= p_limit
   ),
   other_bucket AS (
     SELECT
-      'Other'::text AS make_bucket,
+      'Other'::text AS type_bucket,
       COALESCE(SUM(views), 0)::bigint AS views,
       999::int AS rank
     FROM ranked
@@ -88,7 +85,7 @@ AS $$
     FROM combined
   )
   SELECT
-    c.make_bucket,
+    c.type_bucket,
     c.views,
     ROUND(100.0 * c.views / g.total, 2) AS pct,
     c.rank
@@ -97,9 +94,9 @@ AS $$
   ORDER BY c.rank;
 $$;
 
-REVOKE ALL ON FUNCTION public.get_make_breakdown(
+REVOKE ALL ON FUNCTION public.get_type_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text
 ) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_make_breakdown(
+GRANT EXECUTE ON FUNCTION public.get_type_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text
 ) TO anon, authenticated, service_role;
