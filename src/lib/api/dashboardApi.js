@@ -18,6 +18,19 @@ import {
 const FINAL_DATA_TABLE = 'smart_final_data';
 const LOCATION_PAGE_SIZE = 5000;
 
+function isMissingRpcError(error) {
+  const msg = String(error?.message ?? error ?? '');
+  return /function.*does not exist|could not find the function|schema cache/i.test(msg);
+}
+
+async function rpcLocationBreakdown(supabase, params) {
+  let result = await supabase.rpc('get_dealer_location_breakdown', params);
+  if (result.error && isMissingRpcError(result.error)) {
+    result = await supabase.rpc('get_location_breakdown', params);
+  }
+  return result;
+}
+
 /**
  * GA4 OVERVIEW API
  * ----------------
@@ -460,8 +473,8 @@ async function fetchLocationBreakdownViaApi(params, onCancelCheck) {
 }
 
 /**
- * Location breakdown — get_location_breakdown RPC (3 params; optional filters omitted).
- * Falls back to server API (service role) then direct table read if RPC returns [].
+ * Location breakdown — get_dealer_location_breakdown RPC (configured locations table).
+ * Falls back to get_location_breakdown, server API, then direct table read if needed.
  */
 export async function fetchLocationBreakdown({
   clientId,
@@ -484,7 +497,7 @@ export async function fetchLocationBreakdown({
     ...vdpRpcExtraParams(vdpFilters, tab),
   };
 
-  const { data, error } = await supabase.rpc('get_location_breakdown', params);
+  const { data, error } = await rpcLocationBreakdown(supabase, params);
 
   if (error) throw new Error(error.message || 'Failed to fetch location breakdown.');
   if (onCancelCheck?.()) return undefined;

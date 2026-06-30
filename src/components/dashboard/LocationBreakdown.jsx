@@ -53,7 +53,7 @@ export default function LocationBreakdown(props) {
   return (
     <VdpInventoryDonut
       title="Location Breakdown"
-      centerLabel="LOCAL VISITORS"
+      centerLabel="VDP VIEWS"
       fetchFn={fetchLocationBreakdown}
       normalize={normalizeRows}
       errorMessage="Failed to load location breakdown."

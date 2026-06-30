@@ -98,47 +98,7 @@ export default function VdpLogicsFormModal({
     }
   };
 
-  const renderField = (f) => {
-    if (f.multiPattern) {
-      return (
-        <VdpLogicPatternsEditor
-          key={f.key}
-          patterns={form.vdpLogicPatterns || ['']}
-          onChange={(vdpLogicPatterns) =>
-            setForm((prev) => ({ ...prev, vdpLogicPatterns }))
-          }
-        />
-      );
-    }
-
-    return (
-      <label key={f.key} className={f.wide ? 'vdp-logics-field--wide' : ''}>
-        <span className="admin-date-label">
-          {f.label}
-          {f.requiredFlag ? ' *' : ''}
-        </span>
-        {f.wide ? (
-          <textarea
-            className="vdp-logics-textarea"
-            rows={3}
-            value={form[f.key]}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, [f.key]: e.target.value }))
-            }
-          />
-        ) : (
-          <input
-            type="text"
-            className="admin-date-input"
-            value={form[f.key]}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, [f.key]: e.target.value }))
-            }
-          />
-        )}
-      </label>
-    );
-  };
+  const standardFields = FORM_FIELDS.filter((f) => !f.multiPattern);
 
   return (
     <div className="vdp-logics-modal-backdrop" role="presentation" onClick={onClose}>
@@ -159,7 +119,40 @@ export default function VdpLogicsFormModal({
 
         <form className="vdp-logics-modal-form" onSubmit={handleSubmit}>
           <div className="vdp-logics-modal-grid">
-            {FORM_FIELDS.map(renderField)}
+            <VdpLogicPatternsEditor
+              patterns={form.vdpLogicPatterns || ['']}
+              onChange={(vdpLogicPatterns) =>
+                setForm((prev) => ({ ...prev, vdpLogicPatterns }))
+              }
+            />
+
+            {standardFields.map((f) => (
+              <label key={f.key} className={f.wide ? 'vdp-logics-field--wide' : ''}>
+                <span className="admin-date-label">
+                  {f.label}
+                  {f.requiredFlag ? ' *' : ''}
+                </span>
+                {f.wide ? (
+                  <textarea
+                    className="vdp-logics-textarea"
+                    rows={3}
+                    value={form[f.key]}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, [f.key]: e.target.value }))
+                    }
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    className="admin-date-input"
+                    value={form[f.key]}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, [f.key]: e.target.value }))
+                    }
+                  />
+                )}
+              </label>
+            ))}
           </div>
 
           {localError && <p className="vdp-logics-modal-error">{localError}</p>}

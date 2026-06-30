@@ -278,10 +278,15 @@ export default function BreakdownDonut({
             <div
               className={`donut-lg-total donut-lg-total--fixed${totalDelta != null ? ' donut-lg-total--compare' : ''}${showGroupColumn ? ' donut-lg-total--with-toggle-col' : ''}`}
             >
+              {showGroupColumn && (
+                <span className="donut-lg-toggle-spacer" aria-hidden />
+              )}
+              <span className="donut-lg-swatch donut-lg-total-swatch" aria-hidden />
               <span className="donut-lg-total-label">{totalLabel}</span>
               <span className="donut-lg-total-value">
                 {(Number(grandTotal) || 0).toLocaleString()}
               </span>
+              <span className="donut-lg-total-pct-spacer" aria-hidden />
               {totalDelta != null && (
                 <span className="donut-lg-total-delta">
                   <Delta value={totalDelta} size={11} />

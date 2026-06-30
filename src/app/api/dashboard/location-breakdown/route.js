@@ -5,7 +5,7 @@ import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 /**
  * Server-side location breakdown (uses service role when configured).
  * Browser anon key cannot read smart_final_data under RLS; this route is a fallback
- * until get_location_breakdown is deployed as SECURITY DEFINER in Supabase.
+ * until get_dealer_location_breakdown is deployed as SECURITY DEFINER in Supabase.
  */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -39,7 +39,13 @@ export async function GET(request) {
     ...inv,
   };
 
-  const { data, error } = await supabase.rpc('get_location_breakdown', params);
+  let { data, error } = await supabase.rpc('get_dealer_location_breakdown', params);
+  if (
+    error
+    && /function.*does not exist|could not find the function|schema cache/i.test(error.message)
+  ) {
+    ({ data, error } = await supabase.rpc('get_location_breakdown', params));
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

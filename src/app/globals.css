@@ -3194,6 +3194,8 @@ body {
   padding: 0;
   min-width: 0;
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 .donut-lg-list-col {
   flex: 1;
@@ -3201,12 +3203,71 @@ body {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 .donut-lg-list-col--scroll {
   align-self: center;
   height: 200px;
   min-height: 200px;
   max-height: 200px;
+  max-width: 100%;
+  overflow-x: hidden;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  column-gap: 8px;
+  padding-inline: 10px;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 48px);
+}
+.donut-lg-list-col--scroll.donut-lg-list-col--compare {
+  grid-template-rows: auto 1fr auto;
+}
+.donut-lg-list-col--scroll.donut-lg-list-col--compare:not(.donut-lg-list-col--with-toggle-col) {
+  grid-template-columns: 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 40px) minmax(0, 54px);
+}
+.donut-lg-list-col--scroll.donut-lg-list-col--with-toggle-col:not(.donut-lg-list-col--compare) {
+  grid-template-columns: 18px 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 48px);
+}
+.donut-lg-list-col--scroll.donut-lg-list-col--compare.donut-lg-list-col--with-toggle-col {
+  grid-template-columns: 18px 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 40px) minmax(0, 54px);
+}
+.donut-lg-list-col--scroll .donut-lg-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  padding: 8px 0;
+  min-width: 0;
+}
+.donut-lg-list-col--scroll .donut-lg-list-rows {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: subgrid;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: start;
+}
+.donut-lg-list-col--scroll.donut-lg-list-col--compare .donut-lg-list-rows {
+  grid-row: 2;
+}
+.donut-lg-list-col--scroll .donut-lg-total {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: subgrid;
+  padding: 10px 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.donut-lg-list-col--scroll.donut-lg-list-col--compare .donut-lg-total {
+  grid-row: 3;
+}
+.donut-lg-list-col--scroll.donut-lg-list-col--compare .donut-lg-list-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
 }
 .donut-lg-list-rows {
   display: flex;
@@ -3216,14 +3277,13 @@ body {
   min-height: 0;
 }
 .donut-lg-list--scroll {
-  flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 10px;
-  margin-right: 2px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-content: start;
 }
 .donut-lg-list--scroll::before {
   content: none;
@@ -3244,7 +3304,7 @@ body {
 }
 .donut-lg-row {
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto 48px;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 48px);
   align-items: center;
   column-gap: 8px;
   padding: 8px 10px;
@@ -3253,13 +3313,13 @@ body {
   min-width: 0;
 }
 .donut-lg-row--with-toggle-col {
-  grid-template-columns: 18px 12px minmax(0, 1fr) auto 48px;
+  grid-template-columns: 18px 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 48px);
 }
 .donut-lg-row--compare.donut-lg-row--with-toggle-col {
-  grid-template-columns: 18px 12px minmax(0, 1fr) auto 40px 54px;
+  grid-template-columns: 18px 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 40px) minmax(0, 54px);
 }
 .donut-lg-row--compare:not(.donut-lg-row--with-toggle-col) {
-  grid-template-columns: 12px minmax(0, 1fr) auto 40px 54px;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 40px) minmax(0, 54px);
 }
 .donut-lg-row:hover { background: var(--s3); }
 .donut-lg-swatch {
@@ -3285,8 +3345,10 @@ body {
   color: var(--t);
   font-variant-numeric: tabular-nums;
   text-align: right;
+  justify-self: stretch;
   white-space: nowrap;
   padding-right: 4px;
+  box-sizing: border-box;
 }
 .donut-lg-pct {
   font-size: 11px;
@@ -3323,55 +3385,63 @@ body {
   text-align: right;
 }
 .donut-lg-total--compare {
-  gap: 8px;
+  column-gap: 8px;
 }
 .donut-lg-total {
-  display: flex;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 48px);
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
   margin-top: 0;
-  padding: 10px 12px 10px 10px;
+  padding: 10px;
   border-top: 1px solid var(--bd);
   font-size: 11px;
   color: var(--t3);
   text-transform: uppercase;
   letter-spacing: .06em;
   font-weight: 700;
+  min-width: 0;
+  max-width: 100%;
 }
 .donut-lg-total--with-toggle-col {
-  padding-left: 10px;
+  grid-template-columns: 18px 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 48px);
 }
-.donut-lg-total--with-toggle-col .donut-lg-total-label {
-  padding-left: 38px;
+.donut-lg-total--compare:not(.donut-lg-total--with-toggle-col) {
+  grid-template-columns: 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 40px) minmax(0, 54px);
 }
-.donut-lg-total:not(.donut-lg-total--with-toggle-col) .donut-lg-total-label {
-  padding-left: 20px;
+.donut-lg-total--compare.donut-lg-total--with-toggle-col {
+  grid-template-columns: 18px 12px minmax(0, 1fr) minmax(0, 5.25rem) minmax(0, 40px) minmax(0, 54px);
+}
+.donut-lg-total-swatch {
+  background: #7a8095;
+  flex-shrink: 0;
 }
 .donut-lg-total-label {
-  flex: 1;
   min-width: 0;
 }
 .donut-lg-total-value {
-  flex-shrink: 0;
-  min-width: 3.25rem;
-  margin-right: 52px;
   font-weight: 700;
   color: var(--t);
   font-variant-numeric: tabular-nums;
   text-align: right;
+  justify-self: stretch;
   white-space: nowrap;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 13px;
   letter-spacing: 0;
   text-transform: none;
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+.donut-lg-total-pct-spacer {
+  display: block;
+  min-width: 0;
 }
 .donut-lg-total--compare .donut-lg-total-value {
-  margin-right: 0;
+  padding-right: 0;
 }
 .donut-lg-total-delta {
-  flex-shrink: 0;
-  margin-left: auto;
-  min-width: 54px;
+  justify-self: end;
   text-align: right;
 }
 
@@ -3520,6 +3590,9 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 .make-breakdown-head-controls {
   margin-left: auto;
@@ -3823,6 +3896,9 @@ body {
 
 .breakdown-donut-body {
   padding: 1rem 1.5rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 .donut-skeleton {
   width: 100%;
