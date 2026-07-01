@@ -11,11 +11,12 @@ import {
 import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
 import {
+  bootDealerPlaceholder,
   readStoredDealerId,
   resolveDealerFromList,
   writeStoredDealerId,
 } from '@/lib/dashboard/dashboardPrefs';
-import { ALL_DEALER_CLIENT, ALL_DEALER_ID, isAllDealerClient } from '@/lib/dashboard/allDealers';
+import { ALL_DEALER_CLIENT, isAllDealerClient } from '@/lib/dashboard/allDealers';
 
 const ClientContext = createContext(null);
 
@@ -36,7 +37,7 @@ function normalizeRow(row) {
 
 export function ClientProvider({ children }) {
   const [dealers, setDealers] = useState([]);
-  const [client, setClient] = useState(ALL_DEALER_CLIENT);
+  const [client, setClient] = useState(() => bootDealerPlaceholder() || ALL_DEALER_CLIENT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -77,13 +78,7 @@ export function ClientProvider({ children }) {
       const initialClient = resolveDealerFromList(list, storedId);
 
       setDealers(list);
-      setClient((prev) => {
-        if (prev) {
-          const stillValid = list.find((d) => d.id === prev.id);
-          return stillValid || initialClient;
-        }
-        return initialClient;
-      });
+      setClient(initialClient);
       setLoading(false);
     }
 

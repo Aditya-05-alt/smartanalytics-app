@@ -1,4 +1,7 @@
+import { ALL_DEALER_CLIENT, ALL_DEALER_ID } from '@/lib/dashboard/allDealers';
+
 const DEALER_ID_KEY = 'sa_selected_dealer_id';
+const LAST_REAL_DEALER_ID_KEY = 'sa_last_real_dealer_id';
 const OVERVIEW_TAB_KEY = 'sa_overview_tab';
 const ADMIN_DEALER_ID_KEY = 'sa_admin_pipeline_dealer_id';
 
@@ -18,10 +21,23 @@ export function readStoredDealerId() {
   }
 }
 
+export function readLastRealDealerId() {
+  if (!canUseStorage()) return null;
+  try {
+    const raw = localStorage.getItem(LAST_REAL_DEALER_ID_KEY);
+    return raw && raw !== ALL_DEALER_ID ? String(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function writeStoredDealerId(id) {
   if (!canUseStorage() || id == null) return;
   try {
     localStorage.setItem(DEALER_ID_KEY, String(id));
+    if (String(id) !== ALL_DEALER_ID) {
+      localStorage.setItem(LAST_REAL_DEALER_ID_KEY, String(id));
+    }
   } catch {
     /* ignore */
   }
@@ -65,14 +81,42 @@ export function writeStoredAdminDealerId(id) {
   }
 }
 
-import { ALL_DEALER_CLIENT, ALL_DEALER_ID } from '@/lib/dashboard/allDealers';
+function findDealerById(dealers, id) {
+  if (!id || !dealers?.length) return null;
+  return dealers.find((d) => String(d.id) === String(id)) || null;
+}
 
 export function resolveDealerFromList(dealers, storedId) {
-  if (storedId === ALL_DEALER_ID) return ALL_DEALER_CLIENT;
   if (!dealers?.length) return ALL_DEALER_CLIENT;
-  if (storedId) {
-    const match = dealers.find((d) => String(d.id) === String(storedId));
-    if (match) return match;
-  }
+
+  if (storedId === ALL_DEALER_ID) return ALL_DEALER_CLIENT;
+
+  const storedMatch = findDealerById(dealers, storedId);
+  if (storedMatch) return storedMatch;
+
+  const lastRealMatch = findDealerById(dealers, readLastRealDealerId());
+  if (lastRealMatch) return lastRealMatch;
+
   return ALL_DEALER_CLIENT;
+}
+
+export function bootDealerPlaceholder() {
+  if (!canUseStorage()) return null;
+
+  const storedId = readStoredDealerId();
+  if (storedId === ALL_DEALER_ID) return null;
+
+  const id = storedId || readLastRealDealerId();
+  if (!id) return null;
+
+  return {
+    id,
+    name: 'Loading…',
+    hootId: null,
+    hootUrl: null,
+    ga4CustomerId: null,
+    websitePlatform: null,
+    isActive: true,
+    category: 'rv',
+  };
 }
