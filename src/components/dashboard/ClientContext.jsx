@@ -11,7 +11,6 @@ import {
 import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
 import {
-  bootDealerPlaceholder,
   readStoredDealerId,
   resolveDealerFromList,
   writeStoredDealerId,
@@ -37,7 +36,7 @@ function normalizeRow(row) {
 
 export function ClientProvider({ children }) {
   const [dealers, setDealers] = useState([]);
-  const [client, setClient] = useState(() => bootDealerPlaceholder() || ALL_DEALER_CLIENT);
+  const [client, setClient] = useState(ALL_DEALER_CLIENT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 

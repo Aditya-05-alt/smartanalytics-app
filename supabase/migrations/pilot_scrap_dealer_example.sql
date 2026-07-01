@@ -1,0 +1,31 @@
+-- Pilot scrap dealer checklist (manual — edit placeholders before running).
+-- Deploy core migrations first: smart_scrap_data.sql, smart_scrap_inventory_source.sql
+-- Deploy RPCs: get_scrap_dealers_for_sync, upsert_scrap_inventory_batch, build_smart_final_data
+--
+-- Validation after pipeline Steps 0→3:
+--   SELECT COUNT(*) FROM smart_scrap_data WHERE ga4_customer_id = '<GA4_CLIENT_ID>';
+--   SELECT * FROM smart_scrap_day_complete WHERE ga4_customer_id = '<GA4_CLIENT_ID>' ORDER BY report_date DESC LIMIT 5;
+--   SELECT COUNT(*), SUM(CASE WHEN vdp_conditions THEN 1 ELSE 0 END)
+--     FROM smart_final_data WHERE client_id = '<GA4_CLIENT_ID>' AND report_date BETWEEN '<FROM>' AND '<TO>';
+
+-- 1) Mark dealer as scrap inventory (replace GA4 client id)
+-- UPDATE public.smart_hoot_config
+-- SET inventory_source = 'scrap',
+--     hoot_url = NULL
+-- WHERE trim(ga4_customer_id::text) = '<GA4_CLIENT_ID>';
+
+-- 2) Ensure VDP Logics row with scrap_link + vdp_logic (dealer_id = GA4 client id)
+-- INSERT INTO public.smart_vdp_logic (
+--   dealer_name, dealer_id, website_url, cms, data_source, scrap_link, vdp_logic
+-- ) VALUES (
+--   '<DEALER_NAME>',
+--   '<GA4_CLIENT_ID>',
+--   'https://www.example-dealer.com',
+--   'DealerOn',
+--   'Scrap',
+--   'https://www.example-dealer.com/inventory',
+--   '/inventory/.*'
+-- )
+-- ON CONFLICT DO NOTHING;
+
+-- 3) Run worker or admin Pipeline Step 0, then Steps 1–3 for a test date range.

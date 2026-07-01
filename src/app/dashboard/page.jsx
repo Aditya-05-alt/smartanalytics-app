@@ -35,6 +35,7 @@ function AllDealerOverviewBody() {
   return (
     <>
       <PageTabs />
+      <OverviewFilters />
       <AllDealerChannelTable />
       <StatusBar
         items={[

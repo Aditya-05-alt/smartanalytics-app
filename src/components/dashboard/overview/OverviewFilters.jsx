@@ -76,7 +76,26 @@ export default function OverviewFilters() {
 
   const hasActiveVdpFilters = vdpFiltersActive(vdpFilters, 'vdp');
 
-  if (isAllDealer) return null;
+  if (isAllDealer) {
+    return (
+      <div className="filters all-dealer-filters">
+        <div className="f-right all-dealer-filters-right">
+          <ComparePeriodSwitch enabled={compareEnabled} onChange={toggleCompareEnabled} />
+          {compareEnabled && (
+            <>
+              <span className="f-label">Compare range</span>
+              <CalendarRangePicker
+                value={comparePickerValue}
+                onChange={setCompareDateRange}
+              />
+            </>
+          )}
+          <span className="f-label">Date range</span>
+          <CalendarRangePicker value={dateRange} onChange={setDateRange} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="filters">

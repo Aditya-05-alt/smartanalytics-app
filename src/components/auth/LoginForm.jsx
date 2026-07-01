@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
-import { useActionState, useState, useCallback, memo } from 'react';
+import { useActionState, useState, useCallback, memo, useEffect } from 'react';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { signInAction } from '@/lib/auth/actions';
+import { resetDealerToAll } from '@/lib/dashboard/dashboardPrefs';
 
 const initialState = { ok: false, error: null };
 
@@ -57,6 +58,10 @@ export default function LoginForm({ demoMode = false, demoEmail = '', demoPasswo
   const onRememberToggle = useCallback((e) => setRemember(e.target.checked), []);
   const onEmailChange = useCallback((e) => setEmail(e.target.value), []);
   const onPasswordChange = useCallback((e) => setPassword(e.target.value), []);
+
+  useEffect(() => {
+    resetDealerToAll();
+  }, []);
 
   const fillDemo = useCallback(() => {
     setEmail(demoEmail);

@@ -9,6 +9,7 @@ import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { isAllDealerClient } from '@/lib/dashboard/allDealers';
+import { resetDealerToAll } from '@/lib/dashboard/dashboardPrefs';
 
 const NAV = [
   // { id: 'overview',    href: '/dashboard',              label: 'Overview' },
@@ -167,6 +168,7 @@ function UserAccountMenu() {
 
   const handleSignOut = () => {
     close();
+    resetDealerToAll();
     window.location.href = '/api/auth/signout';
   };
 

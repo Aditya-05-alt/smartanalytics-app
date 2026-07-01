@@ -21,23 +21,21 @@ export function readStoredDealerId() {
   }
 }
 
-export function readLastRealDealerId() {
-  if (!canUseStorage()) return null;
-  try {
-    const raw = localStorage.getItem(LAST_REAL_DEALER_ID_KEY);
-    return raw && raw !== ALL_DEALER_ID ? String(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function writeStoredDealerId(id) {
   if (!canUseStorage() || id == null) return;
   try {
     localStorage.setItem(DEALER_ID_KEY, String(id));
-    if (String(id) !== ALL_DEALER_ID) {
-      localStorage.setItem(LAST_REAL_DEALER_ID_KEY, String(id));
-    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Reset picker to All Dealer (call on logout and login page). */
+export function resetDealerToAll() {
+  if (!canUseStorage()) return;
+  try {
+    localStorage.removeItem(LAST_REAL_DEALER_ID_KEY);
+    localStorage.setItem(DEALER_ID_KEY, ALL_DEALER_ID);
   } catch {
     /* ignore */
   }
@@ -94,29 +92,5 @@ export function resolveDealerFromList(dealers, storedId) {
   const storedMatch = findDealerById(dealers, storedId);
   if (storedMatch) return storedMatch;
 
-  const lastRealMatch = findDealerById(dealers, readLastRealDealerId());
-  if (lastRealMatch) return lastRealMatch;
-
   return ALL_DEALER_CLIENT;
-}
-
-export function bootDealerPlaceholder() {
-  if (!canUseStorage()) return null;
-
-  const storedId = readStoredDealerId();
-  if (storedId === ALL_DEALER_ID) return null;
-
-  const id = storedId || readLastRealDealerId();
-  if (!id) return null;
-
-  return {
-    id,
-    name: 'Loading…',
-    hootId: null,
-    hootUrl: null,
-    ga4CustomerId: null,
-    websitePlatform: null,
-    isActive: true,
-    category: 'rv',
-  };
 }

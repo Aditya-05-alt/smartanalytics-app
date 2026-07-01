@@ -271,6 +271,33 @@ export async function fetchAllDealersChannelMatrix({
   return { ...result, warning: null };
 }
 
+export function compareLookupFromRows(compareRows) {
+  const byDealer = new Map();
+  for (const row of compareRows || []) {
+    const clientId = String(row.dealer?.ga4CustomerId || '').trim();
+    const configId = row.dealer?.id;
+    const entry = {
+      total: Number(row.total) || 0,
+      channels: sliceMapForRow(row),
+    };
+    if (clientId) byDealer.set(`c:${clientId}`, entry);
+    if (configId != null) byDealer.set(`i:${String(configId)}`, entry);
+  }
+  return byDealer;
+}
+
+export function compareEntryForDealer(lookup, dealer) {
+  if (!lookup || !dealer) return null;
+  const clientId = String(dealer.ga4CustomerId || '').trim();
+  if (clientId && lookup.has(`c:${clientId}`)) {
+    return lookup.get(`c:${clientId}`);
+  }
+  if (dealer.id != null && lookup.has(`i:${String(dealer.id)}`)) {
+    return lookup.get(`i:${String(dealer.id)}`);
+  }
+  return null;
+}
+
 export function sliceMapForRow(row) {
   const map = new Map();
   for (const slice of row.slices || []) {
