@@ -11,13 +11,19 @@ const TABS = [
   { id: 'other', label: 'Other',    icon: '📄' },
 ];
 
+const ALL_DEALER_TABS = [
+  { id: 'vdp', icon: '🚗' },
+  { id: 'all', label: 'All', icon: '📊' },
+];
+
 export default function PageTabs() {
-  const { config } = useClient();
+  const { config, isAllDealer } = useClient();
   const { tab, setTab } = useOverview();
+  const tabs = isAllDealer ? ALL_DEALER_TABS : TABS;
 
   return (
     <div className="page-tabs">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const label = t.id === 'vdp' ? config.vdpLabel : t.label;
         return (
           <button

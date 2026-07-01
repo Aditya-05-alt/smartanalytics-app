@@ -8,6 +8,7 @@ import { useDropdown } from './useDropdown';
 import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import { isAllDealerClient } from '@/lib/dashboard/allDealers';
 
 const NAV = [
   // { id: 'overview',    href: '/dashboard',              label: 'Overview' },
@@ -19,30 +20,50 @@ const NAV = [
 ];
 
 function ClientPicker() {
-  const { client, pickClient, dealers, loading, error } = useClient();
+  const {
+    client,
+    pickClient,
+    dealers,
+    loading,
+    error,
+    isAllDealer,
+    allDealerClient,
+  } = useClient();
   const { open, toggle, close, ref } = useDropdown();
 
   const [query, setQuery] = useState('');
 
-  const filtered = useMemo(() => {
+  const listItems = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return dealers;
-    return dealers.filter((d) => d.name.toLowerCase().includes(q));
-  }, [dealers, query]);
+    const dealerMatches = !q
+      ? dealers
+      : dealers.filter((d) => d.name.toLowerCase().includes(q));
+    const allMatches =
+      !q
+      || allDealerClient.name.toLowerCase().includes(q)
+      || q.includes('all');
+    if (allMatches) return [allDealerClient, ...dealerMatches];
+    return dealerMatches;
+  }, [dealers, query, allDealerClient]);
 
   useEffect(() => {
     if (!open) setQuery('');
   }, [open]);
 
-  const currentColor =
-    CATEGORIES[client?.category]?.color || 'var(--acc, #4EE09C)';
+  const currentColor = isAllDealer
+    ? 'var(--t3)'
+    : CATEGORIES[client?.category]?.color || 'var(--acc, #4EE09C)';
 
   const buttonLabel = client?.name || (loading ? 'Loading dealers…' : 'Select dealer');
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <div className="client-pick" onClick={toggle} role="button" tabIndex={0}>
-        <div className="cp-dot" style={{ background: currentColor }} />
+        {isAllDealer ? (
+          <div className="cp-dot" style={{ background: 'var(--t3)' }} aria-hidden />
+        ) : (
+          <div className="cp-dot" style={{ background: currentColor }} />
+        )}
         <span className="cp-name">{buttonLabel}</span>
         <span className="cp-arr">▼</span>
       </div>
@@ -64,13 +85,16 @@ function ClientPicker() {
             {!loading && error && (
               <div className="cd-empty cd-error">Failed to load: {error}</div>
             )}
-            {!loading && !error && filtered.length === 0 && (
+            {!loading && !error && listItems.length === 0 && (
               <div className="cd-empty">No dealers match “{query}”.</div>
             )}
             {!loading &&
               !error &&
-              filtered.map((c) => {
+              listItems.map((c) => {
                 const selected = client?.id === c.id;
+                const dotColor = isAllDealerClient(c)
+                  ? 'var(--t3)'
+                  : currentColor;
                 return (
                   <div
                     key={c.id}
@@ -80,7 +104,7 @@ function ClientPicker() {
                       close();
                     }}
                   >
-                    <div className="cd-dot" style={{ background: currentColor }} />
+                    <div className="cd-dot" style={{ background: dotColor }} />
                     <span className="cd-name">{c.name}</span>
                     {selected && (
                       <span

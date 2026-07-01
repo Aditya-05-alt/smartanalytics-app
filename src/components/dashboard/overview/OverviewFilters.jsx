@@ -35,7 +35,7 @@ function ComparePeriodSwitch({ enabled, onChange }) {
 }
 
 export default function OverviewFilters() {
-  const { config } = useClient();
+  const { config, isAllDealer } = useClient();
   const {
     dateRange,
     setDateRange,
@@ -75,6 +75,8 @@ export default function OverviewFilters() {
   };
 
   const hasActiveVdpFilters = vdpFiltersActive(vdpFilters, 'vdp');
+
+  if (isAllDealer) return null;
 
   return (
     <div className="filters">

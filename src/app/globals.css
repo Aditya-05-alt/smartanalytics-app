@@ -389,6 +389,245 @@ body {
 .cd-name { font-size: 12px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; margin-left: auto; }
 
+.all-dealer-overview-content.content {
+  flex: 1;
+  min-height: 0;
+  padding: 1.25rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.all-dealer-filters {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--bd);
+}
+
+.all-dealer-channel-panel {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.all-dealer-channel-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.adc-table-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.adc-table-wrap::-webkit-scrollbar {
+  display: none;
+}
+
+.adc-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  --adc-dealer-col-w: 200px;
+  --adc-total-col-w: 96px;
+}
+
+.adc-table th {
+  vertical-align: bottom;
+  padding: 10px 12px;
+  white-space: normal;
+}
+
+.adc-th-dealer,
+.adc-td-dealer {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: var(--adc-dealer-col-w);
+  width: var(--adc-dealer-col-w);
+  max-width: var(--adc-dealer-col-w);
+  background: var(--s2);
+}
+
+.adc-th-total,
+.adc-td-total {
+  position: sticky;
+  left: var(--adc-dealer-col-w);
+  z-index: 2;
+  min-width: var(--adc-total-col-w);
+  width: var(--adc-total-col-w);
+  max-width: var(--adc-total-col-w);
+  background: var(--s2);
+  box-shadow: none;
+}
+
+.adc-th-total::after,
+.adc-td-total::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ffffff;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.adc-th-dealer,
+.adc-th-total {
+  z-index: 4;
+  background: var(--s3);
+}
+
+.adc-table tr:hover .adc-td-dealer,
+.adc-table tr:hover .adc-td-total {
+  background: var(--s3);
+  color: var(--t);
+}
+
+.adc-th-dealer {
+  min-width: 200px;
+  text-align: left;
+}
+
+.adc-th-total {
+  min-width: 90px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.adc-th-channel {
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+.adc-col-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.adc-col-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.adc-col-label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--t2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.adc-td-dealer {
+  vertical-align: middle;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.adc-dealer-name {
+  display: inline;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t);
+}
+
+.adc-td-total {
+  text-align: center;
+  vertical-align: middle;
+  padding: 10px 12px !important;
+  white-space: nowrap;
+}
+
+.adc-total-views {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t);
+  font-variant-numeric: tabular-nums;
+}
+
+.adc-dealer-err {
+  margin-left: 6px;
+  color: var(--red, #f87171);
+  font-weight: 700;
+}
+
+.adc-td-channel {
+  text-align: center;
+  vertical-align: middle;
+  padding: 10px 8px !important;
+}
+
+.adc-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.adc-cell-views {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t);
+  font-variant-numeric: tabular-nums;
+}
+
+.adc-cell-pct {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+}
+
+.adc-cell-empty {
+  color: var(--t3);
+  font-size: 12px;
+}
+
+.adc-loading-row {
+  text-align: center;
+  color: var(--t3);
+  padding: 2rem !important;
+}
+
+.local-empty-state {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+.local-empty-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t2);
+}
+.local-empty-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t3);
+}
+
 .cd-search-wrap { padding: 6px 6px 4px; }
 .cd-search {
   width: 100%;

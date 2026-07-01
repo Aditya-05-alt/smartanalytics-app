@@ -16,6 +16,8 @@ import CmpTable from '@/components/dashboard/overview/CmpTable';
 // import ProximityBars from '@/components/dashboard/overview/ProximityBars';
 // import WarmLeads from '@/components/dashboard/overview/WarmLeads';
 import StatusBar from '@/components/dashboard/StatusBar';
+import AllDealerChannelTable from '@/components/dashboard/overview/AllDealerChannelTable';
+import { useClient } from '@/components/dashboard/ClientContext';
 import {
   OverviewProvider,
   useOverview,
@@ -29,7 +31,21 @@ const TAB_PAGE_TYPE = {
   other: 'Other',
 };
 
-function OverviewBody() {
+function AllDealerOverviewBody() {
+  return (
+    <>
+      <PageTabs />
+      <AllDealerChannelTable />
+      <StatusBar
+        items={[
+          { label: 'All Dealer — portfolio view', color: 'var(--t3)' },
+        ]}
+      />
+    </>
+  );
+}
+
+function DealerOverviewBody() {
   const { tab, error, clientKey, from, to, compareEnabled } = useOverview();
   const vdpCompareLayout = tab === 'vdp' && compareEnabled;
 
@@ -175,6 +191,12 @@ function OverviewBody() {
       />
     </>
   );
+}
+
+function OverviewBody() {
+  const { isAllDealer } = useClient();
+  if (isAllDealer) return <AllDealerOverviewBody />;
+  return <DealerOverviewBody />;
 }
 
 export default function OverviewPage() {

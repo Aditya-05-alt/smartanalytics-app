@@ -194,13 +194,19 @@ function chartDateListAndSeries(dateList, seriesByTab) {
 }
 
 export function OverviewProvider({ children }) {
-  const { client } = useClient();
+  const { client, isAllDealer } = useClient();
 
   const [tab, setTabState] = useState(() => readStoredOverviewTab() || 'vdp');
   const setTab = useCallback((nextTab) => {
     setTabState(nextTab);
     writeStoredOverviewTab(nextTab);
   }, []);
+
+  useEffect(() => {
+    if (isAllDealer && tab !== 'vdp' && tab !== 'all') {
+      setTab('vdp');
+    }
+  }, [isAllDealer, tab, setTab]);
   const [dateRange, setDateRange] = useState(DEFAULT_RANGE);
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [compareDateRange, setCompareDateRange] = useState(null);

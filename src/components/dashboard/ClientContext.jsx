@@ -15,6 +15,7 @@ import {
   resolveDealerFromList,
   writeStoredDealerId,
 } from '@/lib/dashboard/dashboardPrefs';
+import { ALL_DEALER_CLIENT, ALL_DEALER_ID, isAllDealerClient } from '@/lib/dashboard/allDealers';
 
 const ClientContext = createContext(null);
 
@@ -35,7 +36,7 @@ function normalizeRow(row) {
 
 export function ClientProvider({ children }) {
   const [dealers, setDealers] = useState([]);
-  const [client, setClient] = useState(null);
+  const [client, setClient] = useState(ALL_DEALER_CLIENT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -97,14 +98,25 @@ export function ClientProvider({ children }) {
     if (c?.id != null) writeStoredDealerId(c.id);
   }, []);
 
+  const isAllDealer = isAllDealerClient(client);
+
   const config = useMemo(() => {
     const key = client?.category || FALLBACK_CATEGORY;
     return CATEGORIES[key] || CATEGORIES.rv;
   }, [client]);
 
   const value = useMemo(
-    () => ({ client, config, pickClient, dealers, loading, error }),
-    [client, config, pickClient, dealers, loading, error]
+    () => ({
+      client,
+      config,
+      pickClient,
+      dealers,
+      loading,
+      error,
+      isAllDealer,
+      allDealerClient: ALL_DEALER_CLIENT,
+    }),
+    [client, config, pickClient, dealers, loading, error, isAllDealer]
   );
 
   return <ClientContext.Provider value={value}>{children}</ClientContext.Provider>;

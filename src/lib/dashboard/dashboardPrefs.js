@@ -65,12 +65,14 @@ export function writeStoredAdminDealerId(id) {
   }
 }
 
+import { ALL_DEALER_CLIENT, ALL_DEALER_ID } from '@/lib/dashboard/allDealers';
+
 export function resolveDealerFromList(dealers, storedId) {
-  if (!dealers?.length) return null;
+  if (storedId === ALL_DEALER_ID) return ALL_DEALER_CLIENT;
+  if (!dealers?.length) return ALL_DEALER_CLIENT;
   if (storedId) {
     const match = dealers.find((d) => String(d.id) === String(storedId));
     if (match) return match;
   }
-  const skyRiver = dealers.find((d) => /sky\s*river/i.test(d.name));
-  return skyRiver || dealers[0] || null;
+  return ALL_DEALER_CLIENT;
 }
