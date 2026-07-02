@@ -3636,6 +3636,8 @@ body {
   flex-direction: column;
   gap: 2px;
   align-content: start;
+  padding-right: 7px;
+  box-sizing: border-box;
 }
 .donut-lg-list--scroll::before {
   content: none;
