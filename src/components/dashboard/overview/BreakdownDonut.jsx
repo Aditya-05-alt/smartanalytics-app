@@ -209,89 +209,93 @@ export default function BreakdownDonut({
             </div>
           </div>
 
-          {/* ── Breakdown (rows scroll; total stays fixed when listScrollable) ── */}
+          {/* ── Breakdown (horizontal scroll for values; vertical when listScrollable) ── */}
           <div
             className={`donut-lg-list-col${listScrollable ? ' donut-lg-list-col--scroll' : ''}${totalDelta != null ? ' donut-lg-list-col--compare' : ''}${showGroupColumn ? ' donut-lg-list-col--with-toggle-col' : ''}`}
           >
-            {totalDelta != null && (
-              <div className="donut-lg-list-header" aria-hidden>
-                <span className="donut-lg-list-header-spacer" />
-                <span className="donut-lg-list-header-delta">Δ vs left</span>
-              </div>
-            )}
-            <div
-              className={
-                listScrollable
-                  ? 'donut-lg-list-rows donut-lg-list--scroll'
-                  : 'donut-lg-list-rows'
-              }
-            >
-              {visibleListSeries.map((s) => (
+            <div className="donut-lg-list-hscroll">
+              <div className="donut-lg-list-track">
+                {totalDelta != null && (
+                  <div className="donut-lg-list-header" aria-hidden>
+                    <span className="donut-lg-list-header-spacer" />
+                    <span className="donut-lg-list-header-delta">Δ vs left</span>
+                  </div>
+                )}
                 <div
-                  key={`${s.groupKey || 'solo'}-${s.name}`}
-                  className={[
-                    'donut-lg-row',
-                    showGroupColumn ? 'donut-lg-row--with-toggle-col' : '',
-                    s.delta != null ? 'donut-lg-row--compare' : '',
-                    s.isGroupRollup ? 'donut-lg-row--group-rollup' : '',
-                    s.isGroupMember ? 'donut-lg-row--group-member' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
+                  className={
+                    listScrollable
+                      ? 'donut-lg-list-rows donut-lg-list--scroll'
+                      : 'donut-lg-list-rows'
+                  }
+                >
+                  {visibleListSeries.map((s) => (
+                    <div
+                      key={`${s.groupKey || 'solo'}-${s.name}`}
+                      className={[
+                        'donut-lg-row',
+                        showGroupColumn ? 'donut-lg-row--with-toggle-col' : '',
+                        s.delta != null ? 'donut-lg-row--compare' : '',
+                        s.isGroupRollup ? 'donut-lg-row--group-rollup' : '',
+                        s.isGroupMember ? 'donut-lg-row--group-member' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {showGroupColumn && (
+                        s.isGroupRollup && s.collapsible ? (
+                          <ChannelGroupToggle
+                            expanded={isExpanded(s.groupKey)}
+                            onToggle={() => toggle(s.groupKey)}
+                            label={s.name}
+                          />
+                        ) : (
+                          <span className="donut-lg-toggle-spacer" aria-hidden />
+                        )
+                      )}
+                      <div
+                        className="donut-lg-swatch"
+                        style={{ background: s.color }}
+                      />
+                      <span
+                        className={`donut-lg-name${s.isGroupMember ? ' donut-lg-name--member' : ''}`}
+                        title={s.fullName || s.name}
+                      >
+                        {s.name}
+                      </span>
+                      <span className="donut-lg-value">
+                        {(Number(s.value) || 0).toLocaleString()}
+                      </span>
+                      <span className="donut-lg-pct">
+                        {(Number(s.pct) || 0).toFixed(pctDecimals)}%
+                      </span>
+                      {s.delta != null && (
+                        <span className="donut-lg-delta">
+                          <Delta value={s.delta} size={10} />
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div
+                  className={`donut-lg-total donut-lg-total--fixed${totalDelta != null ? ' donut-lg-total--compare' : ''}${showGroupColumn ? ' donut-lg-total--with-toggle-col' : ''}`}
                 >
                   {showGroupColumn && (
-                    s.isGroupRollup && s.collapsible ? (
-                      <ChannelGroupToggle
-                        expanded={isExpanded(s.groupKey)}
-                        onToggle={() => toggle(s.groupKey)}
-                        label={s.name}
-                      />
-                    ) : (
-                      <span className="donut-lg-toggle-spacer" aria-hidden />
-                    )
+                    <span className="donut-lg-toggle-spacer" aria-hidden />
                   )}
-                  <div
-                    className="donut-lg-swatch"
-                    style={{ background: s.color }}
-                  />
-                  <span
-                    className={`donut-lg-name${s.isGroupMember ? ' donut-lg-name--member' : ''}`}
-                    title={s.fullName || s.name}
-                  >
-                    {s.name}
+                  <span className="donut-lg-swatch donut-lg-total-swatch" aria-hidden />
+                  <span className="donut-lg-total-label">{totalLabel}</span>
+                  <span className="donut-lg-total-value">
+                    {(Number(grandTotal) || 0).toLocaleString()}
                   </span>
-                  <span className="donut-lg-value">
-                    {(Number(s.value) || 0).toLocaleString()}
-                  </span>
-                  <span className="donut-lg-pct">
-                    {(Number(s.pct) || 0).toFixed(pctDecimals)}%
-                  </span>
-                  {s.delta != null && (
-                    <span className="donut-lg-delta">
-                      <Delta value={s.delta} size={10} />
+                  <span className="donut-lg-total-pct-spacer" aria-hidden />
+                  {totalDelta != null && (
+                    <span className="donut-lg-total-delta">
+                      <Delta value={totalDelta} size={11} />
                     </span>
                   )}
                 </div>
-              ))}
-            </div>
-
-            <div
-              className={`donut-lg-total donut-lg-total--fixed${totalDelta != null ? ' donut-lg-total--compare' : ''}${showGroupColumn ? ' donut-lg-total--with-toggle-col' : ''}`}
-            >
-              {showGroupColumn && (
-                <span className="donut-lg-toggle-spacer" aria-hidden />
-              )}
-              <span className="donut-lg-swatch donut-lg-total-swatch" aria-hidden />
-              <span className="donut-lg-total-label">{totalLabel}</span>
-              <span className="donut-lg-total-value">
-                {(Number(grandTotal) || 0).toLocaleString()}
-              </span>
-              <span className="donut-lg-total-pct-spacer" aria-hidden />
-              {totalDelta != null && (
-                <span className="donut-lg-total-delta">
-                  <Delta value={totalDelta} size={11} />
-                </span>
-              )}
+              </div>
             </div>
           </div>
         </div>
