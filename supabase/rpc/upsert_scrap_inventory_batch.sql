@@ -1,5 +1,5 @@
--- Bulk upsert scrap inventory + day-complete marker (external worker).
--- Deploy in Supabase SQL editor.
+-- Bulk upsert into smart_scrap_inventory (+ optional day-complete marker).
+-- Deploy in Supabase SQL editor. Used by admin scrap sync + external worker.
 
 DROP FUNCTION IF EXISTS public.upsert_scrap_inventory_batch(jsonb, text, date, uuid);
 
@@ -32,11 +32,11 @@ BEGIN
     RAISE EXCEPTION 'No smart_hoot_config row for ga4_customer_id %', p_client_id;
   END IF;
 
-  INSERT INTO public.smart_scrap_data (
-    customer_name,
-    ga4_customer_id,
-    url,
+  INSERT INTO public.smart_scrap_inventory (
     sk,
+    customer_id,
+    customer_name,
+    url,
     vin,
     make,
     model,
@@ -50,20 +50,21 @@ BEGIN
     location,
     first_seen,
     last_seen,
-    source_list_url,
-    scraped_at,
-    scrape_run_id,
+    raw_data,
     updated_at
   )
   SELECT
-    v_name,
+    COALESCE(
+      NULLIF(trim(r->>'sk'), ''),
+      md5(trim(p_client_id) || ':' || lower(trim(r->>'url')))
+    ),
     trim(p_client_id),
+    v_name,
     trim(r->>'url'),
-    NULLIF(trim(r->>'sk'), ''),
     NULLIF(trim(r->>'vin'), ''),
     NULLIF(trim(r->>'make'), ''),
     NULLIF(trim(r->>'model'), ''),
-    NULLIF((r->>'year'), '')::integer,
+    NULLIF(trim(r->>'year'), ''),
     NULLIF(trim(r->>'trim'), ''),
     NULLIF((r->>'price'), '')::numeric,
     NULLIF((r->>'msrp'), '')::numeric,
@@ -73,32 +74,31 @@ BEGIN
     NULLIF(trim(r->>'location'), ''),
     COALESCE((r->>'first_seen')::timestamptz, now()),
     COALESCE((r->>'last_seen')::timestamptz, now()),
-    NULLIF(trim(r->>'source_list_url'), ''),
-    now(),
-    v_run_id,
+    CASE
+      WHEN r ? 'raw_data' THEN r->'raw_data'
+      ELSE jsonb_build_object('source_list_url', NULLIF(trim(r->>'source_list_url'), ''))
+    END,
     now()
   FROM jsonb_array_elements(COALESCE(p_rows, '[]'::jsonb)) AS r
   WHERE trim(COALESCE(r->>'url', '')) <> ''
-  ON CONFLICT (customer_name, url_norm)
-  DO UPDATE SET
-    ga4_customer_id = EXCLUDED.ga4_customer_id,
-    sk              = EXCLUDED.sk,
-    vin             = EXCLUDED.vin,
-    make            = EXCLUDED.make,
-    model           = EXCLUDED.model,
-    year            = EXCLUDED.year,
-    trim            = EXCLUDED.trim,
-    price           = EXCLUDED.price,
-    msrp            = EXCLUDED.msrp,
-    condition       = EXCLUDED.condition,
-    type_           = EXCLUDED.type_,
-    stock_number    = EXCLUDED.stock_number,
-    location        = EXCLUDED.location,
-    last_seen       = EXCLUDED.last_seen,
-    source_list_url = COALESCE(EXCLUDED.source_list_url, smart_scrap_data.source_list_url),
-    scraped_at      = now(),
-    scrape_run_id   = v_run_id,
-    updated_at      = now();
+  ON CONFLICT (sk) DO UPDATE SET
+    customer_id   = EXCLUDED.customer_id,
+    customer_name = EXCLUDED.customer_name,
+    url           = EXCLUDED.url,
+    vin           = EXCLUDED.vin,
+    make          = EXCLUDED.make,
+    model         = EXCLUDED.model,
+    year          = EXCLUDED.year,
+    trim          = EXCLUDED.trim,
+    price         = EXCLUDED.price,
+    msrp          = EXCLUDED.msrp,
+    condition     = EXCLUDED.condition,
+    type_         = EXCLUDED.type_,
+    stock_number  = EXCLUDED.stock_number,
+    location      = EXCLUDED.location,
+    last_seen     = EXCLUDED.last_seen,
+    raw_data      = COALESCE(EXCLUDED.raw_data, smart_scrap_inventory.raw_data),
+    updated_at    = now();
 
   GET DIAGNOSTICS v_count = ROW_COUNT;
 

@@ -8,6 +8,7 @@ import {
   runPipelineFiltration,
   runPipelineFinalSync,
   runPipelinePageSync,
+  runPipelineScrapSync,
 } from '@/lib/api/adminPipeline';
 import { chunkDates, coerceDateRange } from '@/lib/pipeline/dates';
 import PipelineSyncLog from '@/components/dashboard/admin/PipelineSyncLog';
@@ -147,8 +148,9 @@ export default function DealerPipelineCard({ dealer, from, to }) {
   const [message, setMessage] = useState(null);
   const [step1Result, setStep1Result] = useState(null);
   const [step2Result, setStep2Result] = useState(null);
+  const [scrapResult, setScrapResult] = useState(null);
   const [step3Result, setStep3Result] = useState(null);
-  const [stepLogs, setStepLogs] = useState({ 1: [], 2: [], 3: [] });
+  const [stepLogs, setStepLogs] = useState({ 1: [], 2: [], scrap: [], 3: [] });
   const loadAbortRef = useRef(null);
 
   const clientId = dealer.ga4CustomerId;
@@ -411,6 +413,35 @@ export default function DealerPipelineCard({ dealer, from, to }) {
     }
   };
 
+  const runScrapSync = async () => {
+    if (!clientId) return;
+    setBusyStep('scrap');
+    setMessage(null);
+    setError(null);
+    setStepLog('scrap', [
+      logLine('Scrap inventory — fetch list page → smart_scrap_inventory'),
+    ]);
+    try {
+      const res = await runPipelineScrapSync({ clientId, reportDate: to });
+      setScrapResult(res);
+      setStepLog('scrap', [
+        logLine('Scrap inventory — fetch list page → smart_scrap_inventory'),
+        logLine(
+          `Upserted ${(res.upsertedCount || 0).toLocaleString()} rows · ${(res.urlsFound || 0).toLocaleString()} VDP URLs found`
+        ),
+      ]);
+      setMessage(
+        `Scrap inventory sync complete — ${(res.upsertedCount || 0).toLocaleString()} rows in smart_scrap_inventory.`
+      );
+      await loadPipelineData();
+    } catch (e) {
+      appendStepLog('scrap', logLine(`Error: ${e?.message || 'Scrap sync failed.'}`));
+      setError(e?.message || 'Scrap sync failed.');
+    } finally {
+      setBusyStep(null);
+    }
+  };
+
   const runStep3 = async () => {
     if (!clientId) return;
     setBusyStep(3);
@@ -456,6 +487,23 @@ export default function DealerPipelineCard({ dealer, from, to }) {
           No GA4 customer ID on smart_hoot_config — map ga4_customer_id to
           smart_ga4_config.client_id.
         </p>
+      )}
+
+      {stats?.coverage?.inventory && (
+        <div className="pipeline-inventory-summary">
+          <p className="pipeline-step-meta">
+            <strong>Inventory for Step 3</strong>
+            {' · '}
+            Hoot: {(stats.coverage.inventory.hootRowCount || 0).toLocaleString()} rows
+            {' · '}
+            Scrap: {(stats.coverage.inventory.scrapRowCount || 0).toLocaleString()} rows
+            {stats.coverage.inventory.scrapLink ? ' · scrap_link configured' : ''}
+          </p>
+          <p className="pipeline-step-meta pipeline-inventory-hint">
+            Step 3 matches <code>smart_hoot_inventory</code> first; if no URL match, uses{' '}
+            <code>smart_scrap_inventory</code>.
+          </p>
+        </div>
       )}
 
       <div className="pipeline-steps">
@@ -547,6 +595,45 @@ export default function DealerPipelineCard({ dealer, from, to }) {
           <StepResultPanel title="Step 2 — filtration result" result={step2Result} />
         </div>
 
+        {wf.canRunScrapSync && (
+          <div className="pipeline-step pipeline-step--scrap">
+            <div className="pipeline-step-head">
+              <span className="pipeline-step-num">↳</span>
+              <span>Scrap inventory (optional)</span>
+              <span
+                className={`pipeline-badge ${
+                  wf.hasScrapInventory ? 'pipeline-badge--ok' : 'pipeline-badge--pending'
+                }${loadingWorkflow ? ' pipeline-badge--loading' : ''}`}
+              >
+                {loadingWorkflow && !stats
+                  ? 'Checking…'
+                  : wf.hasScrapInventory
+                    ? 'Has data'
+                    : 'Empty'}
+              </span>
+            </div>
+            <p className="pipeline-step-desc">
+              Scrapes the dealer <code>scrap_link</code> from Vdp Logics into{' '}
+              <code>smart_scrap_inventory</code>. Run when Hoot inventory is missing or
+              incomplete — Step 3 will fall back to scrap rows automatically.
+            </p>
+            <button
+              type="button"
+              className="ga4-count-export-btn"
+              disabled={!clientId || busyStep != null}
+              onClick={runScrapSync}
+            >
+              {busyStep === 'scrap' ? 'Syncing scrap…' : 'Sync scrap inventory'}
+            </button>
+            <PipelineSyncLog step="scrap" busyStep={busyStep} lines={stepLogs.scrap || []} />
+            {scrapResult && (
+              <p className="pipeline-step-meta">
+                Last run: {(scrapResult.upsertedCount || 0).toLocaleString()} rows upserted
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="pipeline-step">
           <div className="pipeline-step-head">
             <span className="pipeline-step-num">3</span>
@@ -564,7 +651,9 @@ export default function DealerPipelineCard({ dealer, from, to }) {
             </span>
           </div>
           <p className="pipeline-step-desc">
-            Syncs VDP rows into smart_final_data (inventory match).
+            Syncs VDP rows into <code>smart_final_data</code>. Inventory match:{' '}
+            <code>smart_hoot_inventory</code> first, then <code>smart_scrap_inventory</code>{' '}
+            when Hoot has no matching URL.
           </p>
           {stats?.coverage?.finalVdp && (
             <p className="pipeline-step-meta">

@@ -80,3 +80,16 @@ export async function runPipelineFinalSync({ clientId, from, to }) {
   if (!res.ok) throw new Error(json.error || 'Final sync failed.');
   return json;
 }
+
+/** Optional — scrape dealer list page → smart_scrap_inventory (requires scrap_link in Vdp Logics). */
+export async function runPipelineScrapSync({ clientId, reportDate }) {
+  const res = await fetch('/api/admin/pipeline/scrap-sync', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, reportDate }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Scrap inventory sync failed.');
+  return json;
+}

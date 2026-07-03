@@ -1,6 +1,6 @@
 -- Deploy in Supabase SQL editor. Called by Admin Pipeline Step 3 (build_smart_final_data).
 -- Prefer p_date_from / p_date_to (matches UI From → To). Falls back to p_days_back.
--- Scrap dealers: joins smart_scrap_data instead of smart_hoot_inventory.
+-- Inventory: smart_hoot_inventory first; if no URL match, smart_scrap_inventory (OR join).
 
 CREATE OR REPLACE FUNCTION public.build_smart_final_data(
   p_client_id text DEFAULT NULL,
@@ -72,19 +72,31 @@ BEGIN
       h.customer_name,
       h.hoot_id,
       h.hoot_url,
-      h.website_platform,
-      COALESCE(h.inventory_source, 'hoot') AS inventory_source
+      h.website_platform
     FROM public.smart_hoot_config h
     WHERE h.ga4_customer_id IS NOT NULL
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
   hoot_inv_norm AS (
     SELECT DISTINCT ON (i.customer_name, LOWER(TRIM(i.url)))
-      i.customer_name,
+      i.customer_name::text AS customer_name,
+      NULL::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
-      i.sk, i.vin, i.url, i.make, i.model, i.year, i.trim,
-      i.price, i.msrp, i.condition, i.type_, i.stock_number,
-      i.location, i.first_seen, i.last_seen
+      i.sk::text AS sk,
+      i.vin::text AS vin,
+      i.url::text AS url,
+      i.make::text AS make,
+      i.model::text AS model,
+      NULLIF(TRIM(i.year::text), '') AS year,
+      i.trim::text AS trim,
+      i.price::numeric AS price,
+      i.msrp::numeric AS msrp,
+      i.condition::text AS condition,
+      i.type_::text AS type_,
+      i.stock_number::text AS stock_number,
+      i.location::text AS location,
+      i.first_seen,
+      i.last_seen
     FROM public.smart_hoot_inventory i
     WHERE i.url IS NOT NULL
       AND i.url <> ''
@@ -93,21 +105,56 @@ BEGIN
              i.first_seen DESC NULLS LAST
   ),
   scrap_inv_norm AS (
-    SELECT DISTINCT ON (s.customer_name, s.url_norm)
+    SELECT DISTINCT ON (
+      COALESCE(NULLIF(TRIM(i.customer_id), ''), i.customer_name),
+      LOWER(TRIM(i.url))
+    )
+      i.customer_name::text AS customer_name,
+      NULLIF(TRIM(i.customer_id), '')::text AS ga4_customer_id,
+      LOWER(TRIM(i.url)) AS url_lower,
+      i.sk::text AS sk,
+      i.vin::text AS vin,
+      i.url::text AS url,
+      i.make::text AS make,
+      i.model::text AS model,
+      NULLIF(TRIM(i.year), '') AS year,
+      i.trim::text AS trim,
+      i.price::numeric AS price,
+      i.msrp::numeric AS msrp,
+      i.condition::text AS condition,
+      i.type_::text AS type_,
+      i.stock_number::text AS stock_number,
+      i.location::text AS location,
+      i.first_seen,
+      i.last_seen
+    FROM public.smart_scrap_inventory i
+    WHERE i.url IS NOT NULL
+      AND i.url <> ''
+    ORDER BY COALESCE(NULLIF(TRIM(i.customer_id), ''), i.customer_name),
+             LOWER(TRIM(i.url)),
+             i.last_seen DESC NULLS LAST,
+             i.first_seen DESC NULLS LAST
+  ),
+  inv_pool AS (
+    SELECT
+      h.customer_name,
+      h.ga4_customer_id,
+      h.url_lower, h.sk, h.vin, h.url, h.make, h.model, h.year, h.trim,
+      h.price, h.msrp, h.condition, h.type_, h.stock_number,
+      h.location, h.first_seen, h.last_seen,
+      1 AS match_priority
+    FROM hoot_inv_norm h
+    UNION ALL
+    SELECT
       s.customer_name,
       s.ga4_customer_id,
-      s.url_norm AS url_lower,
-      s.sk, s.vin, s.url, s.make, s.model, s.year, s.trim,
+      s.url_lower, s.sk, s.vin, s.url, s.make, s.model, s.year, s.trim,
       s.price, s.msrp, s.condition, s.type_, s.stock_number,
-      s.location, s.first_seen, s.last_seen
-    FROM public.smart_scrap_data s
-    WHERE s.url IS NOT NULL
-      AND s.url <> ''
-    ORDER BY s.customer_name, s.url_norm,
-             s.last_seen DESC NULLS LAST,
-             s.first_seen DESC NULLS LAST
+      s.location, s.first_seen, s.last_seen,
+      2 AS match_priority
+    FROM scrap_inv_norm s
   ),
-  hoot_matched AS (
+  matched AS (
     SELECT DISTINCT ON (u.client_id, u.report_date, u.page_path)
       u.client_id,
       u.ga4_property_id,
@@ -129,94 +176,19 @@ BEGIN
       iu.price, iu.msrp, iu.condition, iu.type_, iu.stock_number,
       iu.location, iu.first_seen, iu.last_seen
     FROM ga4_unique u
-    INNER JOIN config_unique c
-            ON c.ga4_customer_id = u.client_id
-           AND c.inventory_source = 'hoot'
-    LEFT JOIN hoot_inv_norm iu
-           ON iu.customer_name = c.customer_name
+    LEFT JOIN config_unique c
+           ON c.ga4_customer_id = u.client_id
+    LEFT JOIN inv_pool iu
+           ON (
+                iu.customer_name = c.customer_name
+             OR iu.ga4_customer_id = c.ga4_customer_id::text
+              )
           AND u.page_path IS NOT NULL
           AND u.page_path <> ''
           AND iu.url_lower LIKE '%' || LOWER(TRIM(u.page_path)) || '%'
     ORDER BY u.client_id, u.report_date, u.page_path,
+             iu.match_priority ASC NULLS LAST,
              LENGTH(iu.url_lower) DESC NULLS LAST
-  ),
-  scrap_matched AS (
-    SELECT DISTINCT ON (u.client_id, u.report_date, u.page_path)
-      u.client_id,
-      u.ga4_property_id,
-      u.account_name,
-      u.report_date,
-      u.page_location,
-      u.page_path,
-      u.page_title,
-      u.ga4_page_type,
-      u.views,
-      u.total_users,
-      u.sessions,
-      u.new_users,
-      c.customer_name,
-      c.hoot_id,
-      c.hoot_url,
-      c.website_platform,
-      su.sk, su.vin, su.url, su.make, su.model, su.year, su.trim,
-      su.price, su.msrp, su.condition, su.type_, su.stock_number,
-      su.location, su.first_seen, su.last_seen
-    FROM ga4_unique u
-    INNER JOIN config_unique c
-            ON c.ga4_customer_id = u.client_id
-           AND c.inventory_source = 'scrap'
-    LEFT JOIN scrap_inv_norm su
-           ON (
-                su.customer_name = c.customer_name
-             OR su.ga4_customer_id = c.ga4_customer_id::text
-              )
-          AND u.page_path IS NOT NULL
-          AND u.page_path <> ''
-          AND su.url_lower LIKE '%' || LOWER(TRIM(u.page_path)) || '%'
-    ORDER BY u.client_id, u.report_date, u.page_path,
-             LENGTH(su.url_lower) DESC NULLS LAST
-  ),
-  matched AS (
-    SELECT * FROM hoot_matched
-    UNION ALL
-    SELECT * FROM scrap_matched
-    UNION ALL
-    SELECT
-      u.client_id,
-      u.ga4_property_id,
-      u.account_name,
-      u.report_date,
-      u.page_location,
-      u.page_path,
-      u.page_title,
-      u.ga4_page_type,
-      u.views,
-      u.total_users,
-      u.sessions,
-      u.new_users,
-      c.customer_name,
-      c.hoot_id,
-      c.hoot_url,
-      c.website_platform,
-      NULL::text AS sk,
-      NULL::text AS vin,
-      NULL::text AS url,
-      NULL::text AS make,
-      NULL::text AS model,
-      NULL::integer AS year,
-      NULL::text AS trim,
-      NULL::numeric AS price,
-      NULL::numeric AS msrp,
-      NULL::text AS condition,
-      NULL::text AS type_,
-      NULL::text AS stock_number,
-      NULL::text AS location,
-      NULL::timestamptz AS first_seen,
-      NULL::timestamptz AS last_seen
-    FROM ga4_unique u
-    LEFT JOIN config_unique c ON c.ga4_customer_id = u.client_id
-    WHERE c.ga4_customer_id IS NULL
-       OR c.inventory_source NOT IN ('hoot', 'scrap')
   )
   SELECT
     m.client_id,

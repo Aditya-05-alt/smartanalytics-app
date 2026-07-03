@@ -23,6 +23,64 @@ async function countInRange(supabase, table, clientId, from, to) {
   return { count: count ?? 0 };
 }
 
+async function fetchDealerInventoryContext(supabase, clientId) {
+  const { data: hootRow, error: hootErr } = await supabase
+    .from('smart_hoot_config')
+    .select('customer_name')
+    .eq('ga4_customer_id', clientId)
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (hootErr) {
+    return { customerName: null, error: hootErr.message };
+  }
+
+  const customerName = hootRow?.customer_name?.trim() || null;
+
+  const [hootInv, scrapInv, vdpLogic] = await Promise.all([
+    customerName
+      ? supabase
+          .from('smart_hoot_inventory')
+          .select('*', { count: 'exact', head: true })
+          .eq('customer_name', customerName)
+      : Promise.resolve({ count: 0, error: null }),
+    supabase
+      .from('smart_scrap_inventory')
+      .select('*', { count: 'exact', head: true })
+      .or(
+        customerName
+          ? `customer_id.eq.${clientId},customer_name.eq.${customerName}`
+          : `customer_id.eq.${clientId}`
+      ),
+    supabase
+      .from('smart_vdp_logic')
+      .select('scrap_link')
+      .or(
+        customerName
+          ? `dealer_id.eq.${clientId},dealer_name.eq.${customerName}`
+          : `dealer_id.eq.${clientId}`
+      )
+      .not('scrap_link', 'is', null)
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const scrapLink = vdpLogic.data?.scrap_link?.trim() || null;
+
+  return {
+    customerName,
+    hootInventoryCount: hootInv.error ? 0 : hootInv.count ?? 0,
+    scrapInventoryCount: scrapInv.error ? 0 : scrapInv.count ?? 0,
+    scrapLink,
+    errors: {
+      hootInventory: hootInv.error?.message || null,
+      scrapInventory: scrapInv.error?.message || null,
+    },
+  };
+}
+
 /** Paginate report_date only — avoids loading full rows into memory. */
 export async function filledDatesForTable(supabase, table, clientId, from, to) {
   const filled = new Set();
@@ -88,6 +146,7 @@ export function buildWorkflowPayload({
   vdpInRange,
   vdpTotal,
   finalCount,
+  inventory,
 }) {
   const pageFilled = pageFill.filled || new Set();
   const missingPage = rangeDays.filter((d) => !pageFilled.has(d));
@@ -126,20 +185,32 @@ export function buildWorkflowPayload({
       finalVdp: {
         rowCount: finalCount.count ?? 0,
       },
+      inventory: {
+        hootRowCount: inventory?.hootInventoryCount ?? 0,
+        scrapRowCount: inventory?.scrapInventoryCount ?? 0,
+        scrapLink: inventory?.scrapLink ?? null,
+        customerName: inventory?.customerName ?? null,
+      },
     },
     workflow: {
       ga4PageComplete,
       hasPageData,
       hasFilterData,
       hasFinalData,
+      hasScrapLink: Boolean(inventory?.scrapLink),
+      hasHootInventory: (inventory?.hootInventoryCount ?? 0) > 0,
+      hasScrapInventory: (inventory?.scrapInventoryCount ?? 0) > 0,
       canRunStep1: Boolean(clientId),
       canRunStep2: hasPageData,
       canRunStep3: hasFilterData,
+      canRunScrapSync: Boolean(inventory?.scrapLink),
     },
     errors: {
       pageFill: pageFill.error || null,
       vdpInRange: vdpInRange.error || null,
       vdpTotal: vdpTotal.error || null,
+      hootInventory: inventory?.errors?.hootInventory || null,
+      scrapInventory: inventory?.errors?.scrapInventory || null,
     },
   };
 }
@@ -158,12 +229,14 @@ export async function fetchPipelineWorkflowStats(supabase, clientId, fromRaw, to
     };
   }
 
-  const [pageFill, pageCount, vdpInRange, vdpTotal, finalCount] = await Promise.all([
+  const [pageFill, pageCount, vdpInRange, vdpTotal, finalCount, inventory] =
+    await Promise.all([
     filledDatesForTable(supabase, PAGE_TABLE, clientId, from, to),
     countInRange(supabase, PAGE_TABLE, clientId, from, to),
     countPageRowsInRange(supabase, clientId, from, to, { vdpOnly: true }),
     countVdpPageRowsAny(supabase, clientId),
     countInRange(supabase, FINAL_TABLE, clientId, from, to),
+    fetchDealerInventoryContext(supabase, clientId),
   ]);
 
   return {
@@ -178,6 +251,7 @@ export async function fetchPipelineWorkflowStats(supabase, clientId, fromRaw, to
       vdpInRange,
       vdpTotal,
       finalCount,
+      inventory,
     }),
   };
 }

@@ -1,4 +1,4 @@
--- Dealers configured for scrap inventory sync (external worker input).
+-- Dealers with a scrap_link in smart_vdp_logic (no inventory_source flag required).
 -- Deploy in Supabase SQL editor.
 
 DROP FUNCTION IF EXISTS public.get_scrap_dealers_for_sync(text);
@@ -30,7 +30,7 @@ AS $$
     h.customer_name,
     trim(h.ga4_customer_id::text) AS ga4_customer_id,
     h.website_platform,
-    h.inventory_source,
+    'scrap'::text AS inventory_source,
     v.scrap_link,
     v.website_url,
     v.cms,
@@ -44,13 +44,14 @@ AS $$
     FROM public.smart_vdp_logic vl
     WHERE trim(vl.dealer_id::text) = trim(h.ga4_customer_id::text)
        OR vl.dealer_name = h.customer_name
-    ORDER BY vl.updated_at DESC NULLS LAST, vl.id DESC
+    ORDER BY vl.id DESC
     LIMIT 1
   ) v ON TRUE
   WHERE h.is_active IS TRUE
     AND h.ga4_customer_id IS NOT NULL
     AND trim(h.ga4_customer_id::text) <> ''
-    AND COALESCE(h.inventory_source, 'hoot') = 'scrap'
+    AND v.scrap_link IS NOT NULL
+    AND trim(v.scrap_link) <> ''
     AND (p_client_id IS NULL OR trim(h.ga4_customer_id::text) = trim(p_client_id))
   ORDER BY h.customer_name;
 $$;
@@ -58,4 +59,4 @@ $$;
 REVOKE ALL ON FUNCTION public.get_scrap_dealers_for_sync(text) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_scrap_dealers_for_sync(text)
-  TO anon, authenticated, service_role;
+  TO service_role;
