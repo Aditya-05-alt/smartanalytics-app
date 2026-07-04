@@ -16,7 +16,7 @@ async function fetchPipelineStatsQuery({ clientId, from, to, scope, signal }) {
   return json;
 }
 
-/** Fast workflow metadata — stage badges, coverage, unlock flags (no per-day tables). */
+/** Fast workflow metadata ??? stage badges, coverage, unlock flags (no per-day tables). */
 export async function fetchPipelineWorkflow({ clientId, from, to, signal }) {
   return fetchPipelineStatsQuery({ clientId, from, to, scope: 'workflow', signal });
 }
@@ -42,7 +42,7 @@ export function mergePipelineRangeViews(prev, chunk) {
   };
 }
 
-/** Step 1 — Node GA4 page sync → smart_ga4_page_data */
+/** Step 1 ??? Node GA4 page sync ??? smart_ga4_page_data */
 export async function runPipelinePageSync({ clientId, from, to }) {
   const res = await fetch('/api/admin/pipeline/sync-page', {
     method: 'POST',
@@ -55,7 +55,7 @@ export async function runPipelinePageSync({ clientId, from, to }) {
   return json;
 }
 
-/** Step 2 — apply_vdp_filtration_range RPC */
+/** Step 2 ??? apply_vdp_filtration_range RPC */
 export async function runPipelineFiltration({ clientId, from, to }) {
   const res = await fetch('/api/admin/pipeline/filtration', {
     method: 'POST',
@@ -68,7 +68,7 @@ export async function runPipelineFiltration({ clientId, from, to }) {
   return json;
 }
 
-/** Step 3 — final VDP sync RPC */
+/** Step 3 ??? final VDP sync RPC */
 export async function runPipelineFinalSync({ clientId, from, to }) {
   const res = await fetch('/api/admin/pipeline/final-sync', {
     method: 'POST',
@@ -78,18 +78,5 @@ export async function runPipelineFinalSync({ clientId, from, to }) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || 'Final sync failed.');
-  return json;
-}
-
-/** Optional — scrape dealer list page → smart_scrap_inventory (requires scrap_link in Vdp Logics). */
-export async function runPipelineScrapSync({ clientId, reportDate }) {
-  const res = await fetch('/api/admin/pipeline/scrap-sync', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, reportDate }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || 'Scrap inventory sync failed.');
   return json;
 }

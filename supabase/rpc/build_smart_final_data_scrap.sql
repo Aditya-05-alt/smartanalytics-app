@@ -1,8 +1,9 @@
--- Deploy in Supabase SQL editor. Called by Admin Pipeline Step 3 (build_smart_final_data).
--- Prefer p_date_from / p_date_to (matches UI From -> To). Falls back to p_days_back.
--- Hoot inventory only (smart_hoot_inventory). For scrap fallback use build_smart_final_data_scrap.
+-- Deploy in Supabase SQL editor. Scrap / fallback Step 3 for dealers without Hoot inventory.
+-- Same params + return shape as build_smart_final_data.
+-- Inventory: smart_hoot_inventory first; if no URL match, smart_scrap_inventory (OR join).
+-- Call explicitly from cron/edge or admin — does NOT replace build_smart_final_data.
 
-CREATE OR REPLACE FUNCTION public.build_smart_final_data(
+CREATE OR REPLACE FUNCTION public.build_smart_final_data_scrap(
   p_client_id text DEFAULT NULL,
   p_days_back integer DEFAULT NULL,
   p_date_from date DEFAULT NULL,
@@ -77,19 +78,80 @@ BEGIN
     WHERE h.ga4_customer_id IS NOT NULL
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
-  inv_norm AS (
+  hoot_inv_norm AS (
     SELECT DISTINCT ON (i.customer_name, LOWER(TRIM(i.url)))
-      i.customer_name,
+      i.customer_name::text AS customer_name,
+      NULL::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
-      i.sk, i.vin, i.url, i.make, i.model, i.year, i.trim,
-      i.price, i.msrp, i.condition, i.type_, i.stock_number,
-      i.location, i.first_seen, i.last_seen
+      i.sk::text AS sk,
+      i.vin::text AS vin,
+      i.url::text AS url,
+      i.make::text AS make,
+      i.model::text AS model,
+      NULLIF(TRIM(i.year::text), '') AS year,
+      i.trim::text AS trim,
+      i.price::numeric AS price,
+      i.msrp::numeric AS msrp,
+      i.condition::text AS condition,
+      i.type_::text AS type_,
+      i.stock_number::text AS stock_number,
+      i.location::text AS location,
+      i.first_seen,
+      i.last_seen
     FROM public.smart_hoot_inventory i
     WHERE i.url IS NOT NULL
       AND i.url <> ''
     ORDER BY i.customer_name, LOWER(TRIM(i.url)),
              i.last_seen DESC NULLS LAST,
              i.first_seen DESC NULLS LAST
+  ),
+  scrap_inv_norm AS (
+    SELECT DISTINCT ON (
+      COALESCE(NULLIF(TRIM(i.customer_id), ''), i.customer_name),
+      LOWER(TRIM(i.url))
+    )
+      i.customer_name::text AS customer_name,
+      NULLIF(TRIM(i.customer_id), '')::text AS ga4_customer_id,
+      LOWER(TRIM(i.url)) AS url_lower,
+      i.sk::text AS sk,
+      i.vin::text AS vin,
+      i.url::text AS url,
+      i.make::text AS make,
+      i.model::text AS model,
+      NULLIF(TRIM(i.year), '') AS year,
+      i.trim::text AS trim,
+      i.price::numeric AS price,
+      i.msrp::numeric AS msrp,
+      i.condition::text AS condition,
+      i.type_::text AS type_,
+      i.stock_number::text AS stock_number,
+      i.location::text AS location,
+      i.first_seen,
+      i.last_seen
+    FROM public.smart_scrap_inventory i
+    WHERE i.url IS NOT NULL
+      AND i.url <> ''
+    ORDER BY COALESCE(NULLIF(TRIM(i.customer_id), ''), i.customer_name),
+             LOWER(TRIM(i.url)),
+             i.last_seen DESC NULLS LAST,
+             i.first_seen DESC NULLS LAST
+  ),
+  inv_pool AS (
+    SELECT
+      h.customer_name, h.ga4_customer_id,
+      h.url_lower, h.sk, h.vin, h.url, h.make, h.model, h.year, h.trim,
+      h.price, h.msrp, h.condition, h.type_, h.stock_number,
+      h.location, h.first_seen, h.last_seen,
+      1 AS match_priority
+    FROM hoot_inv_norm h
+    UNION ALL
+    SELECT
+      s.customer_name, s.ga4_customer_id,
+      s.url_lower, s.sk, s.vin, s.url, s.make, s.model, s.year, s.trim,
+      s.price, s.msrp, s.condition, s.type_, s.stock_number,
+      s.location, s.first_seen, s.last_seen,
+      2 AS match_priority
+    FROM scrap_inv_norm s
   ),
   matched AS (
     SELECT DISTINCT ON (u.client_id, u.report_date, u.page_path)
@@ -115,12 +177,16 @@ BEGIN
     FROM ga4_unique u
     LEFT JOIN config_unique c
            ON trim(c.ga4_customer_id::text) = trim(u.client_id)
-    LEFT JOIN inv_norm iu
-           ON iu.customer_name = c.customer_name
+    LEFT JOIN inv_pool iu
+           ON (
+                iu.ga4_customer_id = trim(u.client_id)
+             OR (c.customer_name IS NOT NULL AND iu.customer_name = c.customer_name)
+              )
           AND u.page_path IS NOT NULL
           AND u.page_path <> ''
           AND iu.url_lower LIKE '%' || LOWER(TRIM(u.page_path)) || '%'
     ORDER BY u.client_id, u.report_date, u.page_path,
+             iu.match_priority ASC NULLS LAST,
              LENGTH(iu.url_lower) DESC NULLS LAST
   )
   SELECT
@@ -193,5 +259,5 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.build_smart_final_data(text, integer, date, date)
+GRANT EXECUTE ON FUNCTION public.build_smart_final_data_scrap(text, integer, date, date)
   TO service_role;

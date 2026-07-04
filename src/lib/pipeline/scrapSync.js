@@ -66,9 +66,18 @@ function guessFromUrl(url) {
 }
 
 export async function scrapeDealerListPage(dealer) {
-  const listUrl = dealer.scrap_link || dealer.scrapLink;
-  if (!listUrl?.trim()) {
-    throw new Error(`Missing scrap_link for ${dealer.customer_name || dealer.name}`);
+  const scrapRaw = String(dealer.scrap_link || dealer.scrapLink || '').trim();
+  const websiteUrl = String(dealer.website_url || dealer.websiteUrl || '').trim();
+  const listUrl = /^https?:\/\//i.test(scrapRaw)
+    ? scrapRaw
+    : scrapRaw.toLowerCase() === 'on' && /^https?:\/\//i.test(websiteUrl)
+      ? websiteUrl
+      : null;
+
+  if (!listUrl) {
+    throw new Error(
+      `Missing scrap list URL for ${dealer.customer_name || dealer.name} (set website_url or legacy scrap_link URL)`
+    );
   }
 
   const res = await fetch(listUrl, {

@@ -22,7 +22,7 @@ export const EXAMPLE_ROW = {
   cms: 'DealerOn',
   data_source: 'GA4',
   hoot_link: 'https://hoot.example/inventory',
-  scrap_link: 'https://scrap.example/vdp',
+  scrap_link: 'off',
   vdp_logic: '/inventory/.*vdp.*',
   srp_logic: '/inventory/?$',
   home_page_logic: '^/$',
@@ -36,7 +36,7 @@ const FORM_FIELDS = [
   { key: 'cms', db: 'cms', label: 'CMS' },
   { key: 'dataSource', db: 'data_source', label: 'Data source' },
   { key: 'hootLink', db: 'hoot_link', label: 'Hoot link' },
-  { key: 'scrapLink', db: 'scrap_link', label: 'Scrap link' },
+  { key: 'scrapLink', db: 'scrap_link', label: 'Scrap (auto on/off)', readOnly: true },
   { key: 'vdpLogic', db: 'vdp_logic', label: 'VDP logic', wide: true, multiPattern: true },
   { key: 'srpLogic', db: 'srp_logic', label: 'SRP logic', wide: true },
   { key: 'homePageLogic', db: 'home_page_logic', label: 'Home page logic', wide: true },
@@ -92,6 +92,16 @@ export function normalizeRow(row) {
     dataSource: row.data_source ?? null,
     hootLink: row.hoot_link ?? null,
     scrapLink: row.scrap_link ?? null,
+    scrapStatus:
+      String(row.scrap_link ?? '').trim().toLowerCase() === 'on'
+        ? 'on'
+        : String(row.scrap_link ?? '').trim().toLowerCase() === 'off'
+          ? 'off'
+          : row.scrap_link
+            ? 'on'
+            : 'off',
+    scrapOn: String(row.scrap_link ?? '').trim().toLowerCase() === 'on',
+    scrapRowCount: row.scrap_row_count ?? 0,
     vdpLogic: row.vdp_logic ?? null,
     srpLogic: row.srp_logic ?? null,
     homePageLogic: row.home_page_logic ?? null,
@@ -104,7 +114,7 @@ export function normalizeRow(row) {
 export function bodyToDbRecord(body) {
   const record = {};
   for (const f of FORM_FIELDS) {
-    if (f.multiPattern) continue;
+    if (f.multiPattern || f.readOnly) continue;
     const v = body?.[f.key];
     if (v === undefined) continue;
     const s = v == null ? null : String(v).trim();

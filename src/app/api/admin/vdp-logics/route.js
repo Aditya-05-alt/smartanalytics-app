@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { getSuperadminFromCookies } from '@/lib/auth/adminApiAuth';
 import { createAdminDataClient } from '@/lib/supabase/adminDataClient';
 import { bodyToDbRecord } from '@/lib/vdpLogics/fields';
+import {
+  loadScrapInventoryByCustomerId,
+  scrapStatusForDealerId,
+} from '@/lib/vdpLogics/scrapStatus';
 import { mapSupabaseError, normalizeRow, TABLE } from './_shared';
 
 const RPC = 'build_vdp_logics';
@@ -36,7 +40,44 @@ export async function GET(request) {
     return NextResponse.json({ error: error.message + hint }, { status: 500 });
   }
 
-  const rows = (data || []).map(normalizeRow);
+  const rawRows = (data || []).map(normalizeRow);
+  let scrapCounts = new Map();
+
+  try {
+    scrapCounts = await loadScrapInventoryByCustomerId(admin.supabase);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err?.message || 'Failed to load scrap inventory status.' },
+      { status: 500 }
+    );
+  }
+
+  const rows = await Promise.all(
+    rawRows.map(async (row) => {
+      const { scrapOn, scrapStatus, scrapRowCount } = scrapStatusForDealerId(
+        row.dealerId,
+        scrapCounts
+      );
+
+      const dealerId = String(row.dealerId || '').trim();
+      const current = String(row.scrapLink || '').trim().toLowerCase();
+
+      if (row.id && dealerId && current !== scrapStatus) {
+        await admin.supabase
+          .from(TABLE)
+          .update({ scrap_link: scrapStatus })
+          .eq('id', row.id);
+      }
+
+      return {
+        ...row,
+        scrapLink: scrapStatus,
+        scrapOn,
+        scrapStatus,
+        scrapRowCount,
+      };
+    })
+  );
   const cmsOptions = [...new Set(rows.map((r) => r.cms).filter(Boolean))].sort();
   const dataSourceOptions = [...new Set(rows.map((r) => r.dataSource).filter(Boolean))].sort();
 

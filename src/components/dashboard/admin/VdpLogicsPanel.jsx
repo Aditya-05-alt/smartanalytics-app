@@ -21,7 +21,7 @@ const COLUMNS = [
   { key: 'cms', label: 'CMS', width: 100 },
   { key: 'dataSource', label: 'Data source', width: 110 },
   { key: 'hootLink', label: 'Hoot link', width: 140 },
-  { key: 'scrapLink', label: 'Scrap link', width: 120 },
+  { key: 'scrapStatus', label: 'Scrap', width: 88 },
   { key: 'vdpLogic', label: 'VDP logic', wide: true, width: 200 },
   { key: 'srpLogic', label: 'SRP logic', wide: true, width: 200 },
   { key: 'homePageLogic', label: 'Home logic', wide: true, width: 180 },
@@ -48,7 +48,7 @@ function filterVdpRows(rows, { search = '', cms = '', dataSource = '' } = {}) {
       row.cms,
       row.dataSource,
       row.hootLink,
-      row.scrapLink,
+      row.scrapStatus,
       row.vdpLogic,
       row.srpLogic,
       row.homePageLogic,
@@ -62,13 +62,33 @@ function filterVdpRows(rows, { search = '', cms = '', dataSource = '' } = {}) {
   });
 }
 
-function formatCell(key, value) {
+function formatScrapStatus(row) {
+  const on = row.scrapOn || String(row.scrapStatus || row.scrapLink || '').toLowerCase() === 'on';
+  const count = row.scrapRowCount ?? 0;
+  return (
+    <span
+      className={`vdp-logics-scrap-flag${on ? ' vdp-logics-scrap-flag--on' : ' vdp-logics-scrap-flag--off'}`}
+      title={
+        on
+          ? `${count.toLocaleString()} row(s) in smart_scrap_inventory for dealer_id`
+          : 'No scrap inventory for this dealer_id'
+      }
+    >
+      {on ? 'ON' : 'OFF'}
+    </span>
+  );
+}
+
+function formatCell(key, value, row) {
+  if (key === 'scrapStatus') {
+    return formatScrapStatus(row || {});
+  }
   if (value == null || value === '') return '—';
   if (key === 'updatedAt' || key === 'createdAt') {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
   }
-  if (key === 'websiteUrl' || key === 'hootLink' || key === 'scrapLink') {
+  if (key === 'websiteUrl' || key === 'hootLink') {
     const s = String(value);
     if (/^https?:\/\//i.test(s)) {
       return (
@@ -330,6 +350,12 @@ export default function VdpLogicsPanel() {
       </header>
 
       <p className="ga4-count-meta vdp-logics-example-hint">
+        Scrap column is auto <strong>ON</strong>/<strong>OFF</strong> from{' '}
+        <code>smart_scrap_inventory.customer_id</code> (matches <code>dealer_id</code>). Refresh
+        syncs <code>scrap_link</code> to on/off in the database.
+      </p>
+
+      <p className="ga4-count-meta vdp-logics-example-hint">
         {loading && 'Loading smart_vdp_logic…'}
         {refreshing && !loading && 'Refreshing…'}
         {!loading && !refreshing && error && <span className="ga4-count-error-text">{error}</span>}
@@ -434,7 +460,7 @@ export default function VdpLogicsPanel() {
                           .filter(Boolean)
                           .join(' ')}
                       >
-                        {formatCell(col.key, row[col.key])}
+                        {formatCell(col.key, row[col.key], row)}
                       </td>
                     ))}
                   </tr>

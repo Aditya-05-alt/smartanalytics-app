@@ -126,7 +126,9 @@ export default function VdpLogicsFormModal({
               }
             />
 
-            {standardFields.map((f) => (
+            {standardFields
+              .filter((f) => !f.readOnly)
+              .map((f) => (
               <label key={f.key} className={f.wide ? 'vdp-logics-field--wide' : ''}>
                 <span className="admin-date-label">
                   {f.label}
@@ -153,6 +155,11 @@ export default function VdpLogicsFormModal({
                 )}
               </label>
             ))}
+            <p className="vdp-logics-field-note vdp-logics-field--wide">
+              Scrap is set automatically to <strong>on</strong> or <strong>off</strong> when{' '}
+              <code>smart_scrap_inventory</code> has rows for this dealer&apos;s{' '}
+              <code>dealer_id</code> (refresh VDP Logics list to sync).
+            </p>
           </div>
 
           {localError && <p className="vdp-logics-modal-error">{localError}</p>}

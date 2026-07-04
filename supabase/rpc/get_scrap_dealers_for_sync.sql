@@ -50,8 +50,7 @@ AS $$
   WHERE h.is_active IS TRUE
     AND h.ga4_customer_id IS NOT NULL
     AND trim(h.ga4_customer_id::text) <> ''
-    AND v.scrap_link IS NOT NULL
-    AND trim(v.scrap_link) <> ''
+    AND lower(trim(v.scrap_link)) = 'on'
     AND (p_client_id IS NULL OR trim(h.ga4_customer_id::text) = trim(p_client_id))
   ORDER BY h.customer_name;
 $$;

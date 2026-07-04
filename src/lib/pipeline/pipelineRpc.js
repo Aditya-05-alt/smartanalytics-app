@@ -1,4 +1,5 @@
 import { coerceDateRange, daysBackForFinalSync } from '@/lib/pipeline/dates';
+import { FINAL_RPC_HOOT, resolveFinalVdpRpc } from '@/lib/pipeline/inventoryResolve';
 
 /** Step 2 — apply_vdp_filtration_range(p_client_id, p_from, p_to) */
 export async function runVdpFiltration(supabase, clientId, { from, to } = {}) {
@@ -56,12 +57,27 @@ function isMissingRpcParamError(message) {
   );
 }
 
-/** Step 3 — build_smart_final_data with explicit From → To when RPC supports it. */
-export async function runFinalVdpSync(supabase, clientId, { from, to, daysBack } = {}) {
+/** Step 3 — hoot RPC or scrap RPC per dealer (admin only; cron keeps hoot RPC). */
+export async function runFinalVdpSync(
+  supabase,
+  clientId,
+  { from, to, daysBack, rpcName: rpcNameOverride } = {}
+) {
   const rangeFrom = from || null;
   const rangeTo = to || null;
   const legacyDaysBack =
     daysBack ?? (rangeFrom && rangeTo ? daysBackForFinalSync(rangeFrom, rangeTo) : null);
+
+  const inventory =
+    rpcNameOverride != null
+      ? {
+          rpcName: rpcNameOverride,
+          inventorySource:
+            rpcNameOverride === FINAL_RPC_HOOT ? 'hoot' : 'scrap',
+        }
+      : await resolveFinalVdpRpc(supabase, clientId);
+
+  const rpcName = inventory.rpcName;
 
   const withDateRange = {
     p_client_id: clientId,
@@ -76,17 +92,17 @@ export async function runFinalVdpSync(supabase, clientId, { from, to, daysBack }
   };
 
   let rpcMode = 'date_range';
-  let { data, error } = await supabase.rpc('build_smart_final_data', withDateRange);
+  let { data, error } = await supabase.rpc(rpcName, withDateRange);
 
   if (error && isMissingRpcParamError(error.message)) {
     rpcMode = 'days_back';
-    ({ data, error } = await supabase.rpc('build_smart_final_data', legacyOnly));
+    ({ data, error } = await supabase.rpc(rpcName, legacyOnly));
   }
 
   if (error) {
     throw new Error(
       error.message ||
-        'build_smart_final_data failed. Deploy supabase/rpc/build_smart_final_data.sql (with p_date_from / p_date_to).'
+        `${rpcName} failed. Deploy supabase/rpc/${rpcName}.sql (with p_date_from / p_date_to).`
     );
   }
 
@@ -103,8 +119,8 @@ export async function runFinalVdpSync(supabase, clientId, { from, to, daysBack }
 
   const log = [
     rpcMode === 'date_range'
-      ? `build_smart_final_data(p_client_id=${clientId}, p_date_from=${rangeFrom}, p_date_to=${rangeTo})`
-      : `build_smart_final_data(p_client_id=${clientId}, p_days_back=${legacyDaysBack}) [legacy — deploy updated RPC for exact dates]`,
+      ? `${rpcName}(p_client_id=${clientId}, p_date_from=${rangeFrom}, p_date_to=${rangeTo})`
+      : `${rpcName}(p_client_id=${clientId}, p_days_back=${legacyDaysBack}) [legacy — deploy updated RPC for exact dates]`,
     `Total rows: ${totalRows.toLocaleString()} · inventory matched (vdp_conditions=true): ${totalVdpTrue.toLocaleString()}`,
     ...summary.map(
       (r) =>
@@ -114,7 +130,8 @@ export async function runFinalVdpSync(supabase, clientId, { from, to, daysBack }
 
   return {
     success: true,
-    rpcUsed: 'build_smart_final_data',
+    rpcUsed: rpcName,
+    inventorySource: inventory.inventorySource,
     rpcMode,
     clientId,
     from: rangeFrom,

@@ -174,8 +174,9 @@ export function formatStep2Log(clientId, result, from, to) {
 
 export function formatStep3DayByDayLog(from, to, result) {
   const { from: f, to: t, dates } = coerceDateRange(from, to);
+  const rpcLabel = result?.rpcUsed || 'build_smart_final_data';
   const lines = [
-    logLine(`Step 3 — build_smart_final_data · ${f} → ${t}`),
+    logLine(`Step 3 — ${rpcLabel} · ${f} → ${t}`),
     result?.rpcMode === 'date_range'
       ? logLine('Using exact date range (p_date_from / p_date_to)')
       : logLine('Using legacy p_days_back — deploy updated RPC for exact dates'),
