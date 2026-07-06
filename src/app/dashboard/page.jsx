@@ -17,6 +17,7 @@ import CmpTable from '@/components/dashboard/overview/CmpTable';
 // import WarmLeads from '@/components/dashboard/overview/WarmLeads';
 import StatusBar from '@/components/dashboard/StatusBar';
 import AllDealerChannelTable from '@/components/dashboard/overview/AllDealerChannelTable';
+import { AllDealerMatrixProvider } from '@/components/dashboard/overview/AllDealerMatrixContext';
 import { useClient } from '@/components/dashboard/ClientContext';
 import {
   OverviewProvider,
@@ -33,7 +34,7 @@ const TAB_PAGE_TYPE = {
 
 function AllDealerOverviewBody() {
   return (
-    <>
+    <AllDealerMatrixProvider>
       <PageTabs />
       <OverviewFilters />
       <AllDealerChannelTable />
@@ -42,7 +43,7 @@ function AllDealerOverviewBody() {
           { label: 'All Dealer — portfolio view', color: 'var(--t3)' },
         ]}
       />
-    </>
+    </AllDealerMatrixProvider>
   );
 }
 

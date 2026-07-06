@@ -4,6 +4,7 @@ import FilterDropdown from '../FilterDropdown';
 import CalendarRangePicker from '../CalendarRangePicker';
 import VdpExportButton from './VdpExportButton';
 import AllExportButton from './AllExportButton';
+import AllDealerExportButton from './AllDealerExportButton';
 import { useClient } from '../ClientContext';
 import { useOverview } from './OverviewDataContext';
 import { vdpFiltersActive } from '@/lib/vdp/vdpFilterParams';
@@ -79,6 +80,9 @@ export default function OverviewFilters() {
   if (isAllDealer) {
     return (
       <div className="filters all-dealer-filters">
+        <div className="all-dealer-filters-left">
+          <AllDealerExportButton />
+        </div>
         <div className="f-right all-dealer-filters-right">
           <ComparePeriodSwitch enabled={compareEnabled} onChange={toggleCompareEnabled} />
           {compareEnabled && (

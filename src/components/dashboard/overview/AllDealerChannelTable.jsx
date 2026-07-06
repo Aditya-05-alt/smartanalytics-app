@@ -12,6 +12,7 @@ import {
   sliceMapForRow,
 } from '@/lib/api/allDealerChannelMatrix';
 import { pctChange } from '@/lib/overview/comparePeriod';
+import { useAllDealerMatrix } from './AllDealerMatrixContext';
 
 const TAB_PAGE_TYPE = {
   vdp: 'VDP',
@@ -117,6 +118,7 @@ function CompareValueCell({
 
 export default function AllDealerChannelTable() {
   const { dealers, loading: dealersLoading } = useClient();
+  const { setSnapshot } = useAllDealerMatrix();
   const {
     tab,
     from,
@@ -246,8 +248,30 @@ export default function AllDealerChannelTable() {
     };
   }, [dealersLoading, loadMatrix]);
 
-  const showEmpty = !loading && !compareLoading && !error && matrixRows.length === 0;
   const tableBusy = loading || compareLoading;
+  const exportReady = !dealersLoading && !tableBusy && matrixRows.length > 0 && columns.length > 0;
+
+  useEffect(() => {
+    setSnapshot({
+      matrixRows,
+      compareMatrixRows,
+      columns,
+      loading: dealersLoading || loading,
+      compareLoading,
+      ready: exportReady,
+    });
+  }, [
+    matrixRows,
+    compareMatrixRows,
+    columns,
+    dealersLoading,
+    loading,
+    compareLoading,
+    exportReady,
+    setSnapshot,
+  ]);
+
+  const showEmpty = !loading && !compareLoading && !error && matrixRows.length === 0;
 
   const progressLabel = useMemo(() => {
     if (!progress) {

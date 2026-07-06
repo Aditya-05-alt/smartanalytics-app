@@ -736,8 +736,15 @@ body {
   border-bottom: 1px solid var(--bd);
 }
 
+.all-dealer-filters-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .all-dealer-filters-right {
-  width: 100%;
+  margin-left: auto;
   justify-content: flex-end;
 }
 
