@@ -37,6 +37,12 @@ import { useClient } from '../ClientContext';
 import {
   readStoredOverviewTab,
   writeStoredOverviewTab,
+  readStoredOverviewDateRange,
+  writeStoredOverviewDateRange,
+  readStoredOverviewCompareEnabled,
+  writeStoredOverviewCompareEnabled,
+  readStoredOverviewCompareDateRange,
+  writeStoredOverviewCompareDateRange,
 } from '@/lib/dashboard/dashboardPrefs';
 
 const OverviewDataContext = createContext(null);
@@ -207,9 +213,26 @@ export function OverviewProvider({ children }) {
       setTab('vdp');
     }
   }, [isAllDealer, tab, setTab]);
-  const [dateRange, setDateRange] = useState(DEFAULT_RANGE);
-  const [compareEnabled, setCompareEnabled] = useState(false);
-  const [compareDateRange, setCompareDateRange] = useState(null);
+
+  const [dateRange, setDateRangeState] = useState(
+    () => readStoredOverviewDateRange() || DEFAULT_RANGE,
+  );
+  const setDateRange = useCallback((next) => {
+    setDateRangeState(next);
+    writeStoredOverviewDateRange(next);
+  }, []);
+
+  const [compareEnabled, setCompareEnabledState] = useState(
+    () => readStoredOverviewCompareEnabled(),
+  );
+  const [compareDateRange, setCompareDateRangeState] = useState(
+    () => readStoredOverviewCompareDateRange(),
+  );
+
+  const setCompareDateRange = useCallback((next) => {
+    setCompareDateRangeState(next);
+    writeStoredOverviewCompareDateRange(next);
+  }, []);
   const [compareRows, setCompareRows] = useState([]);
   const [compareLoading, setCompareLoading] = useState(false);
   const [lyRows, setLyRows] = useState([]);
@@ -273,9 +296,19 @@ export function OverviewProvider({ children }) {
     [from, to]
   );
 
+  const setCompareEnabled = useCallback((next) => {
+    const enabled = Boolean(next);
+    setCompareEnabledState(enabled);
+    writeStoredOverviewCompareEnabled(enabled);
+    if (!enabled) {
+      setCompareDateRange(null);
+    }
+  }, [setCompareDateRange]);
+
   const toggleCompareEnabled = useCallback(() => {
-    setCompareEnabled((prev) => {
+    setCompareEnabledState((prev) => {
       const next = !prev;
+      writeStoredOverviewCompareEnabled(next);
       if (next) {
         const def = previousMonthAlignedRange(from, to);
         setCompareDateRange({
@@ -283,14 +316,24 @@ export function OverviewProvider({ children }) {
           end: def.compareTo,
           preset: 'custom',
         });
+      } else {
+        setCompareDateRange(null);
       }
       return next;
     });
-  }, [from, to]);
+  }, [from, to, setCompareDateRange]);
 
+  const prevMainRangeRef = useRef(null);
   useEffect(() => {
+    const key = `${from}|${to}`;
+    if (prevMainRangeRef.current === null) {
+      prevMainRangeRef.current = key;
+      return;
+    }
+    if (prevMainRangeRef.current === key) return;
+    prevMainRangeRef.current = key;
     setCompareDateRange(null);
-  }, [from, to]);
+  }, [from, to, setCompareDateRange]);
 
   // ── single fetch keyed by (client, from, to) ─────────────────
   // Join: `smart_ga4_page_data.client_id` === `smart_hoot_config.ga4_customer_id`.
@@ -914,6 +957,7 @@ export function OverviewProvider({ children }) {
       tab,
       setTab,
       dateRange,
+      setDateRange,
       vdpFilters,
       setVdpFilter,
       clearVdpFilters,
@@ -937,8 +981,10 @@ export function OverviewProvider({ children }) {
       clientKey,
       rows,
       compareEnabled,
+      setCompareEnabled,
       toggleCompareEnabled,
       compareDateRange,
+      setCompareDateRange,
       compareFrom,
       compareTo,
       currentPeriodLabel,

@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
 import { useActionState, useState, useCallback, memo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { signInAction } from '@/lib/auth/actions';
+import { INACTIVITY_TIMEOUT_MINUTES } from '@/lib/auth/inactivityTimeout';
 import { resetDealerToAll } from '@/lib/dashboard/dashboardPrefs';
 
 const initialState = { ok: false, error: null };
@@ -50,6 +52,8 @@ function SubmitButton() {
 }
 
 export default function LoginForm({ demoMode = false, demoEmail = '', demoPassword = '' }) {
+  const searchParams = useSearchParams();
+  const sessionTimedOut = searchParams.get('timeout') === '1';
   const [state, formAction] = useActionState(signInAction, initialState);
   const [remember, setRemember] = useState(true);
   const [email, setEmail] = useState('');
@@ -78,6 +82,20 @@ export default function LoginForm({ demoMode = false, demoEmail = '', demoPasswo
           Sign in to access your dealer analytics.
         </p>
       </header>
+
+      {sessionTimedOut && (
+        <div
+          className="mb-5 rounded-[10px] p-3 animate-fade-in text-[13px]"
+          role="status"
+          style={{
+            background: 'rgba(232, 120, 120, 0.12)',
+            border: '1px solid rgba(232, 120, 120, 0.35)',
+            color: 'var(--t2)',
+          }}
+        >
+          Your session ended after {INACTIVITY_TIMEOUT_MINUTES} minutes of inactivity. Please sign in again.
+        </div>
+      )}
 
       {demoMode && (
         <div

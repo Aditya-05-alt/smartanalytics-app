@@ -1,6 +1,7 @@
 -- Deploy in Supabase SQL editor. Scrap / fallback Step 3 for dealers without Hoot inventory.
+-- Requires: extract_vin_from_text.sql, inventory_matches_ga4_page_path.sql (run those first).
 -- Same params + return shape as build_smart_final_data.
--- Inventory: smart_hoot_inventory first; if no URL match, smart_scrap_inventory (OR join).
+-- Match: VIN from page_path ↔ scrap/hoot inventory (OR legacy URL contains page_path).
 -- Call explicitly from cron/edge or admin — does NOT replace build_smart_final_data.
 
 CREATE OR REPLACE FUNCTION public.build_smart_final_data_scrap(
@@ -41,13 +42,14 @@ BEGIN
     inv_location, inv_first_seen, inv_last_seen,
     vdp_conditions, vdp_vehicle_condition, cms
   )
-  WITH ga4_unique AS (
+  WITH   ga4_unique AS (
     SELECT
       g.client_id,
       MAX(g.ga4_property_id)               AS ga4_property_id,
       MAX(g.account_name)                  AS account_name,
       g.report_date,
       g.page_path,
+      public.extract_vin_from_text(g.page_path) AS page_vin,
       MAX(g.page_location)                 AS page_location,
       MAX(g.page_title)                    AS page_title,
       MAX(g.ga4_page_type)                 AS ga4_page_type,
@@ -83,6 +85,10 @@ BEGIN
       i.customer_name::text AS customer_name,
       NULL::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
+      COALESCE(
+        NULLIF(upper(btrim(i.vin::text)), ''),
+        public.extract_vin_from_text(i.url::text)
+      ) AS vin_key,
       i.sk::text AS sk,
       i.vin::text AS vin,
       i.url::text AS url,
@@ -113,6 +119,10 @@ BEGIN
       i.customer_name::text AS customer_name,
       NULLIF(TRIM(i.customer_id), '')::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
+      COALESCE(
+        NULLIF(upper(btrim(i.vin)), ''),
+        public.extract_vin_from_text(i.url)
+      ) AS vin_key,
       i.sk::text AS sk,
       i.vin::text AS vin,
       i.url::text AS url,
@@ -139,7 +149,7 @@ BEGIN
   inv_pool AS (
     SELECT
       h.customer_name, h.ga4_customer_id,
-      h.url_lower, h.sk, h.vin, h.url, h.make, h.model, h.year, h.trim,
+      h.url_lower, h.vin_key, h.sk, h.vin, h.url, h.make, h.model, h.year, h.trim,
       h.price, h.msrp, h.condition, h.type_, h.stock_number,
       h.location, h.first_seen, h.last_seen,
       1 AS match_priority
@@ -147,7 +157,7 @@ BEGIN
     UNION ALL
     SELECT
       s.customer_name, s.ga4_customer_id,
-      s.url_lower, s.sk, s.vin, s.url, s.make, s.model, s.year, s.trim,
+      s.url_lower, s.vin_key, s.sk, s.vin, s.url, s.make, s.model, s.year, s.trim,
       s.price, s.msrp, s.condition, s.type_, s.stock_number,
       s.location, s.first_seen, s.last_seen,
       2 AS match_priority
@@ -184,8 +194,17 @@ BEGIN
               )
           AND u.page_path IS NOT NULL
           AND u.page_path <> ''
-          AND iu.url_lower LIKE '%' || LOWER(TRIM(u.page_path)) || '%'
+          AND public.inventory_matches_ga4_page_path(u.page_path, iu.url, iu.vin)
     ORDER BY u.client_id, u.report_date, u.page_path,
+             CASE
+               WHEN u.page_vin IS NOT NULL
+                AND iu.vin_key IS NOT NULL
+                AND u.page_vin = iu.vin_key
+               THEN 0
+               WHEN iu.url_lower LIKE '%' || lower(btrim(u.page_path)) || '%'
+               THEN 1
+               ELSE 2
+             END,
              iu.match_priority ASC NULLS LAST,
              LENGTH(iu.url_lower) DESC NULLS LAST
   )

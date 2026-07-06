@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { isDemoLogin, DEMO_EMAIL } from '@/lib/auth/demo';
+import { recordServerLoginSts } from '@/lib/telemetry/serverLoginSts';
 
 /**
  * Server Actions for auth.
@@ -53,6 +54,19 @@ export async function signInAction(_prevState, formData) {
     return { ok: false, error: error.message };
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    await recordServerLoginSts(supabase, {
+      user,
+      eventType: 'login',
+      eventAction: 'password_sign_in',
+      pagePath: '/login',
+    });
+  }
+
   revalidatePath('/', 'layout');
   redirect('/dashboard');
 }
@@ -99,6 +113,19 @@ export async function signUpAction(_prevState, formData) {
 export async function signOutAction() {
   const supabase = await createClient();
   if (supabase) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      await recordServerLoginSts(supabase, {
+        user,
+        eventType: 'logout',
+        eventAction: 'sign_out',
+        pagePath: '/dashboard',
+      });
+    }
+
     await supabase.auth.signOut();
   } else {
     const jar = await cookies();

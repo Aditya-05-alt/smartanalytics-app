@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import AuthLayout from '@/components/auth/AuthLayout';
 import LoginForm from '@/components/auth/LoginForm';
 import { isDemoMode, DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/auth/demo';
@@ -11,11 +12,13 @@ export default function LoginPage() {
   const demo = isDemoMode();
   return (
     <AuthLayout>
-      <LoginForm
-        demoMode={demo}
-        demoEmail={DEMO_EMAIL}
-        demoPassword={DEMO_PASSWORD}
-      />
+      <Suspense fallback={null}>
+        <LoginForm
+          demoMode={demo}
+          demoEmail={DEMO_EMAIL}
+          demoPassword={DEMO_PASSWORD}
+        />
+      </Suspense>
     </AuthLayout>
   );
 }
