@@ -689,7 +689,6 @@ export function OverviewProvider({ children }) {
     beginBreakdownLoad();
     loadTracked = true;
 
-    const invFiltersActive = vdpFiltersActive(vdpFilters, 'vdp');
     const fetchOpts = {
       clientId: clientKey,
       pageTypeFilter: 'VDP',
@@ -697,7 +696,7 @@ export function OverviewProvider({ children }) {
       tab: 'vdp',
       onCancelCheck: () => cancelled,
       adaptiveChunks: true,
-      preferServer: invFiltersActive,
+      preferServer: true,
     };
 
     const loadPeriod = (rangeFrom, rangeTo) =>

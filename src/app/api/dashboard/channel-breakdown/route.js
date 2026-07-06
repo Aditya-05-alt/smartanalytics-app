@@ -40,7 +40,10 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, { invFilters });
+  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
+    invFilters,
+    pageType,
+  });
 
   try {
     const raw = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown', {

@@ -32,18 +32,6 @@ function ChannelHeader({ name }) {
   );
 }
 
-function CompareColumnGuide({ currentLabel, compareLabel }) {
-  const curTag = shortMonthLabel(currentLabel) || 'Current';
-  const prevTag = shortMonthLabel(compareLabel) || 'Previous';
-  return (
-    <div className="adc-compare-guide" aria-hidden>
-      <span title={currentLabel}>{curTag}</span>
-      <span title={compareLabel}>{prevTag}</span>
-      <span>MoM</span>
-    </div>
-  );
-}
-
 function shortMonthLabel(periodLabel) {
   if (!periodLabel) return '';
   const match = String(periodLabel).match(/^(\w{3})\w*\s+(\d{4})/);
@@ -328,9 +316,7 @@ export default function AllDealerChannelTable() {
               >
                 <thead>
                   <tr>
-                    <th className="adc-th-dealer" rowSpan={showCompare ? 2 : 1}>
-                      Dealers
-                    </th>
+                    <th className="adc-th-dealer">Dealers</th>
                     <th className="adc-th-total">Total Views</th>
                     {columns.map((name) => (
                       <th key={name} className="adc-th-channel">
@@ -338,24 +324,6 @@ export default function AllDealerChannelTable() {
                       </th>
                     ))}
                   </tr>
-                  {showCompare && (
-                    <tr className="adc-compare-head-row">
-                      <th className="adc-th-total adc-th-compare-guide">
-                        <CompareColumnGuide
-                          currentLabel={currentPeriodLabel}
-                          compareLabel={comparePeriodLabel}
-                        />
-                      </th>
-                      {columns.map((name) => (
-                        <th key={`guide-${name}`} className="adc-th-channel adc-th-compare-guide">
-                          <CompareColumnGuide
-                            currentLabel={currentPeriodLabel}
-                            compareLabel={comparePeriodLabel}
-                          />
-                        </th>
-                      ))}
-                    </tr>
-                  )}
                 </thead>
                 <tbody>
                   {matrixRows.map((row) => {

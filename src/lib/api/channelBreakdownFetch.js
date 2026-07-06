@@ -75,7 +75,10 @@ async function fetchViaClientProgressive({
   let resolvedChunkDays = chunkDays ?? BREAKDOWN_UI_CHUNK_DAYS;
   let resolvedConcurrency = concurrency ?? 1;
   if (adaptiveChunks) {
-    const plan = resolveRpcChunkPlan(from, to, { invFilters });
+    const plan = resolveRpcChunkPlan(from, to, {
+      invFilters,
+      pageType: pageTypeFilter,
+    });
     resolvedChunkDays = chunkDays ?? plan.chunkDays;
     resolvedConcurrency = concurrency ?? plan.concurrency;
   }

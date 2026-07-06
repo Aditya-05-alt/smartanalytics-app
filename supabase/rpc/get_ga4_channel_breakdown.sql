@@ -45,6 +45,70 @@ BEGIN
     OR COALESCE(array_length(p_years, 1), 0)     > 0
     OR COALESCE(array_length(p_locations, 1), 0) > 0;
 
+  -- Fast path: no inventory filters — aggregate smart_ga4_page_data directly (no smart_final_data join).
+  IF NOT v_filter_active THEN
+    RETURN QUERY
+    WITH base AS (
+      SELECT p.channel, p.views::bigint AS views
+      FROM smart_ga4_page_data p
+      WHERE p.client_id::text = trim(p_client_id)
+        AND p.report_date BETWEEN p_from AND p_to
+        AND (
+          v_page_type = 'ALL'
+          OR (v_page_type = 'VDP'   AND p.ga4_page_type ILIKE 'VDP%')
+          OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
+          OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
+          OR (v_page_type = 'OTHER' AND p.ga4_page_type NOT ILIKE 'VDP%'
+                                    AND p.ga4_page_type <> 'SRP'
+                                    AND p.ga4_page_type NOT ILIKE 'home%')
+        )
+        AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
+             OR p.channel = ANY(p_channels))
+    ),
+    mapped AS (
+      SELECT
+        CASE lower(trim(COALESCE(b.channel, '')))
+          WHEN 'organic_search'  THEN 'Organic Search'
+          WHEN 'paid_search'     THEN 'Paid Search'
+          WHEN 'direct'          THEN 'Direct'
+          WHEN 'organic_social'  THEN 'Organic Social'
+          WHEN 'paid_social'     THEN 'Paid Social'
+          WHEN 'paid_video'      THEN 'Paid Video'
+          WHEN 'organic_video'   THEN 'Organic Video'
+          WHEN 'display'         THEN 'Display'
+          WHEN 'email'           THEN 'Email'
+          WHEN 'referral'        THEN 'Referral'
+          WHEN 'affiliates'      THEN 'Affiliates'
+          WHEN 'paid_other'      THEN 'Paid Other'
+          WHEN 'sms'             THEN 'SMS'
+          WHEN 'audio'           THEN 'Audio'
+          WHEN 'cross-network'   THEN 'Cross-network'
+          WHEN 'unassigned'      THEN 'Unassigned'
+          WHEN ''                THEN '(not set)'
+          ELSE initcap(replace(replace(lower(trim(b.channel)), '_', ' '), '-', ' '))
+        END AS channel_bucket,
+        b.views
+      FROM base b
+    ),
+    agg AS (
+      SELECT m.channel_bucket, SUM(m.views)::bigint AS views
+      FROM mapped m
+      GROUP BY m.channel_bucket
+    ),
+    grand AS (
+      SELECT NULLIF(SUM(a.views), 0)::numeric AS total FROM agg a
+    )
+    SELECT
+      a.channel_bucket,
+      a.views,
+      ROUND(100.0 * a.views / g.total, 2) AS pct
+    FROM agg a
+    CROSS JOIN grand g
+    WHERE a.views > 0
+    ORDER BY a.views DESC, a.channel_bucket;
+    RETURN;
+  END IF;
+
   RETURN QUERY
   WITH pages AS (
     SELECT
