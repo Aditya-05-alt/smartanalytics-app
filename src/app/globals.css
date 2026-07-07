@@ -440,7 +440,7 @@ body {
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  --adc-dealer-col-w: 200px;
+  --adc-dealer-col-w: 280px;
   --adc-total-col-w: 96px;
 }
 
@@ -459,6 +459,7 @@ body {
   width: var(--adc-dealer-col-w);
   max-width: var(--adc-dealer-col-w);
   background: var(--s2);
+  box-sizing: border-box;
 }
 
 .adc-th-total,
@@ -499,8 +500,9 @@ body {
 }
 
 .adc-th-dealer {
-  min-width: 200px;
+  min-width: var(--adc-dealer-col-w);
   text-align: left;
+  vertical-align: bottom;
 }
 
 .adc-th-total {
@@ -542,16 +544,25 @@ body {
 }
 
 .adc-td-dealer {
-  vertical-align: middle;
+  vertical-align: top;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
 }
 
 .adc-dealer-name {
-  display: inline;
+  display: block;
   font-size: 12px;
   font-weight: 600;
   color: var(--t);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .adc-td-total {
@@ -734,6 +745,12 @@ body {
   font-size: 12px;
   color: var(--t2);
   border-bottom: 1px solid var(--bd);
+}
+
+.adc-loading-banner--compare {
+  background: var(--s3);
+  color: var(--t);
+  font-weight: 600;
 }
 
 .all-dealer-filters-left {

@@ -44,7 +44,7 @@ function shortMonthLabel(periodLabel) {
 function CompareValueCell({
   current,
   compare,
-  showCompare,
+  showCompareStack,
   comparePending,
   currentLabel,
   compareLabel,
@@ -52,7 +52,7 @@ function CompareValueCell({
   const cur = Number(current) || 0;
   const cmp = Number(compare) || 0;
 
-  if (!showCompare) {
+  if (!showCompareStack) {
     if (cur <= 0) return <span className="adc-cell-empty">—</span>;
     return (
       <div className="adc-cell">
@@ -131,6 +131,8 @@ export default function AllDealerChannelTable() {
   const panelTitle = `${TAB_LABEL[tab] || 'Page'} views by channel — all dealers`;
   const showCompare = compareEnabled && compareFrom && compareTo;
   const comparePending = showCompare && compareLoading;
+  /** Current month only until current period finishes loading. */
+  const showCompareStack = showCompare && !loading;
 
   const compareByDealer = useMemo(
     () => compareLookupFromRows(compareMatrixRows),
@@ -149,7 +151,7 @@ export default function AllDealerChannelTable() {
     loadGenRef.current = loadGen;
     cancelRef.current = false;
     setLoading(true);
-    setCompareLoading(showCompare);
+    setCompareLoading(false);
     setCompareMatrixRows([]);
     setError(null);
     setProgress(null);
@@ -162,7 +164,11 @@ export default function AllDealerChannelTable() {
         from,
         to,
         pageTypeFilter,
-        onProgress: setProgress,
+        onProgress: (p) => {
+          if (!isStale()) {
+            setProgress({ ...p, phase: 'current' });
+          }
+        },
         onPartial: (partial) => {
           if (!isStale()) {
             setMatrixRows(partial.rows || []);
@@ -177,11 +183,12 @@ export default function AllDealerChannelTable() {
 
       setMatrixRows(current.rows || []);
       setColumns(current.columns || []);
+      setLoading(false);
+      setProgress(null);
 
       let compare = { rows: [], columns: [], warning: null };
       if (showCompare) {
         setCompareLoading(true);
-        setProgress(null);
         compare = await fetchAllDealersChannelMatrix({
           dealers,
           from: compareFrom,
@@ -236,8 +243,8 @@ export default function AllDealerChannelTable() {
     };
   }, [dealersLoading, loadMatrix]);
 
-  const tableBusy = loading || compareLoading;
-  const exportReady = !dealersLoading && !tableBusy && matrixRows.length > 0 && columns.length > 0;
+  const tableBusy = loading;
+  const exportReady = !dealersLoading && !loading && matrixRows.length > 0 && columns.length > 0;
 
   useEffect(() => {
     setSnapshot({
@@ -261,20 +268,24 @@ export default function AllDealerChannelTable() {
 
   const showEmpty = !loading && !compareLoading && !error && matrixRows.length === 0;
 
-  const progressLabel = useMemo(() => {
-    if (!progress) {
-      return compareLoading && !loading
-        ? `Loading compare period (${comparePeriodLabel})…`
-        : 'Loading channel matrix…';
-    }
-    const phase = progress.phase === 'compare' ? 'compare' : 'current';
+  const currentProgressLabel = useMemo(() => {
+    if (!progress || progress.phase === 'compare') return 'Loading current period…';
     const batch = progress.total > 1
       ? ` ${progress.completed}/${progress.total} batches`
       : '';
-    return phase === 'compare'
-      ? `Loading compare period${batch}…`
-      : `Loading current period${batch}…`;
-  }, [progress, compareLoading, loading, comparePeriodLabel]);
+    return `Loading current period${batch}…`;
+  }, [progress]);
+
+  const compareProgressLabel = useMemo(() => {
+    const period = shortMonthLabel(comparePeriodLabel) || comparePeriodLabel || 'previous period';
+    if (!progress || progress.phase !== 'compare') {
+      return `Loading previous month (${period})…`;
+    }
+    const batch = progress.total > 1
+      ? ` ${progress.completed}/${progress.total} batches`
+      : '';
+    return `Loading previous month (${period})${batch}…`;
+  }, [progress, comparePeriodLabel]);
 
   return (
     <div className="content all-dealer-overview-content">
@@ -290,10 +301,16 @@ export default function AllDealerChannelTable() {
           }}
         />
         <PanelBody className="all-dealer-channel-body">
-          {tableBusy && (
+          {loading && (
             <div className="adc-loading-banner" role="status">
               <span className="data-updating-dot" aria-hidden />
-              {progressLabel}
+              {currentProgressLabel}
+            </div>
+          )}
+          {!loading && compareLoading && (
+            <div className="adc-loading-banner adc-loading-banner--compare" role="status">
+              <span className="data-updating-dot" aria-hidden />
+              {compareProgressLabel}
             </div>
           )}
           {error && (
@@ -309,10 +326,10 @@ export default function AllDealerChannelTable() {
               </p>
             </div>
           )}
-          {(tableBusy || matrixRows.length > 0) && (
+          {(loading || matrixRows.length > 0) && (
             <div className="adc-table-wrap">
               <table
-                className={`tbl adc-table${showCompare ? ' adc-table--compare' : ''}`}
+                className={`tbl adc-table${showCompareStack ? ' adc-table--compare' : ''}`}
               >
                 <thead>
                   <tr>
@@ -350,7 +367,7 @@ export default function AllDealerChannelTable() {
                             <CompareValueCell
                               current={row.total}
                               compare={compareTotal}
-                              showCompare={showCompare}
+                              showCompareStack={showCompareStack}
                               comparePending={comparePending}
                               currentLabel={currentPeriodLabel}
                               compareLabel={comparePeriodLabel}
@@ -362,7 +379,7 @@ export default function AllDealerChannelTable() {
                             <CompareValueCell
                               current={sliceMap.get(colName)?.value}
                               compare={compareEntry?.channels?.get(colName)?.value}
-                              showCompare={showCompare}
+                              showCompareStack={showCompareStack}
                               comparePending={comparePending}
                               currentLabel={currentPeriodLabel}
                               compareLabel={comparePeriodLabel}
@@ -372,7 +389,7 @@ export default function AllDealerChannelTable() {
                       </tr>
                     );
                   })}
-                  {tableBusy && matrixRows.length === 0 && (
+                  {loading && matrixRows.length === 0 && (
                     <tr>
                       <td colSpan={Math.max(columns.length + 2, 3)} className="adc-loading-row">
                         Loading channel breakdown…
