@@ -10,6 +10,10 @@ import { createClient } from '@/lib/supabase/client';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { isAllDealerClient } from '@/lib/dashboard/allDealers';
 import { resetDealerToAll } from '@/lib/dashboard/dashboardPrefs';
+import {
+  inventoryReportExcludesAllDealers,
+  isInventoryReportPath,
+} from '@/lib/inventory/inventoryReport';
 
 const NAV = [
   // { id: 'overview',    href: '/dashboard',              label: 'Overview' },
@@ -21,6 +25,7 @@ const NAV = [
 ];
 
 function ClientPicker() {
+  const pathname = usePathname();
   const {
     client,
     pickClient,
@@ -34,18 +39,22 @@ function ClientPicker() {
 
   const [query, setQuery] = useState('');
 
+  const hideAllDealerOption =
+    inventoryReportExcludesAllDealers() && isInventoryReportPath(pathname);
+
   const listItems = useMemo(() => {
     const q = query.trim().toLowerCase();
     const dealerMatches = !q
       ? dealers
       : dealers.filter((d) => d.name.toLowerCase().includes(q));
+    if (hideAllDealerOption) return dealerMatches;
     const allMatches =
       !q
       || allDealerClient.name.toLowerCase().includes(q)
       || q.includes('all');
     if (allMatches) return [allDealerClient, ...dealerMatches];
     return dealerMatches;
-  }, [dealers, query, allDealerClient]);
+  }, [dealers, query, allDealerClient, hideAllDealerOption]);
 
   useEffect(() => {
     if (!open) setQuery('');

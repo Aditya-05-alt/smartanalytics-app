@@ -1,12 +1,37 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Panel, PanelHeader, PanelBody } from '../Panel';
 import Delta from '../Delta';
 import ChannelGroupToggle from './ChannelGroupToggle';
 import { filterByExpandedGroups } from '@/lib/ga4/channelGroups';
 import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
 import { formatViewsK } from '@/lib/format/viewsK';
+
+/** Midpoint angle (deg from top, clockwise) matches stroke-dash layout after SVG -90° rotation. */
+function sliceMidAngleDeg(sliceOffset, dash, circ) {
+  return ((sliceOffset + dash / 2) / circ) * 360;
+}
+
+function polarToXY(cx, cy, radius, angleDeg) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.sin(rad),
+    y: cy - radius * Math.cos(rad),
+  };
+}
+
+function sliceAnchorGeometry(sliceOffset, dash, circ, size, r, stroke) {
+  const midAngleDeg = sliceMidAngleDeg(sliceOffset, dash, circ);
+  const cx = size / 2;
+  const cy = size / 2;
+  const anchor = polarToXY(cx, cy, r, midAngleDeg);
+  return {
+    midAngleDeg,
+    anchorX: anchor.x,
+    anchorY: anchor.y,
+  };
+}
 
 /**
  * Reusable donut + breakdown list panel.
@@ -65,10 +90,17 @@ export default function BreakdownDonut({
   skeletonRows = 5,
   pctDecimals = 2,
   listScrollable = false,
+  /** Hide the breakdown list beside the donut (inventory report uses a table instead). */
+  hideList = false,
+  /** Render chart body only — no outer Panel wrapper. */
+  embedded = false,
   /** % change vs compare period — shown on the right (green up / red down). */
   totalDelta = null,
+  /** Tooltip unit label, e.g. "units" → `fifth-wheel: 100 units (22.6%)` */
+  sliceTooltipUnit = '',
 }) {
   const { expanded, isExpanded, toggle } = useChannelGroupExpansion(false);
+  const [hoveredSlice, setHoveredSlice] = useState(null);
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
 
@@ -97,45 +129,56 @@ export default function BreakdownDonut({
 
   let offset = 0;
 
-  return (
-    <Panel className="breakdown-donut-panel">
-      <PanelHeader title={title} badge={badge}>
-        {headerExtra}
-      </PanelHeader>
+  const slicePct = (slice, total) => {
+    if (slice?.pct != null && slice.pct !== '') {
+      return Number(slice.pct) || 0;
+    }
+    const value = Number(slice?.value) || 0;
+    return total > 0 ? (value / total) * 100 : 0;
+  };
+
+  const chartBody = (
+    <>
       {error && (
         <div className="donut-err" role="alert">
           {error}
         </div>
       )}
-      <PanelBody className="breakdown-donut-body">
-        {disabled ? (
-          <div className="donut-disabled">
-            <div className="donut-disabled-title">{disabledMessage}</div>
-            {disabledSubtext && (
-              <div className="donut-disabled-sub">{disabledSubtext}</div>
-            )}
-          </div>
-        ) : loading ? (
-          <DonutSkeleton size={size} rowCount={skeletonRows} />
-        ) : emptyMessage ? (
-          <div className="donut-empty-msg">{emptyMessage}</div>
-        ) : (
-        <div className="donut-lg-wrap">
+      {disabled ? (
+        <div className="donut-disabled">
+          <div className="donut-disabled-title">{disabledMessage}</div>
+          {disabledSubtext && (
+            <div className="donut-disabled-sub">{disabledSubtext}</div>
+          )}
+        </div>
+      ) : loading ? (
+        <DonutSkeleton size={size} rowCount={skeletonRows} />
+      ) : emptyMessage ? (
+        <div className="donut-empty-msg">{emptyMessage}</div>
+      ) : (
+        <div
+          className={`donut-lg-wrap${hideList ? ' donut-lg-wrap--donut-only' : ''}`}
+        >
           {/* ── Donut ── */}
           <div
-            style={{
-              position: 'relative',
-              width: size,
-              height: size,
-              flexShrink: 0,
-            }}
+            className="donut-chart-stage"
+            style={{ width: size, flexShrink: 0 }}
+            onMouseLeave={() => setHoveredSlice(null)}
           >
-            <svg
-              width={size}
-              height={size}
-              viewBox={`0 0 ${size} ${size}`}
-              style={{ transform: 'rotate(-90deg)' }}
+            <div
+              className="donut-chart-wrap"
+              style={{
+                position: 'relative',
+                width: size,
+                height: size,
+              }}
             >
+              <svg
+                width={size}
+                height={size}
+                viewBox={`0 0 ${size} ${size}`}
+                style={{ transform: 'rotate(-90deg)' }}
+              >
               {/* faint track */}
               <circle
                 cx={size / 2}
@@ -150,66 +193,142 @@ export default function BreakdownDonut({
                   const dash =
                     (Number(s.value) / Math.max(donutTotal, 1)) * circ;
                   if (dash <= 0) return null;
-                  const node = (
-                    <circle
-                      key={s.name}
-                      cx={size / 2}
-                      cy={size / 2}
-                      r={r}
-                      fill="none"
-                      stroke={s.color}
-                      strokeWidth={stroke}
-                      strokeLinecap="butt"
-                      strokeDasharray={`${dash} ${circ - dash}`}
-                      strokeDashoffset={-offset}
-                    />
-                  );
+                  const sliceOffset = offset;
                   offset += dash;
-                  return node;
+                  const isHovered = hoveredSlice?.name === s.name;
+                  const pct = slicePct(s, donutTotal);
+                  return (
+                    <g
+                      key={s.name}
+                      className="donut-slice-group"
+                      onMouseEnter={() =>
+                        setHoveredSlice({
+                          name: s.name,
+                          value: Number(s.value) || 0,
+                          pct,
+                          color: s.color,
+                          ...sliceAnchorGeometry(
+                            sliceOffset,
+                            dash,
+                            circ,
+                            size,
+                            r,
+                            stroke
+                          ),
+                        })
+                      }
+                    >
+                      <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={r}
+                        fill="none"
+                        stroke={s.color}
+                        strokeWidth={stroke}
+                        strokeLinecap="butt"
+                        strokeDasharray={`${dash} ${circ - dash}`}
+                        strokeDashoffset={-sliceOffset}
+                        className={`donut-slice${isHovered ? ' donut-slice--hover' : ''}`}
+                      />
+                      <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={r}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={stroke + 14}
+                        strokeLinecap="butt"
+                        strokeDasharray={`${dash} ${circ - dash}`}
+                        strokeDashoffset={-sliceOffset}
+                        className="donut-slice-hit"
+                      />
+                    </g>
+                  );
                 })}
-            </svg>
+              </svg>
 
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                pointerEvents: 'none',
-              }}
-            >
+              {hoveredSlice && (
+                <span
+                  className="donut-slice-arrow"
+                  aria-hidden
+                  style={{
+                    left: hoveredSlice.anchorX,
+                    top: hoveredSlice.anchorY,
+                    '--slice-color': hoveredSlice.color,
+                    transform: `translate(-50%, 0) rotate(${hoveredSlice.midAngleDeg}deg)`,
+                  }}
+                />
+              )}
+
               <div
-                className="font-display"
+                className="donut-chart-center"
                 style={{
-                  fontSize: 38,
-                  fontWeight: 700,
-                  color: 'var(--t)',
-                  lineHeight: 1,
-                  fontVariantNumeric: 'tabular-nums',
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
                 }}
               >
-                {center}
-              </div>
-              {centerLabel && (
                 <div
+                  className="font-display"
                   style={{
-                    fontSize: 10,
-                    color: 'var(--t3)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '.08em',
-                    marginTop: 5,
-                    fontWeight: 600,
+                    fontSize: 38,
+                    fontWeight: 700,
+                    color: 'var(--t)',
+                    lineHeight: 1,
+                    fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  {centerLabel}
+                  {center}
+                </div>
+                {centerLabel && (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: 'var(--t3)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '.08em',
+                      marginTop: 5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {centerLabel}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="donut-slice-callout-slot" aria-live="polite">
+              {hoveredSlice && (
+                <div
+                  className="donut-slice-callout"
+                  role="tooltip"
+                  style={{ '--slice-color': hoveredSlice.color }}
+                >
+                  <div className="donut-slice-callout-title">
+                    <span
+                      className="donut-slice-tip-swatch"
+                      style={{ background: hoveredSlice.color }}
+                      aria-hidden
+                    />
+                    {hoveredSlice.name}
+                  </div>
+                  <div className="donut-slice-callout-body">
+                    {hoveredSlice.value.toLocaleString()}
+                    {sliceTooltipUnit ? ` ${sliceTooltipUnit}` : ''}
+                    <span className="donut-slice-callout-pct">
+                      {hoveredSlice.pct.toFixed(pctDecimals)}%
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ── Breakdown (horizontal scroll for values; vertical when listScrollable) ── */}
+          {!hideList && (
           <div
             className={`donut-lg-list-col${listScrollable ? ' donut-lg-list-col--scroll' : ''}${totalDelta != null ? ' donut-lg-list-col--compare' : ''}${showGroupColumn ? ' donut-lg-list-col--with-toggle-col' : ''}`}
           >
@@ -298,9 +417,22 @@ export default function BreakdownDonut({
               </div>
             </div>
           </div>
+          )}
         </div>
-        )}
-      </PanelBody>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return chartBody;
+  }
+
+  return (
+    <Panel className="breakdown-donut-panel">
+      <PanelHeader title={title} badge={badge}>
+        {headerExtra}
+      </PanelHeader>
+      <PanelBody className="breakdown-donut-body">{chartBody}</PanelBody>
     </Panel>
   );
 }

@@ -30,6 +30,14 @@ const ICONS = {
       <circle cx="12" cy="10" r="3" />
     </svg>
   ),
+  inventory: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M5 17h14" />
+      <path d="M5 17a2 2 0 0 1-2-2v-4l2-5h14l2 5v4a2 2 0 0 1-2 2" />
+      <circle cx="7.5" cy="17" r="1.5" />
+      <circle cx="16.5" cy="17" r="1.5" />
+    </svg>
+  ),
   admin: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="8" r="4" />
@@ -46,6 +54,7 @@ const ICONS = {
 
 const ITEMS = [
   { id: 'overview',    href: '/dashboard',             title: 'Overview' },
+  { id: 'inventory',   href: '/dashboard/inventory',   title: 'Inventory report' },
   { id: 'health',      href: '/dashboard/health',      title: 'Portfolio Health', badge: true },
   { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
   { id: 'local',       href: '/dashboard/local',       title: 'Local Intel' },
