@@ -3,7 +3,7 @@
 -- Per dealer: hoot when configured; scrap when scrap_link on or hoot has no rows for that date.
 -- One pull_date snapshot + filters. Supports single dealer OR All Dealers.
 -- Units = one row per sk on that pull_date (deduped per dealer + VIN).
--- Freshness: last_seen within 24h of pull_date (today uses now(); past dates use that day's window).
+-- Freshness: hoot only (today rolling 24h; past dates snapshot window). Scrap uses pull_date match.
 -- Value = SUM(COALESCE(NULLIF(price,0), NULLIF(msrp,0), 0)).
 -- Deploy in Supabase SQL Editor (full file).
 
@@ -156,21 +156,38 @@ BEGIN
       CASE
         WHEN NULLIF(TRIM(v.hoot_link), '') IS NOT NULL THEN 'hoot'
         WHEN lower(TRIM(COALESCE(v.scrap_link, ''))) = 'on' THEN 'scrap'
-        WHEN lower(TRIM(COALESCE(v.scrap_link, ''))) = 'off'
+        WHEN TRIM(COALESCE(v.scrap_link, '')) ~* '^https?://' THEN 'scrap'
+        WHEN EXISTS (
+          SELECT 1
+          FROM public.smart_scrap_inventory_daily sd
+          WHERE sd.pull_date = p_report_date
+            AND (
+              TRIM(COALESCE(sd.customer_id, '')) = d.ga4_customer_id
+              OR TRIM(COALESCE(sd.customer_name, '')) = d.customer_name
+              OR TRIM(COALESCE(sd.advertiser, '')) = d.customer_name
+              OR TRIM(COALESCE(sd.customer_name, '')) ILIKE TRIM(d.customer_name) || '%'
+              OR TRIM(d.customer_name) ILIKE TRIM(COALESCE(sd.customer_name, '')) || '%'
+            )
+        ) THEN 'scrap'
+        WHEN NULLIF(TRIM(d.hoot_url), '') IS NOT NULL
           AND EXISTS (
             SELECT 1
-            FROM public.smart_scrap_inventory_daily sd
-            WHERE sd.pull_date = p_report_date
-              AND sd.last_seen IS NOT NULL
-              AND sd.last_seen >= v_last_seen_cutoff
-              AND (v_last_seen_upper IS NULL OR sd.last_seen < v_last_seen_upper)
+            FROM public.smart_hoot_inventory_daily hd
+            WHERE hd.pull_date = p_report_date
               AND (
-                TRIM(COALESCE(sd.customer_id, '')) = d.ga4_customer_id
-                OR TRIM(COALESCE(sd.customer_name, '')) = d.customer_name
+                TRIM(COALESCE(hd.customer_name, '')) = d.customer_name
+                OR TRIM(COALESCE(hd.advertiser, '')) = d.customer_name
               )
-          ) THEN 'scrap'
-        WHEN TRIM(COALESCE(v.scrap_link, '')) ~* '^https?://' THEN 'scrap'
-        WHEN d.hoot_url IS NOT NULL THEN 'hoot'
+          ) THEN 'hoot'
+        WHEN EXISTS (
+          SELECT 1
+          FROM public.smart_hoot_inventory_daily hd
+          WHERE hd.pull_date = p_report_date
+            AND (
+              TRIM(COALESCE(hd.customer_name, '')) = d.customer_name
+              OR TRIM(COALESCE(hd.advertiser, '')) = d.customer_name
+            )
+        ) THEN 'hoot'
         ELSE 'scrap'
       END AS preferred_source
     FROM dealers d
@@ -191,12 +208,35 @@ BEGIN
     FROM dealer_mode dm
     INNER JOIN public.smart_hoot_inventory_daily i
       ON i.pull_date = p_report_date
-     AND i.last_seen IS NOT NULL
-     AND i.last_seen >= v_last_seen_cutoff
-     AND (v_last_seen_upper IS NULL OR i.last_seen < v_last_seen_upper)
+     AND COALESCE(
+       CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
+       CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
+       i.first_seen
+     ) >= v_last_seen_cutoff
+     AND (
+       v_last_seen_upper IS NULL
+       OR COALESCE(
+         CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
+         CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
+         i.first_seen
+       ) < v_last_seen_upper
+     )
      AND (
        TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
        OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
+     )
+  ),
+  scrap_dealers_with_data AS (
+    SELECT DISTINCT dm.ga4_customer_id
+    FROM dealer_mode dm
+    INNER JOIN public.smart_scrap_inventory_daily i
+      ON i.pull_date = p_report_date
+     AND (
+       TRIM(COALESCE(i.customer_id, '')) = dm.ga4_customer_id
+       OR TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
+       OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
+       OR TRIM(COALESCE(i.customer_name, '')) ILIKE TRIM(dm.customer_name) || '%'
+       OR TRIM(dm.customer_name) ILIKE TRIM(COALESCE(i.customer_name, '')) || '%'
      )
   ),
   inventory_raw AS (
@@ -216,9 +256,19 @@ BEGIN
     FROM dealer_mode dm
     INNER JOIN public.smart_hoot_inventory_daily i
       ON i.pull_date = p_report_date
-     AND i.last_seen IS NOT NULL
-     AND i.last_seen >= v_last_seen_cutoff
-     AND (v_last_seen_upper IS NULL OR i.last_seen < v_last_seen_upper)
+     AND COALESCE(
+       CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
+       CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
+       i.first_seen
+     ) >= v_last_seen_cutoff
+     AND (
+       v_last_seen_upper IS NULL
+       OR COALESCE(
+         CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
+         CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
+         i.first_seen
+       ) < v_last_seen_upper
+     )
      AND (
        TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
        OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
@@ -243,13 +293,12 @@ BEGIN
     FROM dealer_mode dm
     INNER JOIN public.smart_scrap_inventory_daily i
       ON i.pull_date = p_report_date
-     AND i.last_seen IS NOT NULL
-     AND i.last_seen >= v_last_seen_cutoff
-     AND (v_last_seen_upper IS NULL OR i.last_seen < v_last_seen_upper)
      AND (
        TRIM(COALESCE(i.customer_id, '')) = dm.ga4_customer_id
        OR TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
        OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
+       OR TRIM(COALESCE(i.customer_name, '')) ILIKE TRIM(dm.customer_name) || '%'
+       OR TRIM(dm.customer_name) ILIKE TRIM(COALESCE(i.customer_name, '')) || '%'
      )
     WHERE dm.preferred_source = 'scrap'
        OR (
@@ -258,6 +307,11 @@ BEGIN
            SELECT 1
            FROM hoot_dealers_with_data hd
            WHERE hd.ga4_customer_id = dm.ga4_customer_id
+         )
+         AND EXISTS (
+           SELECT 1
+           FROM scrap_dealers_with_data sd
+           WHERE sd.ga4_customer_id = dm.ga4_customer_id
          )
        )
   ),
@@ -647,11 +701,14 @@ COMMENT ON FUNCTION public.get_inventory_report(
   'Full inventory report from daily snapshots (hoot + scrap). '
   'Per dealer: uses smart_hoot_inventory_daily when hoot is configured and has rows; '
   'otherwise smart_scrap_inventory_daily for scrap dealers or hoot fallback. '
+  'Scrap daily rows use pull_date match only (no last_seen freshness). '
+  'Hoot uses last_seen freshness (today rolling 24h; past dates snapshot window). '
   'p_client_id NULL/empty/__all_dealer__ = All Dealers. '
   'Exact pull_date only (p_report_date). '
   'Units = one row per dealer+VIN (deduped). Value uses COALESCE(NULLIF(price,0), NULLIF(msrp,0), 0). '
-  'Excludes stale units by last_seen: today = rolling 24h from now(); '
-  'past pull_date = 24h window ending at end of that snapshot day (data retained in daily tables).';
+  'Excludes stale hoot units by freshness timestamp (today rolling 24h; past dates snapshot window). '
+  'Scrap daily rows included by pull_date + dealer match only. '
+  'Data retained in daily tables.';
 
 GRANT EXECUTE ON FUNCTION public.get_inventory_report(
   text, date, text[], text[], text[], text[], integer[], text
