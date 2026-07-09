@@ -1,6 +1,8 @@
 import { ALL_DEALER_CLIENT, ALL_DEALER_ID } from '@/lib/dashboard/allDealers';
 
 const DEALER_ID_KEY = 'sa_selected_dealer_id';
+const OVERVIEW_DEALER_ID_KEY = 'sa_overview_dealer_id';
+const INVENTORY_DEALER_ID_KEY = 'sa_inventory_dealer_id';
 const LAST_REAL_DEALER_ID_KEY = 'sa_last_real_dealer_id';
 const OVERVIEW_TAB_KEY = 'sa_overview_tab';
 const OVERVIEW_DATE_RANGE_KEY = 'sa_overview_date_range';
@@ -33,14 +35,44 @@ function parseStoredRangeObject(raw) {
 
 export const OVERVIEW_TAB_IDS = ['vdp', 'srp', 'home', 'all', 'other'];
 
+export const DEALER_SCOPE = {
+  OVERVIEW: 'overview',
+  INVENTORY: 'inventory',
+};
+
+const INVENTORY_REPORT_PATH = '/dashboard/inventory';
+
+export function dealerScopeFromPathname(pathname) {
+  if (pathname?.startsWith(INVENTORY_REPORT_PATH)) return DEALER_SCOPE.INVENTORY;
+  return DEALER_SCOPE.OVERVIEW;
+}
+
+function dealerStorageKey(scope) {
+  return scope === DEALER_SCOPE.INVENTORY
+    ? INVENTORY_DEALER_ID_KEY
+    : OVERVIEW_DEALER_ID_KEY;
+}
+
 function canUseStorage() {
   return typeof window !== 'undefined';
 }
 
 export function readStoredDealerId() {
+  return readStoredDealerIdForScope(DEALER_SCOPE.OVERVIEW);
+}
+
+export function readStoredDealerIdForScope(scope) {
   if (!canUseStorage()) return null;
   try {
-    const raw = localStorage.getItem(DEALER_ID_KEY);
+    const key = dealerStorageKey(scope);
+    let raw = localStorage.getItem(key);
+    if (!raw && scope === DEALER_SCOPE.INVENTORY) {
+      const legacy = localStorage.getItem(DEALER_ID_KEY);
+      if (legacy && legacy !== ALL_DEALER_ID) {
+        raw = legacy;
+        localStorage.setItem(INVENTORY_DEALER_ID_KEY, legacy);
+      }
+    }
     return raw ? String(raw) : null;
   } catch {
     return null;
@@ -48,9 +80,13 @@ export function readStoredDealerId() {
 }
 
 export function writeStoredDealerId(id) {
+  writeStoredDealerIdForScope(DEALER_SCOPE.OVERVIEW, id);
+}
+
+export function writeStoredDealerIdForScope(scope, id) {
   if (!canUseStorage() || id == null) return;
   try {
-    localStorage.setItem(DEALER_ID_KEY, String(id));
+    localStorage.setItem(dealerStorageKey(scope), String(id));
   } catch {
     /* ignore */
   }
@@ -61,7 +97,9 @@ export function resetDealerToAll() {
   if (!canUseStorage()) return;
   try {
     localStorage.removeItem(LAST_REAL_DEALER_ID_KEY);
+    localStorage.setItem(OVERVIEW_DEALER_ID_KEY, ALL_DEALER_ID);
     localStorage.setItem(DEALER_ID_KEY, ALL_DEALER_ID);
+    localStorage.removeItem(INVENTORY_DEALER_ID_KEY);
   } catch {
     /* ignore */
   }
@@ -206,4 +244,20 @@ export function resolveDealerFromList(dealers, storedId) {
   if (storedMatch) return storedMatch;
 
   return ALL_DEALER_CLIENT;
+}
+
+/** Resolve picker client per dashboard area (VDP overview vs inventory report). */
+export function resolveDealerForScope(dealers, scope, storedId) {
+  if (!dealers?.length) return ALL_DEALER_CLIENT;
+
+  if (scope === DEALER_SCOPE.INVENTORY) {
+    if (storedId && storedId !== ALL_DEALER_ID) {
+      const match = findDealerById(dealers, storedId);
+      if (match) return match;
+    }
+    return dealers.find((d) => d?.id) ?? ALL_DEALER_CLIENT;
+  }
+
+  if (!storedId || storedId === ALL_DEALER_ID) return ALL_DEALER_CLIENT;
+  return resolveDealerFromList(dealers, storedId);
 }

@@ -11,16 +11,36 @@ import {
 } from './InventoryReportContext';
 
 function InventoryReportContent() {
-  const { sections, inventoryList, loading, error, meta } = useInventoryReport();
+  const {
+    sections,
+    compareSections,
+    inventoryList,
+    compareInventoryList,
+    loading,
+    compareEnabled,
+    compareLoading,
+    compareDateLabel,
+    reportDateLabel,
+    error,
+    compareError,
+    meta,
+  } = useInventoryReport();
 
-  const statusItems = error
-    ? [{ label: `Inventory report · ${error}`, color: 'var(--red)' }]
+  const statusItems = error || compareError
+    ? [{ label: `Inventory report · ${error || compareError}`, color: 'var(--red)' }]
     : [
         {
           label: meta?.source === 'sample'
             ? 'Inventory report · sample data (Supabase not configured)'
             : [
                 'Inventory report',
+                meta?.noSnapshot && meta?.reportDate
+                  ? `no snapshot for ${meta.reportDate}`
+                  :                 meta?.inventorySource === 'scrap'
+                  ? 'scrap inventory'
+                  : meta?.inventorySource === 'mixed'
+                    ? 'hoot + scrap inventory'
+                    : null,
                 meta?.pullDate ? `snapshot ${meta.pullDate}` : null,
                 meta?.allDealers ? 'All Dealers' : null,
                 meta?.rowCount != null ? `${meta.rowCount} units` : null,
@@ -41,6 +61,11 @@ function InventoryReportContent() {
             {error}
           </div>
         )}
+        {compareError && (
+          <div className="donut-err" role="alert">
+            {compareError}
+          </div>
+        )}
         {loading && !sections ? (
           <div className="local-empty-state">
             <p className="local-empty-title">Loading inventory report…</p>
@@ -58,15 +83,29 @@ function InventoryReportContent() {
                   totalUnits={block.totalUnits}
                   totalValue={block.totalValue}
                   centerLabel="UNITS"
+                  compareEnabled={compareEnabled}
+                  compareRows={compareSections?.[key]?.rows ?? []}
+                  compareTotalUnits={compareSections?.[key]?.totalUnits ?? 0}
+                  compareTotalValue={compareSections?.[key]?.totalValue ?? 0}
+                  compareDateLabel={compareDateLabel}
+                  reportDateLabel={reportDateLabel}
+                  compareLoading={compareLoading}
                 />
               </div>
             );
           })
         )}
 
-        {!loading && inventoryList && (
+        {inventoryList && (
           <div className="inventory-report-section inventory-report-list-section">
-            <InventoryList list={inventoryList} />
+            <InventoryList
+              list={inventoryList}
+              compareEnabled={compareEnabled}
+              compareList={compareInventoryList}
+              compareDateLabel={compareDateLabel}
+              reportDateLabel={reportDateLabel}
+              compareLoading={compareLoading}
+            />
           </div>
         )}
       </div>

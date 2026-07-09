@@ -12,6 +12,7 @@ import { useClient } from '@/components/dashboard/ClientContext';
 import {
   fetchInventoryReport,
   inventoryReportExcludesAllDealers,
+  isInventoryReportRefreshing,
   resolveInventoryReportClientId,
 } from '@/lib/inventory/inventoryReport';
 import {
@@ -20,9 +21,15 @@ import {
   normalizeInventoryFilters,
 } from '@/lib/inventory/inventoryReportFilters';
 import {
+  defaultInventoryCompareDate,
   defaultInventoryReportDate,
+  formatInventoryDateLabel,
   normalizeInventoryReportDate,
+  readStoredInventoryCompareDate,
+  readStoredInventoryCompareEnabled,
   readStoredInventoryReportDate,
+  writeStoredInventoryCompareDate,
+  writeStoredInventoryCompareEnabled,
   writeStoredInventoryReportDate,
 } from '@/lib/inventory/inventoryReportPrefs';
 
@@ -34,18 +41,57 @@ export function InventoryReportProvider({ children }) {
   const [reportDate, setReportDateState] = useState(
     () => readStoredInventoryReportDate() || defaultInventoryReportDate(),
   );
+  const [compareEnabled, setCompareEnabledState] = useState(
+    () => readStoredInventoryCompareEnabled(),
+  );
+  const [compareDate, setCompareDateState] = useState(() => {
+    const primary = readStoredInventoryReportDate() || defaultInventoryReportDate();
+    return readStoredInventoryCompareDate() || defaultInventoryCompareDate(primary);
+  });
   const [filters, setFiltersState] = useState(DEFAULT_INVENTORY_FILTERS);
   const [sections, setSections] = useState(null);
+  const [compareSections, setCompareSections] = useState(null);
   const [inventoryList, setInventoryList] = useState(null);
+  const [compareInventoryList, setCompareInventoryList] = useState(null);
   const [rpcFilterOptions, setRpcFilterOptions] = useState(null);
   const [meta, setMeta] = useState(null);
+  const [compareMeta, setCompareMeta] = useState(null);
   const [error, setError] = useState(null);
+  const [compareError, setCompareError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [hasDisplayedReport, setHasDisplayedReport] = useState(false);
+  const [hasDisplayedCompare, setHasDisplayedCompare] = useState(false);
+
+  const updating = isInventoryReportRefreshing(loading, hasDisplayedReport);
+  const compareUpdating = isInventoryReportRefreshing(
+    compareLoading,
+    hasDisplayedCompare,
+  );
 
   const setReportDate = useCallback((next) => {
     const normalized = normalizeInventoryReportDate(next);
     setReportDateState(normalized);
     writeStoredInventoryReportDate(normalized);
+  }, []);
+
+  const setCompareDate = useCallback((next) => {
+    const normalized = normalizeInventoryReportDate(next);
+    setCompareDateState(normalized);
+    writeStoredInventoryCompareDate(normalized);
+  }, []);
+
+  const setCompareEnabled = useCallback((enabled) => {
+    setCompareEnabledState(enabled);
+    writeStoredInventoryCompareEnabled(enabled);
+  }, []);
+
+  const toggleCompareEnabled = useCallback(() => {
+    setCompareEnabledState((prev) => {
+      const next = !prev;
+      writeStoredInventoryCompareEnabled(next);
+      return next;
+    });
   }, []);
 
   const setFilter = useCallback((key, value) => {
@@ -66,6 +112,21 @@ export function InventoryReportProvider({ children }) {
     [client, dealers],
   );
 
+  const normalizedFilters = useMemo(
+    () => normalizeInventoryFilters(filters),
+    [filters],
+  );
+
+  const reportDateLabel = useMemo(
+    () => formatInventoryDateLabel(reportDate),
+    [reportDate],
+  );
+
+  const compareDateLabel = useMemo(
+    () => formatInventoryDateLabel(compareDate),
+    [compareDate],
+  );
+
   useEffect(() => {
     if (!inventoryReportExcludesAllDealers() || !isAllDealer) return;
     const first = dealers.find((d) => d?.id);
@@ -80,7 +141,7 @@ export function InventoryReportProvider({ children }) {
     fetchInventoryReport({
       clientId,
       reportDate,
-      filters: normalizeInventoryFilters(filters),
+      filters: normalizedFilters,
     })
       .then((result) => {
         if (cancelled) return;
@@ -89,6 +150,7 @@ export function InventoryReportProvider({ children }) {
           setInventoryList(result.inventoryList ?? null);
           setRpcFilterOptions(result.filterOptions ?? null);
           setMeta(result.meta ?? null);
+          setHasDisplayedReport(true);
         }
       })
       .catch((err) => {
@@ -107,36 +169,109 @@ export function InventoryReportProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [clientId, reportDate, filters]);
+  }, [clientId, reportDate, normalizedFilters]);
+
+  useEffect(() => {
+    if (!compareEnabled) {
+      setCompareSections(null);
+      setCompareInventoryList(null);
+      setCompareMeta(null);
+      setCompareError(null);
+      setCompareLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setCompareLoading(true);
+    setCompareError(null);
+
+    fetchInventoryReport({
+      clientId,
+      reportDate: compareDate,
+      filters: normalizedFilters,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ready) {
+          setCompareSections(result.sections ?? {});
+          setCompareInventoryList(result.inventoryList ?? null);
+          setCompareMeta(result.meta ?? null);
+          setHasDisplayedCompare(true);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setCompareError(err?.message || 'Failed to load compare inventory report.');
+          setCompareSections({});
+          setCompareInventoryList({ rows: [], totalUnits: 0, totalValue: 0, averagePrice: 0 });
+          setCompareMeta(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCompareLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, compareDate, normalizedFilters, compareEnabled]);
 
   const value = useMemo(
     () => ({
       reportDate,
       setReportDate,
+      compareEnabled,
+      setCompareEnabled,
+      toggleCompareEnabled,
+      compareDate,
+      setCompareDate,
+      reportDateLabel,
+      compareDateLabel,
       filters,
       setFilter,
       clearFilters,
       filterOptions,
       sections,
+      compareSections,
       inventoryList,
+      compareInventoryList,
       meta,
+      compareMeta,
       error,
+      compareError,
       loading,
+      compareLoading,
+      updating,
+      compareUpdating,
       showLocationFilter: config?.showLoc !== false,
       typeHeader: config?.typeH || 'Type',
     }),
     [
       reportDate,
       setReportDate,
+      compareEnabled,
+      setCompareEnabled,
+      toggleCompareEnabled,
+      compareDate,
+      setCompareDate,
+      reportDateLabel,
+      compareDateLabel,
       filters,
       setFilter,
       clearFilters,
       filterOptions,
       sections,
+      compareSections,
       inventoryList,
+      compareInventoryList,
       meta,
+      compareMeta,
       error,
+      compareError,
       loading,
+      compareLoading,
+      updating,
+      compareUpdating,
       config,
     ],
   );

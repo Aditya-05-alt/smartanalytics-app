@@ -6,6 +6,7 @@ import BreakdownDonut from '@/components/dashboard/overview/BreakdownDonut';
 import { formatViewsK } from '@/lib/format/viewsK';
 import { formatInventoryUnits } from '@/lib/inventory/formatInventory';
 import { rowsToInventoryDonutData } from '@/lib/inventory/inventoryDonutData';
+import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
 import InventoryBreakdownTable from './InventoryBreakdownTable';
 
 function ChartModeToggle({ mode, onChange }) {
@@ -33,6 +34,111 @@ function ChartModeToggle({ mode, onChange }) {
   );
 }
 
+function InventoryDonutChart({
+  rows,
+  centerLabel,
+  size = 280,
+  stroke = 28,
+  baselineDonutData,
+  loading = false,
+  periodLabel,
+}) {
+  const donutData = useMemo(() => rowsToInventoryDonutData(rows), [rows]);
+  const allData = useMemo(() => rowsToInventoryDonutData(rows), [rows]);
+
+  const listData = useMemo(() => {
+    if (!baselineDonutData) return allData;
+    return buildDonutCompareDeltas(allData, baselineDonutData).items;
+  }, [allData, baselineDonutData]);
+
+  const { totalDelta } = useMemo(() => {
+    if (!baselineDonutData) return { totalDelta: null };
+    return buildDonutCompareDeltas(allData, baselineDonutData);
+  }, [allData, baselineDonutData]);
+
+  const total = useMemo(
+    () => donutData.reduce((sum, row) => sum + row.value, 0),
+    [donutData],
+  );
+
+  if (loading && rows.length === 0) {
+    return (
+      <div className="inventory-condition-compare-pane">
+        {periodLabel && (
+          <div className="inventory-compare-period-label">{periodLabel}</div>
+        )}
+        <div className="inventory-condition-donut-center inventory-condition-donut-center--loading">
+          <BreakdownDonut
+            embedded
+            hideList
+            data={[]}
+            centerLabel={centerLabel}
+            loading
+            size={size}
+            stroke={stroke}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="inventory-condition-compare-pane">
+      {periodLabel && (
+        <div className="inventory-compare-period-label">{periodLabel}</div>
+      )}
+      <div className="inventory-condition-donut-center">
+        <BreakdownDonut
+          embedded
+          hideList
+          data={listData}
+          chartData={donutData}
+          centerLabel={centerLabel}
+          centerValue={formatViewsK(total)}
+          totalViews={total}
+          totalDelta={totalDelta}
+          size={size}
+          stroke={stroke}
+          sliceTooltipUnit="units"
+          pctDecimals={1}
+        />
+      </div>
+    </div>
+  );
+}
+
+function InventoryBarChart({ rows, maxBar: maxBarProp }) {
+  const donutData = useMemo(() => rowsToInventoryDonutData(rows), [rows]);
+  const maxBar = maxBarProp ?? Math.max(...donutData.map((row) => row.value), 1);
+
+  return (
+    <div className="make-breakdown-bars inventory-condition-bars">
+      {donutData.map((row) => {
+        const heightPct = Math.max((row.value / maxBar) * 100, 4);
+        return (
+          <div key={row.name} className="make-breakdown-bar-col">
+            <div
+              className="make-breakdown-bar-v"
+              style={{
+                height: `${heightPct}%`,
+                background: row.color,
+                minHeight: 8,
+              }}
+            >
+              <span className="make-breakdown-bar-tip">
+                {formatInventoryUnits(row.value)}
+              </span>
+            </div>
+            <span className="make-breakdown-bar-label" title={row.name}>
+              {row.name}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function InventoryBreakdownBlock({
   title,
   labelHeader,
@@ -40,20 +146,38 @@ export default function InventoryBreakdownBlock({
   totalUnits = 0,
   totalValue = 0,
   centerLabel = 'UNITS',
+  compareEnabled = false,
+  compareRows = [],
+  compareTotalUnits = 0,
+  compareTotalValue = 0,
+  compareDateLabel = '',
+  reportDateLabel = '',
+  compareLoading = false,
 }) {
   const [chartMode, setChartMode] = useState('donut');
 
   const donutData = useMemo(() => rowsToInventoryDonutData(rows), [rows]);
+  const compareDonutData = useMemo(
+    () => rowsToInventoryDonutData(compareRows),
+    [compareRows],
+  );
 
   const total = useMemo(
     () => donutData.reduce((sum, row) => sum + row.value, 0),
-    [donutData]
+    [donutData],
   );
 
   const maxBar = useMemo(
-    () => Math.max(...donutData.map((row) => row.value), 1),
-    [donutData]
+    () => Math.max(
+      ...donutData.map((row) => row.value),
+      ...compareDonutData.map((row) => row.value),
+      1,
+    ),
+    [donutData, compareDonutData],
   );
+
+  const compareDonutSize = compareEnabled ? 240 : 280;
+  const compareDonutStroke = compareEnabled ? 24 : 28;
 
   return (
     <Panel className="breakdown-donut-panel inventory-condition-block dashboard-full-row">
@@ -61,58 +185,89 @@ export default function InventoryBreakdownBlock({
         <ChartModeToggle mode={chartMode} onChange={setChartMode} />
       </PanelHeader>
       <PanelBody className="breakdown-donut-body">
-        <div className="inventory-condition-split">
-          <div className="inventory-condition-chart-col">
-            {chartMode === 'donut' ? (
-              <div className="inventory-condition-donut-center">
-                <BreakdownDonut
-                  embedded
-                  hideList
-                  data={donutData}
-                  centerLabel={centerLabel}
-                  centerValue={formatViewsK(total)}
-                  totalViews={total}
-                  size={280}
-                  stroke={28}
-                  sliceTooltipUnit="units"
-                  pctDecimals={1}
-                />
-              </div>
-            ) : (
-              <div className="make-breakdown-bars inventory-condition-bars">
-                {donutData.map((row) => {
-                  const heightPct = Math.max((row.value / maxBar) * 100, 4);
-                  return (
-                    <div key={row.name} className="make-breakdown-bar-col">
-                      <div
-                        className="make-breakdown-bar-v"
-                        style={{
-                          height: `${heightPct}%`,
-                          background: row.color,
-                          minHeight: 8,
-                        }}
-                      >
-                        <span className="make-breakdown-bar-tip">
-                          {formatInventoryUnits(row.value)}
-                        </span>
-                      </div>
-                      <span className="make-breakdown-bar-label" title={row.name}>
-                        {row.name}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        {compareEnabled ? (
+          <div className="inventory-condition-compare-layout">
+            <div className="inventory-condition-compare-donuts">
+              {chartMode === 'donut' ? (
+                <>
+                  <InventoryDonutChart
+                    rows={compareRows}
+                    centerLabel={centerLabel}
+                    size={compareDonutSize}
+                    stroke={compareDonutStroke}
+                    loading={compareLoading}
+                    periodLabel={compareDateLabel}
+                  />
+                  <InventoryDonutChart
+                    rows={rows}
+                    centerLabel={centerLabel}
+                    size={compareDonutSize}
+                    stroke={compareDonutStroke}
+                    baselineDonutData={compareDonutData}
+                    periodLabel={reportDateLabel}
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="inventory-condition-compare-pane">
+                    <div className="inventory-compare-period-label">{compareDateLabel}</div>
+                    <InventoryBarChart rows={compareRows} maxBar={maxBar} />
+                  </div>
+                  <div className="inventory-condition-compare-pane">
+                    <div className="inventory-compare-period-label">{reportDateLabel}</div>
+                    <InventoryBarChart rows={rows} maxBar={maxBar} />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="inventory-condition-compare-tables">
+              <InventoryBreakdownTable
+                rows={compareRows}
+                totalUnits={compareTotalUnits}
+                totalValue={compareTotalValue}
+                labelHeader={labelHeader}
+                periodLabel={compareDateLabel}
+              />
+              <InventoryBreakdownTable
+                rows={rows}
+                totalUnits={totalUnits}
+                totalValue={totalValue}
+                labelHeader={labelHeader}
+                periodLabel={reportDateLabel}
+              />
+            </div>
           </div>
+        ) : (
+          <div className="inventory-condition-split">
+            <div className="inventory-condition-chart-col">
+              {chartMode === 'donut' ? (
+                <div className="inventory-condition-donut-center">
+                  <BreakdownDonut
+                    embedded
+                    hideList
+                    data={donutData}
+                    centerLabel={centerLabel}
+                    centerValue={formatViewsK(total)}
+                    totalViews={total}
+                    size={280}
+                    stroke={28}
+                    sliceTooltipUnit="units"
+                    pctDecimals={1}
+                  />
+                </div>
+              ) : (
+                <InventoryBarChart rows={rows} maxBar={maxBar} />
+              )}
+            </div>
 
-          <InventoryBreakdownTable
-            rows={rows}
-            totalUnits={totalUnits}
-            totalValue={totalValue}
-            labelHeader={labelHeader}
-          />
-        </div>
+            <InventoryBreakdownTable
+              rows={rows}
+              totalUnits={totalUnits}
+              totalValue={totalValue}
+              labelHeader={labelHeader}
+            />
+          </div>
+        )}
       </PanelBody>
     </Panel>
   );

@@ -11,9 +11,15 @@ export default function InventoryBreakdownTable({
   totalUnits = 0,
   totalValue = 0,
   labelHeader = 'Conditions',
+  periodLabel,
 }) {
   return (
     <div className="make-breakdown-table-side inventory-condition-data-col">
+      {periodLabel && (
+        <div className="inventory-compare-period-label inventory-compare-table-label">
+          {periodLabel}
+        </div>
+      )}
       <div className="make-breakdown-table-header inventory-condition-data-header">
         <span>{labelHeader}</span>
         <span>Units</span>

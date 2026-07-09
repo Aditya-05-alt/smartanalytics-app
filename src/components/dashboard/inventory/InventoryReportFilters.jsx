@@ -9,19 +9,43 @@ import {
 } from '@/lib/inventory/inventoryReportFilters';
 import { useInventoryReport } from './InventoryReportContext';
 
+function CompareDateSwitch({ enabled, onChange }) {
+  return (
+    <label className="compare-period-switch">
+      <span className="compare-period-switch-label">Compare date</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        className={`compare-period-switch-track ${enabled ? 'compare-period-switch-track--on' : ''}`}
+        onClick={onChange}
+      >
+        <span className="compare-period-switch-thumb" />
+      </button>
+    </label>
+  );
+}
+
 export default function InventoryReportFilters() {
   const {
     reportDate,
     setReportDate,
+    compareEnabled,
+    toggleCompareEnabled,
+    compareDate,
+    setCompareDate,
     filters,
     setFilter,
     clearFilters,
     filterOptions,
     showLocationFilter,
     typeHeader,
+    updating,
+    compareUpdating,
   } = useInventoryReport();
 
   const hasActiveFilters = inventoryFiltersActive(filters);
+  const showDataUpdating = updating || (compareEnabled && compareUpdating);
 
   return (
     <div className="filters">
@@ -45,21 +69,9 @@ export default function InventoryReportFilters() {
       />
       <FilterDropdown
         clearable
-        options={toFilterOpts(filterOptions.years, 'All Years')}
-        value={filters.year}
-        onChange={(v) => setFilter('year', v)}
-      />
-      <FilterDropdown
-        clearable
         options={toFilterOpts(filterOptions.makes, 'All Makes')}
         value={filters.make}
         onChange={(v) => setFilter('make', v)}
-      />
-      <FilterDropdown
-        clearable
-        options={toFilterOpts(filterOptions.models, 'All Models')}
-        value={filters.model}
-        onChange={(v) => setFilter('model', v)}
       />
       <FilterDropdown
         clearable
@@ -76,6 +88,19 @@ export default function InventoryReportFilters() {
         />
       )}
       <div className="f-right">
+        {showDataUpdating && (
+          <span className="data-updating-badge" role="status" aria-live="polite">
+            <span className="data-updating-dot" aria-hidden />
+            Data is updating
+          </span>
+        )}
+        <CompareDateSwitch enabled={compareEnabled} onChange={toggleCompareEnabled} />
+        {compareEnabled && (
+          <>
+            <span className="f-label">Compare</span>
+            <InventoryDatePicker value={compareDate} onChange={setCompareDate} />
+          </>
+        )}
         <span className="f-label">Date</span>
         <InventoryDatePicker value={reportDate} onChange={setReportDate} />
       </div>

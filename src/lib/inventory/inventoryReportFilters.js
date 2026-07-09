@@ -34,16 +34,15 @@ const STATIC_MODELS = [
 const STATIC_LOCATIONS = ['Main Lot', 'Remote Lot', 'Showroom'];
 
 export function normalizeInventoryFilters(input) {
-  return { ...DEFAULT_INVENTORY_FILTERS, ...(input || {}) };
+  const merged = { ...DEFAULT_INVENTORY_FILTERS, ...(input || {}) };
+  return { ...merged, year: 'All', model: 'All' };
 }
 
 export function inventoryFiltersActive(filters) {
   const f = normalizeInventoryFilters(filters);
   return (
-    f.year !== 'All'
-    || (f.condition !== 'All' && f.condition !== 'Used + New')
+    (f.condition !== 'All' && f.condition !== 'Used + New')
     || f.make !== 'All'
-    || f.model !== 'All'
     || f.type !== 'All'
     || f.location !== 'All'
   );

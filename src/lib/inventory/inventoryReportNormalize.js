@@ -59,11 +59,29 @@ function enrichRows(rows = []) {
   return mergeDuplicateLabels(rows);
 }
 
-function enrichSection(section) {
+function enrichRowsExact(rows = []) {
+  const list = (rows || []).map((row) => ({
+    ...row,
+    label: row.label ?? '(No type)',
+    units: Number(row.units) || 0,
+    totalValue: Number(row.totalValue) || 0,
+  }));
+  const totalUnits = list.reduce((sum, row) => sum + row.units, 0);
+
+  return list
+    .sort((a, b) => b.units - a.units || String(a.label).localeCompare(String(b.label)))
+    .map((row, index) => ({
+      ...row,
+      pct: totalUnits > 0 ? (row.units / totalUnits) * 100 : 0,
+      color: colorForInventoryRow(row.label, index),
+    }));
+}
+
+function enrichSection(section, { mergeLabels = true } = {}) {
   if (!section) return null;
   return {
     ...section,
-    rows: enrichRows(section.rows),
+    rows: mergeLabels ? enrichRows(section.rows) : enrichRowsExact(section.rows),
     totalUnits: Number(section.totalUnits) || 0,
     totalValue: Number(section.totalValue) || 0,
   };
@@ -116,7 +134,7 @@ export function normalizeInventoryReportResponse(raw, params = {}) {
     condition: enrichSection(raw.sections?.condition),
     location: enrichSection(raw.sections?.location),
     make: enrichSection(raw.sections?.make),
-    type: enrichSection(raw.sections?.type),
+    type: enrichSection(raw.sections?.type, { mergeLabels: false }),
   };
 
   const list = raw.inventoryList ?? {};

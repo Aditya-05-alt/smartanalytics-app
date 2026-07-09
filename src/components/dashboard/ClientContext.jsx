@@ -8,12 +8,14 @@ import {
   useMemo,
   useEffect,
 } from 'react';
+import { usePathname } from 'next/navigation';
 import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
 import {
-  readStoredDealerId,
-  resolveDealerFromList,
-  writeStoredDealerId,
+  dealerScopeFromPathname,
+  readStoredDealerIdForScope,
+  resolveDealerForScope,
+  writeStoredDealerIdForScope,
 } from '@/lib/dashboard/dashboardPrefs';
 import { ALL_DEALER_CLIENT, isAllDealerClient } from '@/lib/dashboard/allDealers';
 
@@ -35,6 +37,12 @@ function normalizeRow(row) {
 }
 
 export function ClientProvider({ children }) {
+  const pathname = usePathname();
+  const dealerScope = useMemo(
+    () => dealerScopeFromPathname(pathname),
+    [pathname],
+  );
+
   const [dealers, setDealers] = useState([]);
   const [client, setClient] = useState(ALL_DEALER_CLIENT);
   const [loading, setLoading] = useState(true);
@@ -73,11 +81,7 @@ export function ClientProvider({ children }) {
         .filter((r) => r && r.customer_name)
         .map(normalizeRow);
 
-      const storedId = readStoredDealerId();
-      const initialClient = resolveDealerFromList(list, storedId);
-
       setDealers(list);
-      setClient(initialClient);
       setLoading(false);
     }
 
@@ -87,10 +91,16 @@ export function ClientProvider({ children }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!dealers.length) return;
+    const storedId = readStoredDealerIdForScope(dealerScope);
+    setClient(resolveDealerForScope(dealers, dealerScope, storedId));
+  }, [dealers, dealerScope]);
+
   const pickClient = useCallback((c) => {
     setClient(c);
-    if (c?.id != null) writeStoredDealerId(c.id);
-  }, []);
+    if (c?.id != null) writeStoredDealerIdForScope(dealerScope, c.id);
+  }, [dealerScope]);
 
   const isAllDealer = isAllDealerClient(client);
 
