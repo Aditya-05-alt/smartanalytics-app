@@ -15,7 +15,7 @@ import VdpLogicsFormModal from '@/components/dashboard/admin/VdpLogicsFormModal'
 import AdminConfirmDialog from '@/components/dashboard/admin/AdminConfirmDialog';
 
 const COLUMNS = [
-  { key: 'dealerName', label: 'Dealer', sticky: true, width: 160 },
+  { key: 'dealerName', label: 'Dealer', sticky: true, width: 300 },
   { key: 'dealerId', label: 'Dealer ID', width: 120 },
   { key: 'websiteUrl', label: 'Website', width: 140 },
   { key: 'cms', label: 'CMS', width: 100 },

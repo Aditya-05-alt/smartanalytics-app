@@ -53,7 +53,7 @@ serve(async (req) => {
     /* no body */
   }
 
-  const pullDate = parsePullDate(body?.pull_date);
+    const pullDate = parsePullDate(body?.pull_date);
   const skipIfComplete = body?.skip_if_complete !== false;
 
   const supabase = createClient(
@@ -62,8 +62,9 @@ serve(async (req) => {
   );
 
   try {
+    // Null pull_date → SQL uses Asia/Kolkata business date (not UTC CURRENT_DATE)
     console.log(
-      `📦 Inventory daily snapshot (insert-only) pull_date=${pullDate ?? "CURRENT_DATE"} skip_if_complete=${skipIfComplete}`,
+      `📦 Inventory daily snapshot (insert-only) pull_date=${pullDate ?? "Asia/Kolkata today"} skip_if_complete=${skipIfComplete}`,
     );
 
     const { data, error } = await supabase.rpc("run_daily_inventory_snapshot", {

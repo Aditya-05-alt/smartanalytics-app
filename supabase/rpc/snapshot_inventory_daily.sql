@@ -280,7 +280,7 @@ $$;
 -- ── Cron / edge entrypoint ───────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.run_daily_inventory_snapshot(
-  p_pull_date date DEFAULT CURRENT_DATE,
+  p_pull_date date DEFAULT NULL,
   p_skip_if_complete boolean DEFAULT true
 )
 RETURNS jsonb
@@ -289,7 +289,10 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_pull_date date := COALESCE(p_pull_date, CURRENT_DATE);
+  v_pull_date date := COALESCE(
+    p_pull_date,
+    (timezone('Asia/Kolkata', now()))::date
+  );
   v_hoot_done boolean;
   v_scrap_done boolean;
   v_hoot_row record;

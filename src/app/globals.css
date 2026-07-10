@@ -2225,7 +2225,7 @@ body {
 }
 .vdp-logics-page .vdp-logics-table-layout {
   width: 100%;
-  min-width: 1942px;
+  min-width: 2082px;
   table-layout: fixed;
 }
 .vdp-logics-page .vdp-logics-table-layout .ga4-count-cell {
@@ -2251,8 +2251,13 @@ body {
   white-space: nowrap;
 }
 .vdp-logics-page .vdp-logics-table-layout .vdp-logics-dealer-col {
-  min-width: 0;
+  min-width: 300px;
   max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
 }
 .vdp-logics-empty-row .vdp-logics-empty-cell {
   padding: 1.25rem 1rem;
@@ -2358,12 +2363,18 @@ body {
 .vdp-logics-table .vdp-logics-dealer-col {
   position: sticky;
   left: 132px;
-  min-width: 160px;
-  max-width: 220px;
+  min-width: 300px;
+  max-width: 300px;
+  width: 300px;
   z-index: 1;
   padding: 10px 12px !important;
   text-align: left !important;
   box-shadow: 2px 0 6px rgba(0, 0, 0, 0.06);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+  line-height: 1.35;
 }
 .vdp-logics-table thead .vdp-logics-dealer-col {
   z-index: 6;

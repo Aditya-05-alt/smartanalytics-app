@@ -3,7 +3,7 @@
 -- Per dealer: hoot when configured; scrap when scrap_link on or hoot has no rows for that date.
 -- One pull_date snapshot + filters. Supports single dealer OR All Dealers.
 -- Units = one row per sk on that pull_date (deduped per dealer + VIN).
--- Freshness: hoot only (today rolling 24h; past dates snapshot window). Scrap uses pull_date match.
+-- Freshness (hoot): last_seen within 24h of pull_date (IST business day). Scrap = pull_date match only.
 -- Value = SUM(COALESCE(NULLIF(price,0), NULLIF(msrp,0), 0)).
 -- Deploy in Supabase SQL Editor (full file).
 
@@ -32,6 +32,7 @@ DECLARE
   v_all_dealers       boolean;
   v_pull_date         date;
   v_condition         text := UPPER(TRIM(COALESCE(p_condition, 'BOTH')));
+  v_business_today    date := (timezone('Asia/Kolkata', now()))::date;
   v_last_seen_cutoff  timestamptz;
   v_last_seen_upper   timestamptz;
   v_result            jsonb;
@@ -42,13 +43,13 @@ BEGIN
 
   v_pull_date := p_report_date;
 
-  -- Today: rolling 24h from now. Past pull_date: 24h window ending at end of that snapshot day.
-  IF p_report_date = CURRENT_DATE THEN
-    v_last_seen_cutoff := now() - interval '24 hours';
-    v_last_seen_upper := NULL;
-  ELSE
-    v_last_seen_upper := (p_report_date::timestamptz + interval '1 day');
-    v_last_seen_cutoff := v_last_seen_upper - interval '24 hours';
+  -- 24h window anchored to pull_date in IST (matches frontend local calendar + cron).
+  -- Today: also allow rolling now()-24h so late-evening last_seen still counts.
+  v_last_seen_cutoff := (p_report_date::timestamp AT TIME ZONE 'Asia/Kolkata');
+  v_last_seen_upper  := v_last_seen_cutoff + interval '1 day';
+  IF p_report_date = v_business_today THEN
+    v_last_seen_cutoff := LEAST(v_last_seen_cutoff, now() - interval '24 hours');
+    v_last_seen_upper := NULL; -- open-ended upper for live today
   END IF;
 
   v_all_dealers := (
@@ -76,6 +77,8 @@ BEGIN
             AND (
               TRIM(COALESCE(d.customer_name, '')) = TRIM(h.customer_name)
               OR TRIM(COALESCE(d.advertiser, '')) = TRIM(h.customer_name)
+              OR TRIM(COALESCE(d.customer_name, '')) ILIKE TRIM(h.customer_name) || '%'
+              OR TRIM(h.customer_name) ILIKE TRIM(COALESCE(d.customer_name, '')) || '%'
             )
         )
         OR EXISTS (
@@ -157,6 +160,17 @@ BEGIN
         WHEN NULLIF(TRIM(v.hoot_link), '') IS NOT NULL THEN 'hoot'
         WHEN lower(TRIM(COALESCE(v.scrap_link, ''))) = 'on' THEN 'scrap'
         WHEN TRIM(COALESCE(v.scrap_link, '')) ~* '^https?://' THEN 'scrap'
+        -- Hoot URL / hoot daily before scrap-exists so leftover scrap rows don't blank hoot dealers
+        WHEN NULLIF(TRIM(d.hoot_url), '') IS NOT NULL THEN 'hoot'
+        WHEN EXISTS (
+          SELECT 1
+          FROM public.smart_hoot_inventory_daily hd
+          WHERE hd.pull_date = p_report_date
+            AND (
+              TRIM(COALESCE(hd.customer_name, '')) = d.customer_name
+              OR TRIM(COALESCE(hd.advertiser, '')) = d.customer_name
+            )
+        ) THEN 'hoot'
         WHEN EXISTS (
           SELECT 1
           FROM public.smart_scrap_inventory_daily sd
@@ -169,25 +183,6 @@ BEGIN
               OR TRIM(d.customer_name) ILIKE TRIM(COALESCE(sd.customer_name, '')) || '%'
             )
         ) THEN 'scrap'
-        WHEN NULLIF(TRIM(d.hoot_url), '') IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM public.smart_hoot_inventory_daily hd
-            WHERE hd.pull_date = p_report_date
-              AND (
-                TRIM(COALESCE(hd.customer_name, '')) = d.customer_name
-                OR TRIM(COALESCE(hd.advertiser, '')) = d.customer_name
-              )
-          ) THEN 'hoot'
-        WHEN EXISTS (
-          SELECT 1
-          FROM public.smart_hoot_inventory_daily hd
-          WHERE hd.pull_date = p_report_date
-            AND (
-              TRIM(COALESCE(hd.customer_name, '')) = d.customer_name
-              OR TRIM(COALESCE(hd.advertiser, '')) = d.customer_name
-            )
-        ) THEN 'hoot'
         ELSE 'scrap'
       END AS preferred_source
     FROM dealers d
@@ -208,22 +203,34 @@ BEGIN
     FROM dealer_mode dm
     INNER JOIN public.smart_hoot_inventory_daily i
       ON i.pull_date = p_report_date
-     AND COALESCE(
-       CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
-       CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
-       i.first_seen
-     ) >= v_last_seen_cutoff
      AND (
-       v_last_seen_upper IS NULL
-       OR COALESCE(
-         CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
-         CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
-         i.first_seen
-       ) < v_last_seen_upper
+       CASE
+         WHEN p_report_date = v_business_today THEN
+           -- Today: fresh last_seen, OR freshly snapshotted (cron) with last_seen not ancient
+           (
+             i.last_seen IS NOT NULL
+             AND i.last_seen >= v_last_seen_cutoff
+           )
+           OR (
+             i.snapshotted_at IS NOT NULL
+             AND i.snapshotted_at >= v_last_seen_cutoff
+             AND (
+               i.last_seen IS NULL
+               OR i.last_seen >= (v_last_seen_cutoff - interval '6 days')
+             )
+           )
+         ELSE
+           -- Past pull_date: last_seen must fall inside that IST calendar day
+           i.last_seen IS NOT NULL
+           AND i.last_seen >= v_last_seen_cutoff
+           AND i.last_seen < v_last_seen_upper
+       END
      )
      AND (
        TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
        OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
+       OR TRIM(COALESCE(i.customer_name, '')) ILIKE dm.customer_name || '%'
+       OR dm.customer_name ILIKE TRIM(COALESCE(i.customer_name, '')) || '%'
      )
   ),
   scrap_dealers_with_data AS (
@@ -256,22 +263,34 @@ BEGIN
     FROM dealer_mode dm
     INNER JOIN public.smart_hoot_inventory_daily i
       ON i.pull_date = p_report_date
-     AND COALESCE(
-       CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
-       CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
-       i.first_seen
-     ) >= v_last_seen_cutoff
      AND (
-       v_last_seen_upper IS NULL
-       OR COALESCE(
-         CASE WHEN p_report_date = CURRENT_DATE THEN i.last_seen ELSE i.snapshotted_at END,
-         CASE WHEN p_report_date = CURRENT_DATE THEN i.snapshotted_at ELSE i.last_seen END,
-         i.first_seen
-       ) < v_last_seen_upper
+       CASE
+         WHEN p_report_date = v_business_today THEN
+           -- Today: fresh last_seen, OR freshly snapshotted (cron) with last_seen not ancient
+           (
+             i.last_seen IS NOT NULL
+             AND i.last_seen >= v_last_seen_cutoff
+           )
+           OR (
+             i.snapshotted_at IS NOT NULL
+             AND i.snapshotted_at >= v_last_seen_cutoff
+             AND (
+               i.last_seen IS NULL
+               OR i.last_seen >= (v_last_seen_cutoff - interval '6 days')
+             )
+           )
+         ELSE
+           -- Past pull_date: last_seen must fall inside that IST calendar day
+           i.last_seen IS NOT NULL
+           AND i.last_seen >= v_last_seen_cutoff
+           AND i.last_seen < v_last_seen_upper
+       END
      )
      AND (
        TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
        OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
+       OR TRIM(COALESCE(i.customer_name, '')) ILIKE dm.customer_name || '%'
+       OR dm.customer_name ILIKE TRIM(COALESCE(i.customer_name, '')) || '%'
      )
     WHERE dm.preferred_source = 'hoot'
 
@@ -583,7 +602,8 @@ BEGIN
       'lastSeenCutoff', v_last_seen_cutoff,
       'lastSeenUpper', v_last_seen_upper,
       'lastSeenMaxAgeHours', 24,
-      'lastSeenMode', CASE WHEN p_report_date = CURRENT_DATE THEN 'live' ELSE 'snapshot' END,
+      'lastSeenMode', CASE WHEN p_report_date = v_business_today THEN 'live' ELSE 'snapshot' END,
+      'businessToday', v_business_today,
       'filters', jsonb_build_object(
         'types', COALESCE(to_jsonb(p_types), '[]'::jsonb),
         'makes', COALESCE(to_jsonb(p_makes), '[]'::jsonb),
@@ -706,8 +726,8 @@ COMMENT ON FUNCTION public.get_inventory_report(
   'p_client_id NULL/empty/__all_dealer__ = All Dealers. '
   'Exact pull_date only (p_report_date). '
   'Units = one row per dealer+VIN (deduped). Value uses COALESCE(NULLIF(price,0), NULLIF(msrp,0), 0). '
-  'Excludes stale hoot units by freshness timestamp (today rolling 24h; past dates snapshot window). '
-  'Scrap daily rows included by pull_date + dealer match only. '
+  'Hoot freshness: last_seen in pull_date IST day window (today also allows rolling now()-24h); '
+  'null last_seen falls back to snapshotted_at. Scrap = pull_date + dealer match only. '
   'Data retained in daily tables.';
 
 GRANT EXECUTE ON FUNCTION public.get_inventory_report(
