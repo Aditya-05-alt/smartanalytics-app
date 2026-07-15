@@ -10,6 +10,7 @@ import {
   normalizeInventoryFilters,
 } from './inventoryReportFilters';
 import { getDummyInventoryReport } from './inventoryReportDummy';
+import { INVENTORY_PIPELINE } from './inventoryPipeline';
 import { normalizeInventoryReportResponse } from './inventoryReportNormalize';
 import { normalizeInventoryReportDate } from './inventoryReportPrefs';
 
@@ -114,7 +115,7 @@ export function buildEmptyInventoryReport({
   filters = null,
   allDealers = false,
   nearestPullDate = null,
-  source = 'smart_hoot_inventory_daily',
+  source = INVENTORY_PIPELINE.dailyHootTable,
 } = {}) {
   const requested = inventoryReportDateKey(reportDate);
   const message = requested

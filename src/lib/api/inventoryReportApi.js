@@ -17,7 +17,7 @@ function inventoryReportRpcParams(clientId, reportDate, filters) {
   };
 }
 
-/** Full inventory report via get_inventory_report RPC. */
+/** Full inventory report via get_inventory_report RPC (reads smart_hoot_inventory_daily from live snapshot). */
 export async function fetchGetInventoryReport({
   clientId,
   reportDate,

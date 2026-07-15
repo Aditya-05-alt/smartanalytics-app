@@ -1,6 +1,10 @@
 export const HOOT_TABLE = 'smart_hoot_config';
 export const GA4_TABLE = 'smart_ga4_config';
 
+/** Grant this account Viewer access on each new dealer GA4 property. */
+export const GA4_SERVICE_ACCOUNT_EMAIL =
+  'ga4-automation@leisuretime-184200.iam.gserviceaccount.com';
+
 export const FORM_FIELDS = [
   { key: 'customerName', db: 'customer_name', label: 'Dealer name', section: 'hoot', required: true },
   { key: 'hootUrl', db: 'hoot_url', label: 'Hoot URL', section: 'hoot', required: true },
@@ -92,6 +96,10 @@ export function normalizeDealerRow(hootRow, ga4Row) {
       : null,
     accountName: ga4Row?.account_name ?? null,
     ga4IsActive: ga4Row?.is_active !== false,
+    syncGroup:
+      ga4Row?.sync_group != null && Number.isFinite(Number(ga4Row.sync_group))
+        ? Number(ga4Row.sync_group)
+        : null,
     hasGa4Config,
     createdAt: hootRow.created_at ?? null,
   };

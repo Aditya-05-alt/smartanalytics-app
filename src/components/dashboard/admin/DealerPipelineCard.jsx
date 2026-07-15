@@ -582,7 +582,7 @@ export default function DealerPipelineCard({ dealer, from, to }) {
           </p>
           {stats?.inventory && (
             <p className="pipeline-step-meta">
-              Config: smart_vdp_logic + smart_hoot_config · Inventory: smart_hoot_inventory + smart_scrap_inventory
+              Config: smart_vdp_logic + smart_hoot_config · Inventory: smart_hoot_inventory_live + smart_scrap_inventory
               · Hoot link: {stats.inventory.hasHootLink ? 'yes' : 'no'}
               · Scrap link: {stats.inventory.hasScrapLink ? 'yes' : 'no'}
               · Hoot URL (config): {stats.inventory.hasHootUrl ? 'yes' : 'no'}

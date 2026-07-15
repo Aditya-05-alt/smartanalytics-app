@@ -27,7 +27,7 @@ import {
   normalizeInventoryReportDate,
   readStoredInventoryCompareDate,
   readStoredInventoryCompareEnabled,
-  readStoredInventoryReportDate,
+  resolveInventoryReportDateOnLoad,
   writeStoredInventoryCompareDate,
   writeStoredInventoryCompareEnabled,
   writeStoredInventoryReportDate,
@@ -39,13 +39,13 @@ export function InventoryReportProvider({ children }) {
   const { client, config, dealers, pickClient, isAllDealer } = useClient();
 
   const [reportDate, setReportDateState] = useState(
-    () => readStoredInventoryReportDate() || defaultInventoryReportDate(),
+    () => resolveInventoryReportDateOnLoad(),
   );
   const [compareEnabled, setCompareEnabledState] = useState(
     () => readStoredInventoryCompareEnabled(),
   );
   const [compareDate, setCompareDateState] = useState(() => {
-    const primary = readStoredInventoryReportDate() || defaultInventoryReportDate();
+    const primary = resolveInventoryReportDateOnLoad();
     return readStoredInventoryCompareDate() || defaultInventoryCompareDate(primary);
   });
   const [filters, setFiltersState] = useState(DEFAULT_INVENTORY_FILTERS);
@@ -132,6 +132,24 @@ export function InventoryReportProvider({ children }) {
     const first = dealers.find((d) => d?.id);
     if (first) pickClient(first);
   }, [isAllDealer, dealers, pickClient]);
+
+  useEffect(() => {
+    const today = defaultInventoryReportDate();
+    let sessionDate = null;
+    try {
+      sessionDate = sessionStorage.getItem('sa_inventory_report_date_session');
+    } catch {
+      sessionDate = null;
+    }
+
+    if (!sessionDate) {
+      setReportDateState(today);
+      writeStoredInventoryReportDate(today);
+      const nextCompare = defaultInventoryCompareDate(today);
+      setCompareDateState(nextCompare);
+      writeStoredInventoryCompareDate(nextCompare);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

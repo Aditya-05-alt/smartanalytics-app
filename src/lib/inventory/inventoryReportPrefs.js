@@ -1,8 +1,10 @@
 import { toCalendarISO } from '@/lib/ga4/dateRange';
 
 const INVENTORY_REPORT_DATE_KEY = 'sa_inventory_report_date';
+const INVENTORY_REPORT_DATE_SESSION_KEY = 'sa_inventory_report_date_session';
 const INVENTORY_COMPARE_ENABLED_KEY = 'sa_inventory_compare_enabled';
 const INVENTORY_COMPARE_DATE_KEY = 'sa_inventory_compare_date';
+const INVENTORY_COMPARE_DATE_SESSION_KEY = 'sa_inventory_compare_date_session';
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function defaultInventoryReportDate() {
@@ -31,15 +33,20 @@ function canUseStorage() {
   return typeof window !== 'undefined';
 }
 
-export function readStoredInventoryReportDate() {
-  if (!canUseStorage()) return null;
+/** Default on login / new tab: today unless user already picked a date this session. */
+export function resolveInventoryReportDateOnLoad() {
+  if (!canUseStorage()) return defaultInventoryReportDate();
   try {
-    const raw = localStorage.getItem(INVENTORY_REPORT_DATE_KEY)?.trim();
-    if (!raw || !ISO_DATE_RE.test(raw)) return null;
-    return raw;
+    const sessionRaw = sessionStorage.getItem(INVENTORY_REPORT_DATE_SESSION_KEY)?.trim();
+    if (sessionRaw && ISO_DATE_RE.test(sessionRaw)) return sessionRaw;
   } catch {
-    return null;
+    /* ignore */
   }
+  return defaultInventoryReportDate();
+}
+
+export function readStoredInventoryReportDate() {
+  return resolveInventoryReportDateOnLoad();
 }
 
 export function writeStoredInventoryReportDate(value) {
@@ -47,6 +54,7 @@ export function writeStoredInventoryReportDate(value) {
   const date = String(value).slice(0, 10);
   if (!ISO_DATE_RE.test(date)) return;
   try {
+    sessionStorage.setItem(INVENTORY_REPORT_DATE_SESSION_KEY, date);
     localStorage.setItem(INVENTORY_REPORT_DATE_KEY, date);
   } catch {
     /* ignore */
@@ -74,6 +82,9 @@ export function writeStoredInventoryCompareEnabled(enabled) {
 export function readStoredInventoryCompareDate() {
   if (!canUseStorage()) return null;
   try {
+    const sessionRaw = sessionStorage.getItem(INVENTORY_COMPARE_DATE_SESSION_KEY)?.trim();
+    if (sessionRaw && ISO_DATE_RE.test(sessionRaw)) return sessionRaw;
+
     const raw = localStorage.getItem(INVENTORY_COMPARE_DATE_KEY)?.trim();
     if (!raw || !ISO_DATE_RE.test(raw)) return null;
     return raw;
@@ -87,6 +98,7 @@ export function writeStoredInventoryCompareDate(value) {
   const date = String(value).slice(0, 10);
   if (!ISO_DATE_RE.test(date)) return;
   try {
+    sessionStorage.setItem(INVENTORY_COMPARE_DATE_SESSION_KEY, date);
     localStorage.setItem(INVENTORY_COMPARE_DATE_KEY, date);
   } catch {
     /* ignore */

@@ -6,9 +6,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
  * Tiny self-contained dropdown helper.
  *  - Returns ref to attach to the wrapper.
  *  - Auto-closes on outside click + Escape.
- *  - Single shared listener via the wrapper ref → cheap.
+ *  - Use closeOn: 'click' when the menu contains <input type="date"> so the
+ *    native calendar popup is not destroyed by mousedown outside-close.
  */
-export function useDropdown(initial = false) {
+export function useDropdown(initial = false, options = {}) {
+  const closeOn = options.closeOn === 'click' ? 'click' : 'mousedown';
   const [open, setOpen] = useState(initial);
   const ref = useRef(null);
 
@@ -25,13 +27,13 @@ export function useDropdown(initial = false) {
       if (e.key === 'Escape') close();
     }
 
-    document.addEventListener('mousedown', onPointer);
+    document.addEventListener(closeOn, onPointer);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener(closeOn, onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, close]);
+  }, [open, close, closeOn]);
 
   return { open, setOpen, toggle, close, ref };
 }

@@ -35,7 +35,7 @@ function parsePullDate(value: unknown): string | null {
 
 /**
  * Daily inventory snapshot — smart_hoot_inventory_live → smart_hoot_inventory_daily.
- * Prefer deploying as inventory-report-daily-sync; this alias kept for old cron URLs.
+ * POST /functions/v1/inventory-report-daily-sync
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -88,7 +88,7 @@ serve(async (req) => {
       if ((probe as SnapshotResult)?.skippedRun) {
         return jsonResponse({
           success: true,
-          edge: "inventory-daily-snapshot",
+          edge: "inventory-report-daily-sync",
           hootSource: "smart_hoot_inventory_live",
           hootLiveRows: 0,
           rpc: "run_daily_inventory_snapshot",
@@ -126,7 +126,7 @@ serve(async (req) => {
 
     return jsonResponse({
       success: true,
-      edge: "inventory-daily-snapshot",
+      edge: "inventory-report-daily-sync",
       hootSource: "smart_hoot_inventory_live",
       hootLiveRows: liveRows,
       rpc: "run_daily_inventory_snapshot",
@@ -138,7 +138,7 @@ serve(async (req) => {
     return jsonResponse(
       {
         success: false,
-        edge: "inventory-daily-snapshot",
+        edge: "inventory-report-daily-sync",
         rpc: "run_daily_inventory_snapshot",
         error: message,
       },

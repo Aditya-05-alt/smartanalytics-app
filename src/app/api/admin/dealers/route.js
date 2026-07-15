@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSuperadminFromCookies } from '@/lib/auth/adminApiAuth';
 import { createAdminDataClient } from '@/lib/supabase/adminDataClient';
 import { bodyToPayload } from '@/lib/dealers/fields';
+import { resolveSyncGroupForNewDealer } from '@/lib/dealers/syncGroup';
 import {
   HOOT_TABLE,
   listDealers,
@@ -54,7 +55,8 @@ export async function POST(request) {
   }
 
   try {
-    await upsertGa4Config(admin.supabase, payload);
+    const syncGroup = await resolveSyncGroupForNewDealer(admin.supabase);
+    await upsertGa4Config(admin.supabase, payload, { syncGroup });
 
     const hootRecord = {
       customer_name: payload.customerName,
@@ -82,6 +84,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         row,
+        syncGroup,
         vdpLogic: {
           dealerName: payload.customerName,
           vdpLogicsUrl: vdpLogicsAdminUrl(payload.customerName, {

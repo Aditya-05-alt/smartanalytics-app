@@ -11,7 +11,7 @@ export { GA4_TABLE, HOOT_TABLE, normalizeDealerRow, normalizeGa4PropertyId, vdpL
 const HOOT_SELECT =
   'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, is_active, created_at';
 
-const GA4_SELECT = 'id, client_id, ga4_property_id, account_name, is_active';
+const GA4_SELECT = 'id, client_id, ga4_property_id, account_name, is_active, sync_group';
 
 export function mapDealerError(error) {
   if (!error) return 'Database error';
@@ -93,7 +93,7 @@ export async function hasPageDataForClient(supabase, clientId) {
   return (count ?? 0) > 0;
 }
 
-export async function upsertGa4Config(supabase, payload) {
+export async function upsertGa4Config(supabase, payload, options = {}) {
   const record = {
     client_id: payload.ga4CustomerId,
     ga4_property_id: payload.ga4PropertyId,
@@ -111,6 +111,10 @@ export async function upsertGa4Config(supabase, payload) {
       .single();
     if (error) throw error;
     return data;
+  }
+
+  if (options.syncGroup != null) {
+    record.sync_group = options.syncGroup;
   }
 
   const { data, error } = await supabase

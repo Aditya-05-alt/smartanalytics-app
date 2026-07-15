@@ -1,9 +1,13 @@
 -- Full Inventory Report from daily inventory snapshots.
--- Sources: smart_hoot_inventory_daily (hoot dealers) + smart_scrap_inventory_daily (scrap / fallback).
+-- Pipeline: smart-hoot-inv-live → smart_hoot_inventory_live
+--           inventory-report-daily-sync → smart_hoot_inventory_daily
+--           get_inventory_report → frontend
+-- Sources: smart_hoot_inventory_daily (hoot) + smart_scrap_inventory_daily (scrap).
 -- Per dealer: hoot when configured; scrap when scrap_link on or hoot has no rows for that date.
 -- One pull_date snapshot + filters. Supports single dealer OR All Dealers.
--- Units = one row per sk on that pull_date (deduped per dealer + VIN).
--- Freshness (hoot): last_seen within 24h of pull_date (IST business day). Scrap = pull_date match only.
+-- Units = one row per sk on that pull_date (Hoot API grain).
+-- Hoot: all units on pull_date (sourced from smart_hoot_inventory_live daily snapshot; no last_seen filter).
+-- Scrap: pull_date match only.
 -- Value = SUM(COALESCE(NULLIF(price,0), NULLIF(msrp,0), 0)).
 -- Deploy in Supabase SQL Editor (full file).
 
@@ -33,8 +37,6 @@ DECLARE
   v_pull_date         date;
   v_condition         text := UPPER(TRIM(COALESCE(p_condition, 'BOTH')));
   v_business_today    date := (timezone('Asia/Kolkata', now()))::date;
-  v_last_seen_cutoff  timestamptz;
-  v_last_seen_upper   timestamptz;
   v_result            jsonb;
 BEGIN
   IF p_report_date IS NULL THEN
@@ -42,15 +44,6 @@ BEGIN
   END IF;
 
   v_pull_date := p_report_date;
-
-  -- 24h window anchored to pull_date in IST (matches frontend local calendar + cron).
-  -- Today: also allow rolling now()-24h so late-evening last_seen still counts.
-  v_last_seen_cutoff := (p_report_date::timestamp AT TIME ZONE 'Asia/Kolkata');
-  v_last_seen_upper  := v_last_seen_cutoff + interval '1 day';
-  IF p_report_date = v_business_today THEN
-    v_last_seen_cutoff := LEAST(v_last_seen_cutoff, now() - interval '24 hours');
-    v_last_seen_upper := NULL; -- open-ended upper for live today
-  END IF;
 
   v_all_dealers := (
     p_client_id IS NULL
@@ -204,29 +197,6 @@ BEGIN
     INNER JOIN public.smart_hoot_inventory_daily i
       ON i.pull_date = p_report_date
      AND (
-       CASE
-         WHEN p_report_date = v_business_today THEN
-           -- Today: fresh last_seen, OR freshly snapshotted (cron) with last_seen not ancient
-           (
-             i.last_seen IS NOT NULL
-             AND i.last_seen >= v_last_seen_cutoff
-           )
-           OR (
-             i.snapshotted_at IS NOT NULL
-             AND i.snapshotted_at >= v_last_seen_cutoff
-             AND (
-               i.last_seen IS NULL
-               OR i.last_seen >= (v_last_seen_cutoff - interval '6 days')
-             )
-           )
-         ELSE
-           -- Past pull_date: last_seen must fall inside that IST calendar day
-           i.last_seen IS NOT NULL
-           AND i.last_seen >= v_last_seen_cutoff
-           AND i.last_seen < v_last_seen_upper
-       END
-     )
-     AND (
        TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
        OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
        OR TRIM(COALESCE(i.customer_name, '')) ILIKE dm.customer_name || '%'
@@ -263,29 +233,6 @@ BEGIN
     FROM dealer_mode dm
     INNER JOIN public.smart_hoot_inventory_daily i
       ON i.pull_date = p_report_date
-     AND (
-       CASE
-         WHEN p_report_date = v_business_today THEN
-           -- Today: fresh last_seen, OR freshly snapshotted (cron) with last_seen not ancient
-           (
-             i.last_seen IS NOT NULL
-             AND i.last_seen >= v_last_seen_cutoff
-           )
-           OR (
-             i.snapshotted_at IS NOT NULL
-             AND i.snapshotted_at >= v_last_seen_cutoff
-             AND (
-               i.last_seen IS NULL
-               OR i.last_seen >= (v_last_seen_cutoff - interval '6 days')
-             )
-           )
-         ELSE
-           -- Past pull_date: last_seen must fall inside that IST calendar day
-           i.last_seen IS NOT NULL
-           AND i.last_seen >= v_last_seen_cutoff
-           AND i.last_seen < v_last_seen_upper
-       END
-     )
      AND (
        TRIM(COALESCE(i.customer_name, '')) = dm.customer_name
        OR TRIM(COALESCE(i.advertiser, '')) = dm.customer_name
@@ -334,12 +281,9 @@ BEGIN
          )
        )
   ),
-  /* Configured dealers only; one unit per dealer + VIN (fallback sk when VIN missing) */
+  /* One unit per dealer + sk (Hoot API grain; do not collapse duplicate VINs) */
   scoped AS (
-    SELECT DISTINCT ON (
-      r.ga4_customer_id,
-      COALESCE(NULLIF(TRIM(UPPER(r.vin)), ''), r.sk)
-    )
+    SELECT DISTINCT ON (r.ga4_customer_id, r.sk)
       r.sk,
       r.vin,
       r.make,
@@ -354,9 +298,8 @@ BEGIN
     FROM inventory_raw r
     ORDER BY
       r.ga4_customer_id,
-      COALESCE(NULLIF(TRIM(UPPER(r.vin)), ''), r.sk),
-      r.snapshotted_at DESC NULLS LAST,
-      r.sk
+      r.sk,
+      r.snapshotted_at DESC NULLS LAST
   ),
   filtered AS (
     SELECT
@@ -599,10 +542,8 @@ BEGIN
         WHEN t.total_units > 0 THEN ROUND(t.total_value / t.total_units, 0)
         ELSE 0
       END,
-      'lastSeenCutoff', v_last_seen_cutoff,
-      'lastSeenUpper', v_last_seen_upper,
-      'lastSeenMaxAgeHours', 24,
-      'lastSeenMode', CASE WHEN p_report_date = v_business_today THEN 'live' ELSE 'snapshot' END,
+      'countMode', 'snapshot_sk_pull_date',
+      'hootSource', 'smart_hoot_inventory_live',
       'businessToday', v_business_today,
       'filters', jsonb_build_object(
         'types', COALESCE(to_jsonb(p_types), '[]'::jsonb),
@@ -721,14 +662,11 @@ COMMENT ON FUNCTION public.get_inventory_report(
   'Full inventory report from daily snapshots (hoot + scrap). '
   'Per dealer: uses smart_hoot_inventory_daily when hoot is configured and has rows; '
   'otherwise smart_scrap_inventory_daily for scrap dealers or hoot fallback. '
-  'Scrap daily rows use pull_date match only (no last_seen freshness). '
-  'Hoot uses last_seen freshness (today rolling 24h; past dates snapshot window). '
+  'Scrap daily rows use pull_date match only. '
+  'Hoot: all units on pull_date from smart_hoot_inventory_live daily snapshot (no last_seen filter). '
   'p_client_id NULL/empty/__all_dealer__ = All Dealers. '
   'Exact pull_date only (p_report_date). '
-  'Units = one row per dealer+VIN (deduped). Value uses COALESCE(NULLIF(price,0), NULLIF(msrp,0), 0). '
-  'Hoot freshness: last_seen in pull_date IST day window (today also allows rolling now()-24h); '
-  'null last_seen falls back to snapshotted_at. Scrap = pull_date + dealer match only. '
-  'Data retained in daily tables.';
+  'Units = one row per dealer+sk. Value uses COALESCE(NULLIF(price,0), NULLIF(msrp,0), 0).';
 
 GRANT EXECUTE ON FUNCTION public.get_inventory_report(
   text, date, text[], text[], text[], text[], integer[], text

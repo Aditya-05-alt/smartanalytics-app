@@ -48,7 +48,7 @@ export default function InventoryReportFilters() {
   const showDataUpdating = updating || (compareEnabled && compareUpdating);
 
   return (
-    <div className="filters">
+    <div className="filters inventory-report-filters">
       <span className="f-label">Filter</span>
       {hasActiveFilters && (
         <button

@@ -1,13 +1,16 @@
 -- Daily inventory snapshots (hoot + scrap) — INSERT only on (pull_date, sk).
+-- Hoot source: smart_hoot_inventory_live (populated by smart-hoot-inv-live edge).
 -- ON CONFLICT DO NOTHING (no upsert). Safe to schedule via cron / edge function.
 --
--- Deploy in Supabase SQL Editor (after smart_hoot_inventory_daily + smart_scrap_inventory_daily tables exist).
+-- Pipeline:
+--   smart-hoot-inv-live → smart_hoot_inventory_live
+--   inventory-report-daily-sync → smart_hoot_inventory_daily
+--   get_inventory_report → frontend
 --
 -- Manual:
---   SELECT public.run_daily_inventory_snapshot(CURRENT_DATE);
---   SELECT public.snapshot_all_inventory_daily(CURRENT_DATE);
+--   SELECT public.run_daily_inventory_snapshot(CURRENT_DATE, false);
 --
--- Edge: POST /functions/v1/inventory-daily-snapshot  body: { "pull_date": "2026-07-09" }
+-- Edge: POST /functions/v1/inventory-report-daily-sync  body: { "pull_date": "2026-07-10" }
 
 DROP FUNCTION IF EXISTS public.run_daily_inventory_snapshot(date, boolean);
 DROP FUNCTION IF EXISTS public.snapshot_all_inventory_daily(date);
@@ -40,7 +43,11 @@ BEGIN
     RAISE EXCEPTION 'p_pull_date is required';
   END IF;
 
-  SELECT COUNT(*)::bigint INTO v_source FROM public.smart_hoot_inventory;
+  SELECT COUNT(*)::bigint INTO v_source FROM public.smart_hoot_inventory_live;
+
+  IF v_source = 0 THEN
+    RAISE WARNING 'snapshot_hoot_inventory_daily: smart_hoot_inventory_live is empty — run smart-hoot-inv-live first';
+  END IF;
 
   SELECT COUNT(*)::bigint INTO v_before
   FROM public.smart_hoot_inventory_daily
@@ -88,8 +95,8 @@ BEGIN
     i.year,
     i.price,
     i.condition,
-    i.first_seen,
-    i.last_seen,
+    NULL::timestamptz AS first_seen,
+    NULL::timestamptz AS last_seen,
     i.raw_data,
     i.customer_name,
     i.location,
@@ -99,7 +106,7 @@ BEGIN
     i.stock_number,
     i.website_platform,
     now()
-  FROM public.smart_hoot_inventory i
+  FROM public.smart_hoot_inventory_live i
   ON CONFLICT ON CONSTRAINT smart_hoot_inventory_daily_pkey DO NOTHING;
 
   GET DIAGNOSTICS v_inserted = ROW_COUNT;
@@ -124,7 +131,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.snapshot_hoot_inventory_daily(date) IS
-  'Insert-only copy of smart_hoot_inventory → smart_hoot_inventory_daily for pull_date. Skips existing (pull_date, sk).';
+  'Insert-only copy of smart_hoot_inventory_live → smart_hoot_inventory_daily for pull_date. Skips existing (pull_date, sk).';
 
 -- ── Scrap: insert-only snapshot ──────────────────────────────────────────────
 
@@ -365,7 +372,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.run_daily_inventory_snapshot(date, boolean) IS
-  'Insert-only daily snapshot for hoot + scrap inventory. Used by inventory-daily-snapshot edge function / pg_cron.';
+  'Insert-only daily snapshot: smart_hoot_inventory_live → smart_hoot_inventory_daily (+ scrap). Used by inventory-report-daily-sync edge / pg_cron.';
 
 GRANT EXECUTE ON FUNCTION public.snapshot_hoot_inventory_daily(date) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.snapshot_scrap_inventory_daily(date) TO anon, authenticated, service_role;

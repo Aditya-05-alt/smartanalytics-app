@@ -2,6 +2,7 @@
 
 import StatusBar from '@/components/dashboard/StatusBar';
 import { INVENTORY_REPORT_SECTION_ORDER } from '@/lib/inventory/inventoryReport';
+import { inventoryReportSourceLabel } from '@/lib/inventory/inventoryPipeline';
 import InventoryBreakdownBlock from './InventoryBreakdownBlock';
 import InventoryList from './InventoryList';
 import InventoryReportFilters from './InventoryReportFilters';
@@ -36,11 +37,7 @@ function InventoryReportContent() {
                 'Inventory report',
                 meta?.noSnapshot && meta?.reportDate
                   ? `no snapshot for ${meta.reportDate}`
-                  :                 meta?.inventorySource === 'scrap'
-                  ? 'scrap inventory'
-                  : meta?.inventorySource === 'mixed'
-                    ? 'hoot + scrap inventory'
-                    : null,
+                  : inventoryReportSourceLabel(meta),
                 meta?.pullDate ? `snapshot ${meta.pullDate}` : null,
                 meta?.allDealers ? 'All Dealers' : null,
                 meta?.rowCount != null ? `${meta.rowCount} units` : null,

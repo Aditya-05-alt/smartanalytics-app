@@ -47,7 +47,7 @@ async function loadVdpLogicRow(supabase, clientId, customerName) {
  * - smart_vdp_logic (hoot_link, scrap_link) — Admin → VDP Logics
  * - smart_hoot_config (customer_name, hoot_url, ga4_customer_id)
  * Inventory tables:
- * - smart_hoot_inventory (customer_name)
+ * - smart_hoot_inventory_live (customer_name) — hoot report pipeline live feed
  * - smart_scrap_inventory (customer_id / customer_name)
  *
  * Priority:
@@ -83,7 +83,7 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
   let hootInventoryCount = 0;
   if (customerName) {
     const { count, error } = await supabase
-      .from('smart_hoot_inventory')
+      .from('smart_hoot_inventory_live')
       .select('*', { count: 'exact', head: true })
       .eq('customer_name', customerName);
 
@@ -138,7 +138,7 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
     useHoot = true;
     step3Reason = hasHootUrl
       ? 'hoot_url on smart_hoot_config'
-      : `smart_hoot_inventory (${hootInventoryCount.toLocaleString()} rows)`;
+      : `smart_hoot_inventory_live (${hootInventoryCount.toLocaleString()} rows)`;
   } else {
     useHoot = false;
     step3Reason = 'no hoot source configured';

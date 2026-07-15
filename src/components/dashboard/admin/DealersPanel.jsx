@@ -8,7 +8,7 @@ import {
   fetchAdminDealers,
   updateAdminDealer,
 } from '@/lib/api/adminDealers';
-import { vdpLogicsAdminUrl } from '@/lib/dealers/fields';
+import { vdpLogicsAdminUrl, GA4_SERVICE_ACCOUNT_EMAIL } from '@/lib/dealers/fields';
 import AdminConfirmDialog from '@/components/dashboard/admin/AdminConfirmDialog';
 import DealerFormModal from '@/components/dashboard/admin/DealerFormModal';
 
@@ -73,6 +73,7 @@ const COLUMNS = [
   { key: 'hootUrl', label: 'Hoot URL', wide: true, width: '28%' },
   { key: 'hootId', label: 'Hoot ID', width: '9%' },
   { key: 'websitePlatform', label: 'Platform', width: '10%' },
+  { key: 'syncGroup', label: 'Sync group', width: '7%' },
   { key: 'isActive', label: 'Active', width: '6%' },
   { key: 'configStatus', label: 'GA4 config', width: '9%' },
 ];
@@ -324,13 +325,19 @@ export default function DealersPanel() {
 
       {notice && (
         <div className="dealers-notice" role="status">
-          <p>
-            Dealer <strong>{notice.dealerName}</strong> added. Add a VDP logic row using the same
-            template as existing dealers.{' '}
-            <Link href={notice.href} className="dealers-notice-link">
-              Open Vdp Logics to add row
-            </Link>
-          </p>
+          <div className="dealers-notice-body">
+            <p className="dealers-notice-ga4-flash">
+              Add <strong>{GA4_SERVICE_ACCOUNT_EMAIL}</strong> as a Viewer on this dealer&apos;s
+              GA4 property.
+            </p>
+            <p>
+              Dealer <strong>{notice.dealerName}</strong> added. Add a VDP logic row using the same
+              template as existing dealers.{' '}
+              <Link href={notice.href} className="dealers-notice-link">
+                Open Vdp Logics to add row
+              </Link>
+            </p>
+          </div>
           <button
             type="button"
             className="dealers-notice-dismiss"

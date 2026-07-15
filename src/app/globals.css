@@ -1064,7 +1064,26 @@ body {
 
 .inventory-date-menu {
   min-width: 260px;
-  z-index: 500;
+  z-index: 1200;
+}
+
+.inventory-date-picker--disabled .dr-trigger {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.inventory-report-filters {
+  position: relative;
+  z-index: 120;
+}
+
+.inventory-date-custom input[type='date'] {
+  cursor: pointer;
+}
+
+.inventory-date-custom input[type='date']:disabled {
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .inventory-date-custom {
@@ -5603,6 +5622,37 @@ body {
   font-size: 13px;
   line-height: 1.5;
   color: var(--t1);
+}
+.dealers-notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.dealers-notice-ga4-flash {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, #22c55e 55%, transparent);
+  background: color-mix(in srgb, #22c55e 14%, var(--surface));
+  color: #15803d;
+  font-weight: 600;
+  animation: dealers-notice-flash 1.6s ease-in-out infinite;
+}
+:root[data-theme='dark'] .dealers-notice-ga4-flash {
+  color: #86efac;
+  border-color: color-mix(in srgb, #4ade80 45%, transparent);
+  background: color-mix(in srgb, #22c55e 18%, var(--surface));
+}
+@keyframes dealers-notice-flash {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, #22c55e 0%, transparent);
+    border-color: color-mix(in srgb, #22c55e 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 22%, transparent);
+    border-color: color-mix(in srgb, #22c55e 75%, transparent);
+  }
 }
 .dealers-notice p {
   margin: 0;

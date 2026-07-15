@@ -1,4 +1,5 @@
 import { colorForInventoryRow } from './inventoryDonutData';
+import { INVENTORY_PIPELINE } from './inventoryPipeline';
 import { filterOptionsFromRpc } from './inventoryReportFilters';
 
 function normalizeGroupKey(value) {
@@ -156,7 +157,10 @@ export function normalizeInventoryReportResponse(raw, params = {}) {
       reportDate: params.reportDate ?? raw.meta?.requestedDate ?? null,
       pullDate: raw.meta?.pullDate ?? null,
       filters: params.filters ?? null,
-      source: raw.meta?.source ?? 'smart_hoot_inventory_daily',
+      source: raw.meta?.source ?? INVENTORY_PIPELINE.dailyHootTable,
+      inventorySource: raw.meta?.inventorySource ?? null,
+      hootSource: raw.meta?.hootSource ?? INVENTORY_PIPELINE.liveTable,
+      countMode: raw.meta?.countMode ?? 'snapshot_sk_pull_date',
       rowCount: Number(raw.meta?.rowCount) || inventoryList.totalUnits,
       allDealers: Boolean(raw.meta?.allDealers),
     },

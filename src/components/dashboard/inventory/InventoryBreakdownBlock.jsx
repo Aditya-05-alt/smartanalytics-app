@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/dashboard/Panel';
 import BreakdownDonut from '@/components/dashboard/overview/BreakdownDonut';
-import { formatViewsK } from '@/lib/format/viewsK';
 import { formatInventoryUnits } from '@/lib/inventory/formatInventory';
 import { rowsToInventoryDonutData } from '@/lib/inventory/inventoryDonutData';
 import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
@@ -37,6 +36,7 @@ function ChartModeToggle({ mode, onChange }) {
 function InventoryDonutChart({
   rows,
   centerLabel,
+  centerUnits,
   size = 280,
   stroke = 28,
   baselineDonutData,
@@ -60,6 +60,7 @@ function InventoryDonutChart({
     () => donutData.reduce((sum, row) => sum + row.value, 0),
     [donutData],
   );
+  const centerTotal = centerUnits ?? total;
 
   if (loading && rows.length === 0) {
     return (
@@ -94,8 +95,8 @@ function InventoryDonutChart({
           data={listData}
           chartData={donutData}
           centerLabel={centerLabel}
-          centerValue={formatViewsK(total)}
-          totalViews={total}
+          centerValue={formatInventoryUnits(centerTotal)}
+          totalViews={centerTotal}
           totalDelta={totalDelta}
           size={size}
           stroke={stroke}
@@ -162,11 +163,6 @@ export default function InventoryBreakdownBlock({
     [compareRows],
   );
 
-  const total = useMemo(
-    () => donutData.reduce((sum, row) => sum + row.value, 0),
-    [donutData],
-  );
-
   const maxBar = useMemo(
     () => Math.max(
       ...donutData.map((row) => row.value),
@@ -193,6 +189,7 @@ export default function InventoryBreakdownBlock({
                   <InventoryDonutChart
                     rows={compareRows}
                     centerLabel={centerLabel}
+                    centerUnits={compareTotalUnits}
                     size={compareDonutSize}
                     stroke={compareDonutStroke}
                     loading={compareLoading}
@@ -201,6 +198,7 @@ export default function InventoryBreakdownBlock({
                   <InventoryDonutChart
                     rows={rows}
                     centerLabel={centerLabel}
+                    centerUnits={totalUnits}
                     size={compareDonutSize}
                     stroke={compareDonutStroke}
                     baselineDonutData={compareDonutData}
@@ -247,8 +245,8 @@ export default function InventoryBreakdownBlock({
                     hideList
                     data={donutData}
                     centerLabel={centerLabel}
-                    centerValue={formatViewsK(total)}
-                    totalViews={total}
+                    centerValue={formatInventoryUnits(totalUnits)}
+                    totalViews={totalUnits}
                     size={280}
                     stroke={28}
                     sliceTooltipUnit="units"
