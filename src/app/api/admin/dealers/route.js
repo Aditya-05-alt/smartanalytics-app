@@ -4,6 +4,7 @@ import { createAdminDataClient } from '@/lib/supabase/adminDataClient';
 import { bodyToPayload } from '@/lib/dealers/fields';
 import { resolveSyncGroupForNewDealer } from '@/lib/dealers/syncGroup';
 import {
+  HOOT_SELECT,
   HOOT_TABLE,
   listDealers,
   mapDealerError,
@@ -63,6 +64,7 @@ export async function POST(request) {
       hoot_url: payload.hootUrl,
       hoot_id: payload.hootId,
       website_platform: payload.websitePlatform,
+      dealer_category: payload.dealerCategory,
       ga4_customer_id: payload.ga4CustomerId,
       is_active: payload.isActive,
     };
@@ -70,9 +72,7 @@ export async function POST(request) {
     const { data: hootRow, error: hootError } = await admin.supabase
       .from(HOOT_TABLE)
       .insert(hootRecord)
-      .select(
-        'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, is_active, created_at'
-      )
+      .select(HOOT_SELECT)
       .single();
 
     if (hootError) {

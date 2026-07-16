@@ -47,6 +47,17 @@ export async function setAdminDealerActive(id, active) {
   return parseJson(res);
 }
 
+/** Auto-save dealer category from the table dropdown. */
+export async function setAdminDealerCategory(id, dealerCategory) {
+  const res = await fetch(`/api/admin/dealers/${id}/category`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dealerCategory: dealerCategory || '' }),
+  });
+  return parseJson(res);
+}
+
 export async function deleteAdminDealer(id, { hard = false } = {}) {
   const qs = hard ? '?hard=true' : '';
   const res = await fetch(`/api/admin/dealers/${id}${qs}`, {

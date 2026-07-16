@@ -5802,6 +5802,17 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.dealers-page .dealers-category-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 160px;
+  height: 30px;
+  padding: 0 0.4rem;
+  font-size: 12px;
+}
+.dealers-page .dealers-table-layout .ga4-count-cell:has(.dealers-category-select) {
+  overflow: visible;
+}
 .dealers-page .dealers-table-layout .vdp-logics-cell--wide {
   max-width: none;
   text-align: left;
@@ -5817,14 +5828,25 @@ body {
 }
 .dealers-page .dealers-table-layout .vdp-logics-dealer-col {
   left: 108px;
-  min-width: 0;
+  min-width: 220px;
   max-width: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+  line-height: 1.35;
 }
 .dealers-page .dealers-table-layout .ga4-count-client {
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
+.dealers-page .dealers-table-layout td.vdp-logics-dealer-col.ga4-count-cell {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 .dealers-filter-check {
   min-width: 140px;

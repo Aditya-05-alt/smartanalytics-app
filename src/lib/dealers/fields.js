@@ -5,10 +5,41 @@ export const GA4_TABLE = 'smart_ga4_config';
 export const GA4_SERVICE_ACCOUNT_EMAIL =
   'ga4-automation@leisuretime-184200.iam.gserviceaccount.com';
 
+export const DEALER_CATEGORY_OPTIONS = [
+  'Auto',
+  'Boats',
+  'Marine',
+  'Motorcycle',
+  'Powersports',
+  'Powersports/RV',
+  'RV',
+  'Service',
+];
+
+const DEALER_CATEGORY_SET = new Set(DEALER_CATEGORY_OPTIONS);
+
+export const HOOT_SELECT =
+  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active, created_at';
+
+export function normalizeDealerCategory(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+  return DEALER_CATEGORY_SET.has(trimmed) ? trimmed : null;
+}
+
 export const FORM_FIELDS = [
   { key: 'customerName', db: 'customer_name', label: 'Dealer name', section: 'hoot', required: true },
   { key: 'hootUrl', db: 'hoot_url', label: 'Hoot URL', section: 'hoot', required: true },
   { key: 'hootId', db: 'hoot_id', label: 'Hoot ID', section: 'hoot' },
+  {
+    key: 'dealerCategory',
+    db: 'dealer_category',
+    label: 'Dealer category',
+    section: 'hoot',
+    type: 'select',
+    options: DEALER_CATEGORY_OPTIONS,
+    placeholder: 'Select category',
+  },
   {
     key: 'websitePlatform',
     db: 'website_platform',
@@ -52,6 +83,7 @@ export function emptyFormState() {
     customerName: '',
     hootUrl: '',
     hootId: '',
+    dealerCategory: '',
     websitePlatform: '',
     isActive: true,
     ga4CustomerId: '',
@@ -67,6 +99,7 @@ export function rowToFormState(row) {
   state.customerName = row.customerName ?? '';
   state.hootUrl = row.hootUrl ?? '';
   state.hootId = row.hootId ?? '';
+  state.dealerCategory = row.dealerCategory ?? '';
   state.websitePlatform = row.websitePlatform ?? '';
   state.isActive = row.isActive !== false;
   state.ga4CustomerId = row.ga4CustomerId ?? '';
@@ -88,6 +121,7 @@ export function normalizeDealerRow(hootRow, ga4Row) {
     hootUrl: hootRow.hoot_url ?? null,
     hootId: hootRow.hoot_id ?? null,
     ga4CustomerId,
+    dealerCategory: normalizeDealerCategory(hootRow.dealer_category),
     websitePlatform: hootRow.website_platform ?? null,
     isActive: hootRow.is_active !== false,
     ga4ConfigId: ga4Row?.id ?? null,
@@ -132,6 +166,11 @@ export function bodyToPayload(body) {
   const customerName = String(body?.customerName || '').trim();
   const hootUrl = String(body?.hootUrl || '').trim();
   const hootId = String(body?.hootId || '').trim() || null;
+  const rawCategory = String(body?.dealerCategory || '').trim();
+  const dealerCategory = rawCategory ? normalizeDealerCategory(rawCategory) : null;
+  if (rawCategory && !dealerCategory) {
+    throw new Error('Invalid dealer category.');
+  }
   const websitePlatform = String(body?.websitePlatform || '').trim() || null;
   const ga4CustomerId = String(body?.ga4CustomerId || '').trim();
   const ga4PropertyId = normalizeGa4PropertyId(body?.ga4PropertyId);
@@ -149,6 +188,7 @@ export function bodyToPayload(body) {
     customerName,
     hootUrl,
     hootId,
+    dealerCategory,
     websitePlatform,
     isActive,
     ga4CustomerId,

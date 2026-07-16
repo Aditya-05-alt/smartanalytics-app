@@ -1,15 +1,20 @@
 import {
   GA4_TABLE,
+  HOOT_SELECT,
   HOOT_TABLE,
   normalizeDealerRow,
   normalizeGa4PropertyId,
   vdpLogicsAdminUrl,
 } from '@/lib/dealers/fields';
 
-export { GA4_TABLE, HOOT_TABLE, normalizeDealerRow, normalizeGa4PropertyId, vdpLogicsAdminUrl };
-
-const HOOT_SELECT =
-  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, is_active, created_at';
+export {
+  GA4_TABLE,
+  HOOT_SELECT,
+  HOOT_TABLE,
+  normalizeDealerRow,
+  normalizeGa4PropertyId,
+  vdpLogicsAdminUrl,
+};
 
 const GA4_SELECT = 'id, client_id, ga4_property_id, account_name, is_active, sync_group';
 
@@ -70,6 +75,7 @@ export async function listDealers(supabase, { activeOnly = false, search = '' } 
         r.ga4_customer_id,
         r.hoot_id,
         r.website_platform,
+        r.dealer_category,
       ]
         .filter(Boolean)
         .join(' ')

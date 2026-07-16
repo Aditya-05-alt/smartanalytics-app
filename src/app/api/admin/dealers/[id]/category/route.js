@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getSuperadminFromCookies } from '@/lib/auth/adminApiAuth';
 import { createAdminDataClient } from '@/lib/supabase/adminDataClient';
-import { GA4_TABLE, HOOT_SELECT, HOOT_TABLE, fetchHootById, mapDealerError, mergeDealer } from '../../_shared';
+import { normalizeDealerCategory } from '@/lib/dealers/fields';
+import {
+  HOOT_SELECT,
+  HOOT_TABLE,
+  fetchHootById,
+  mapDealerError,
+  mergeDealer,
+} from '../../_shared';
 
-/** Quick on/off switch — sets is_active on smart_hoot_config + smart_ga4_config.
- *  Off hides the dealer from dashboard pickers (VDP overview dropdown); on restores it. */
+/** Quick category update — saves on dropdown change (no full dealer form). */
 export async function PATCH(request, { params }) {
   if (!(await getSuperadminFromCookies())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,7 +27,14 @@ export async function PATCH(request, { params }) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const active = body?.active === true;
+  const raw = String(body?.dealerCategory ?? '').trim();
+  let dealerCategory = null;
+  if (raw) {
+    dealerCategory = normalizeDealerCategory(raw);
+    if (!dealerCategory) {
+      return NextResponse.json({ error: 'Invalid dealer category.' }, { status: 400 });
+    }
+  }
 
   try {
     const existing = await fetchHootById(admin.supabase, id);
@@ -31,7 +44,7 @@ export async function PATCH(request, { params }) {
 
     const { data: hootRow, error: hootError } = await admin.supabase
       .from(HOOT_TABLE)
-      .update({ is_active: active })
+      .update({ dealer_category: dealerCategory })
       .eq('id', id)
       .select(HOOT_SELECT)
       .single();
@@ -40,21 +53,11 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: mapDealerError(hootError) }, { status: 500 });
     }
 
-    const clientId = existing.ga4_customer_id
-      ? String(existing.ga4_customer_id).trim()
-      : null;
-    if (clientId) {
-      await admin.supabase
-        .from(GA4_TABLE)
-        .update({ is_active: active })
-        .eq('client_id', clientId);
-    }
-
     const row = await mergeDealer(admin.supabase, hootRow);
-    return NextResponse.json({ ok: true, row, active });
+    return NextResponse.json({ ok: true, row });
   } catch (err) {
     return NextResponse.json(
-      { error: err?.message || 'Failed to update dealer status.' },
+      { error: err?.message || 'Failed to update dealer category.' },
       { status: 500 }
     );
   }

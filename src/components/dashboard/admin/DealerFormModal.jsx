@@ -20,6 +20,29 @@ function FieldInput({ field, form, setForm }) {
     );
   }
 
+  if (field.type === 'select') {
+    return (
+      <label className="dealers-field">
+        <span className="admin-date-label">
+          {field.label}
+          {field.required ? ' *' : ''}
+        </span>
+        <select
+          className="ga4-count-select"
+          value={form[field.key] ?? ''}
+          onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+        >
+          <option value="">{field.placeholder || `Select ${field.label}`}</option>
+          {(field.options || []).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
   return (
     <label className={field.key === 'hootUrl' ? 'dealers-field dealers-field--wide' : 'dealers-field'}>
       <span className="admin-date-label">

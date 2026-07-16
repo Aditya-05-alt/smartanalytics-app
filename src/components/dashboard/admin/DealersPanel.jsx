@@ -7,9 +7,10 @@ import {
   deleteAdminDealer,
   fetchAdminDealers,
   setAdminDealerActive,
+  setAdminDealerCategory,
   updateAdminDealer,
 } from '@/lib/api/adminDealers';
-import { vdpLogicsAdminUrl, GA4_SERVICE_ACCOUNT_EMAIL } from '@/lib/dealers/fields';
+import { vdpLogicsAdminUrl, GA4_SERVICE_ACCOUNT_EMAIL, DEALER_CATEGORY_OPTIONS } from '@/lib/dealers/fields';
 import AdminConfirmDialog from '@/components/dashboard/admin/AdminConfirmDialog';
 import DealerFormModal from '@/components/dashboard/admin/DealerFormModal';
 
@@ -68,15 +69,16 @@ const DeleteIcon = () => (
 );
 
 const COLUMNS = [
-  { key: 'customerName', label: 'Dealer', sticky: true, width: '15%' },
-  { key: 'ga4CustomerId', label: 'GA4 customer ID', width: '12%' },
-  { key: 'ga4PropertyId', label: 'GA4 property ID', width: '11%' },
-  { key: 'hootUrl', label: 'Hoot URL', wide: true, width: '28%' },
-  { key: 'hootId', label: 'Hoot ID', width: '9%' },
-  { key: 'websitePlatform', label: 'Platform', width: '10%' },
-  { key: 'syncGroup', label: 'Sync group', width: '7%' },
-  { key: 'isActive', label: 'Active', width: '6%' },
-  { key: 'configStatus', label: 'GA4 config', width: '9%' },
+  { key: 'customerName', label: 'Dealer', sticky: true, width: '22%' },
+  { key: 'dealerCategory', label: 'Dealer category', width: '11%' },
+  { key: 'ga4CustomerId', label: 'GA4 customer ID', width: '10%' },
+  { key: 'ga4PropertyId', label: 'GA4 property ID', width: '9%' },
+  { key: 'hootUrl', label: 'Hoot URL', wide: true, width: '20%' },
+  { key: 'hootId', label: 'Hoot ID', width: '7%' },
+  { key: 'websitePlatform', label: 'Platform', width: '8%' },
+  { key: 'syncGroup', label: 'Sync group', width: '5%' },
+  { key: 'isActive', label: 'Active', width: '5%' },
+  { key: 'configStatus', label: 'GA4 config', width: '7%' },
 ];
 
 function ConfigBadge({ row }) {
@@ -108,6 +110,25 @@ function ActiveSwitch({ row, busy, onToggle }) {
   );
 }
 
+function CategorySelect({ value, onChange, dealerName, busy }) {
+  return (
+    <select
+      className="ga4-count-select dealers-category-select"
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={busy}
+      aria-label={`Dealer category for ${dealerName || 'dealer'}`}
+    >
+      <option value="">Select category</option>
+      {DEALER_CATEGORY_OPTIONS.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function formatCell(key, row) {
   if (key === 'configStatus') return <ConfigBadge row={row} />;
   const val = row[key];
@@ -125,12 +146,16 @@ function formatCell(key, row) {
   return String(val);
 }
 
-function filterDealers(rows, { search = '', platform = '' } = {}) {
+function filterDealers(rows, { search = '', platform = '', category = '' } = {}) {
   const q = String(search || '').trim().toLowerCase();
   const platformFilter = String(platform || '').trim();
+  const categoryFilter = String(category || '').trim();
 
   return (rows || []).filter((row) => {
     if (platformFilter && String(row.websitePlatform || '').trim() !== platformFilter) {
+      return false;
+    }
+    if (categoryFilter && String(row.dealerCategory || '').trim() !== categoryFilter) {
       return false;
     }
     if (!q) return true;
@@ -139,6 +164,7 @@ function filterDealers(rows, { search = '', platform = '' } = {}) {
       row.ga4CustomerId,
       row.hootId,
       row.websitePlatform,
+      row.dealerCategory,
       row.hootUrl,
     ]
       .filter(Boolean)
@@ -151,6 +177,7 @@ function filterDealers(rows, { search = '', platform = '' } = {}) {
 export default function DealersPanel() {
   const [search, setSearch] = useState('');
   const [platform, setPlatform] = useState('');
+  const [category, setCategory] = useState('');
   const [showInactive, setShowInactive] = useState(true);
   const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -162,6 +189,7 @@ export default function DealersPanel() {
   const [confirm, setConfirm] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
+  const [categorySavingId, setCategorySavingId] = useState(null);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -191,8 +219,8 @@ export default function DealersPanel() {
   }, [load]);
 
   const rows = useMemo(
-    () => filterDealers(allRows, { search, platform }),
-    [allRows, search, platform]
+    () => filterDealers(allRows, { search, platform, category }),
+    [allRows, search, platform, category]
   );
 
   const platformOptions = useMemo(
@@ -203,11 +231,34 @@ export default function DealersPanel() {
     [allRows]
   );
 
-  const hasFilters = Boolean(search.trim() || platform);
+  const hasFilters = Boolean(search.trim() || platform || category);
 
   const openCreate = () => setModal({ open: true, mode: 'create', row: null });
   const openEdit = (row) => setModal({ open: true, mode: 'edit', row });
   const closeModal = () => setModal({ open: false, mode: 'create', row: null });
+
+  const handleCategoryChange = async (row, value) => {
+    if (!row?.id || categorySavingId) return;
+    const prev = row.dealerCategory || '';
+    const next = value || '';
+    if (prev === next) return;
+
+    setCategorySavingId(row.id);
+    setError(null);
+    setAllRows((rows) =>
+      rows.map((r) => (r.id === row.id ? { ...r, dealerCategory: next || null } : r))
+    );
+    try {
+      await setAdminDealerCategory(row.id, next);
+    } catch (e) {
+      setAllRows((rows) =>
+        rows.map((r) => (r.id === row.id ? { ...r, dealerCategory: prev || null } : r))
+      );
+      setError(e?.message || 'Failed to save dealer category.');
+    } finally {
+      setCategorySavingId(null);
+    }
+  };
 
   const handleSave = async (form) => {
     setSaving(true);
@@ -362,6 +413,22 @@ export default function DealersPanel() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+          </label>
+          <label className="admin-date-field ga4-count-dealer-field">
+            <span className="admin-date-label">Dealer category</span>
+            <select
+              className="ga4-count-select"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">All categories</option>
+              {DEALER_CATEGORY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="admin-date-field ga4-count-dealer-field">
             <span className="admin-date-label">Platform</span>
@@ -546,6 +613,13 @@ export default function DealersPanel() {
                           busy={togglingId === row.id}
                           onToggle={handleToggleActive}
                         />
+                      ) : col.key === 'dealerCategory' ? (
+                        <CategorySelect
+                          value={row.dealerCategory || ''}
+                          onChange={(value) => handleCategoryChange(row, value)}
+                          dealerName={row.customerName}
+                          busy={categorySavingId === row.id}
+                        />
                       ) : (
                         formatCell(col.key, row)
                       )}
@@ -556,7 +630,7 @@ export default function DealersPanel() {
               ) : (
                 <tr className="dealers-empty-row">
                   <td colSpan={COLUMNS.length + 1} className="dealers-empty-cell">
-                    No dealers match your search or platform filter.
+                    No dealers match your search or filters.
                   </td>
                 </tr>
               )}
