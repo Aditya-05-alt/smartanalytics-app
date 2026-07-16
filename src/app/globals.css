@@ -5915,7 +5915,13 @@ body {
 .roles-page .roles-table-layout {
   width: 100%;
   min-width: 100%;
+  max-width: 100%;
   table-layout: fixed;
+}
+.roles-page .ga4-count-table.roles-table-layout,
+.roles-page .vdp-logics-table.roles-table-layout {
+  width: 100%;
+  min-width: 100%;
 }
 .roles-page .roles-table-layout .vdp-logics-actions-col {
   width: 108px;
@@ -5923,23 +5929,45 @@ body {
   max-width: 108px;
 }
 .roles-page .roles-table-layout .vdp-logics-dealer-col {
+  position: sticky;
   left: 108px;
-  min-width: 0;
-  max-width: none;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+.roles-page .roles-table-layout .roles-col-email {
+  padding: 8px 12px !important;
 }
 .roles-page .roles-table-layout .ga4-count-client {
   text-align: left;
   white-space: normal;
   overflow: hidden;
 }
-.roles-page .roles-table-layout .ga4-count-cell {
+.roles-page .roles-table-layout thead th {
+  text-align: left;
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+.roles-page .roles-table-layout thead th.vdp-logics-actions-col {
+  text-align: center;
+  padding: 8px 6px;
+}
+.roles-page .roles-table-layout .roles-col-data,
+.roles-page .roles-table-layout .ga4-count-cell.roles-col-data {
   min-width: 0;
   text-align: left;
   vertical-align: middle;
+  padding: 8px 12px;
   overflow: hidden;
 }
-.roles-page .roles-cell-left {
-  text-align: left !important;
+.roles-page .roles-table-layout .roles-col-role {
+  width: 110px;
+}
+.roles-page .roles-table-layout .roles-col-reports {
+  width: 22%;
+}
+.roles-page .roles-table-layout .roles-col-dealers {
+  width: auto;
 }
 .roles-row--editing .ga4-count-cell,
 .roles-row--editing .ga4-count-client,

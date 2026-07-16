@@ -243,19 +243,19 @@ export default function RolesPanel() {
             <colgroup>
               <col style={{ width: 108 }} />
               <col style={{ width: '26%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '24%' }} />
-              <col style={{ width: '24%' }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: '22%' }} />
+              <col />
             </colgroup>
             <thead>
               <tr>
                 <th className="ga4-count-sticky-col vdp-logics-actions-col">Actions</th>
-                <th className="ga4-count-sticky-col ga4-count-client vdp-logics-dealer-col">
+                <th className="ga4-count-sticky-col ga4-count-client vdp-logics-dealer-col roles-col-email">
                   Email
                 </th>
-                <th>Role</th>
-                <th>Reports</th>
-                <th>Dealers</th>
+                <th className="roles-col-data roles-col-role">Role</th>
+                <th className="roles-col-data roles-col-reports">Reports</th>
+                <th className="roles-col-data roles-col-dealers">Dealers</th>
               </tr>
             </thead>
             <tbody>
@@ -310,14 +310,14 @@ export default function RolesPanel() {
                         </div>
                       </td>
 
-                      <td className="ga4-count-sticky-col ga4-count-client vdp-logics-dealer-col">
+                      <td className="ga4-count-sticky-col ga4-count-client vdp-logics-dealer-col roles-col-email">
                         <div className="roles-email">{user.email || '—'}</div>
                         {user.name ? (
                           <div className="roles-email-sub">{user.name}</div>
                         ) : null}
                       </td>
 
-                      <td className="ga4-count-cell">
+                      <td className="ga4-count-cell roles-col-data roles-col-role">
                         {editing ? (
                           <select
                             className="ga4-count-select roles-inline-select"
@@ -339,7 +339,7 @@ export default function RolesPanel() {
                         )}
                       </td>
 
-                      <td className="ga4-count-cell roles-cell-left">
+                      <td className="ga4-count-cell roles-col-data roles-col-reports">
                         {editing && isUserRole ? (
                           <div className="roles-cell-editor">
                             <label className="roles-check roles-check--all">
@@ -376,7 +376,7 @@ export default function RolesPanel() {
                         )}
                       </td>
 
-                      <td className="ga4-count-cell roles-cell-left">
+                      <td className="ga4-count-cell roles-col-data roles-col-dealers">
                         {editing && isUserRole ? (
                           <div className="roles-cell-editor">
                             <label className="roles-check roles-check--all">
