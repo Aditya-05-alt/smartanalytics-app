@@ -1,27 +1,60 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { ClientProvider } from '@/components/dashboard/ClientContext';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { ClientProvider, useClient } from '@/components/dashboard/ClientContext';
 import TopBar from '@/components/dashboard/TopBar';
 import SideBar from '@/components/dashboard/SideBar';
 import LoginStsTracker from '@/components/telemetry/LoginStsTracker';
 import InactivityTimeout from '@/components/auth/InactivityTimeout';
+import {
+  canAccessReport,
+  firstAllowedReportHref,
+  reportKeyFromPathname,
+} from '@/lib/access/permissions';
 
-export default function DashboardChrome({ children }) {
+function DashboardContent({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { access, accessLoading } = useClient();
   const isAdminRoute = pathname?.startsWith('/dashboard/admin');
+  const reportKey = isAdminRoute ? null : reportKeyFromPathname(pathname);
+  const denied =
+    !isAdminRoute &&
+    !accessLoading &&
+    reportKey &&
+    !canAccessReport(access, reportKey);
+
+  useEffect(() => {
+    if (denied) router.replace(firstAllowedReportHref(access));
+  }, [access, denied, router]);
 
   return (
-    <ClientProvider>
+    <>
       {!isAdminRoute && <LoginStsTracker />}
       {!isAdminRoute && <InactivityTimeout />}
       <div className="dash-root">
         <TopBar />
         <div className={`dash-layout ${isAdminRoute ? 'dash-layout--admin' : ''}`}>
           {!isAdminRoute && <SideBar />}
-          <main className="page-shell">{children}</main>
+          <main className="page-shell">
+            {denied ? (
+              <p className="ga4-count-meta">Redirecting to an allowed report…</p>
+            ) : (
+              children
+            )}
+          </main>
         </div>
       </div>
+    </>
+  );
+}
+
+export default function DashboardChrome({ children }) {
+  return (
+    <ClientProvider>
+      <DashboardContent>{children}</DashboardContent>
     </ClientProvider>
   );
 }

@@ -36,6 +36,17 @@ export async function updateAdminDealer(id, payload) {
   return parseJson(res);
 }
 
+/** Switch a dealer on/off — off hides it from dashboard dropdowns (VDP overview). */
+export async function setAdminDealerActive(id, active) {
+  const res = await fetch(`/api/admin/dealers/${id}/active`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ active: active === true }),
+  });
+  return parseJson(res);
+}
+
 export async function deleteAdminDealer(id, { hard = false } = {}) {
   const qs = hard ? '?hard=true' : '';
   const res = await fetch(`/api/admin/dealers/${id}${qs}`, {

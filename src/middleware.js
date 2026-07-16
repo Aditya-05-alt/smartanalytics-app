@@ -1,6 +1,27 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { isValidSuperadminSession, SUPERADMIN_COOKIE } from '@/lib/auth/superadmin';
+import {
+  canAccessReport,
+  firstAllowedReportHref,
+  normalizeAccess,
+  reportKeyFromPathname,
+} from '@/lib/access/permissions';
+import { loadUserAccessRecord } from '@/lib/access/userAccess';
+
+async function enforceDashboardReportAccess(supabase, user, response, request, pathname) {
+  const reportKey = reportKeyFromPathname(pathname);
+  if (!reportKey) return response;
+
+  try {
+    const record = await loadUserAccessRecord(supabase, user.id);
+    const access = normalizeAccess(record);
+    if (canAccessReport(access, reportKey)) return response;
+    return NextResponse.redirect(new URL(firstAllowedReportHref(access), request.url));
+  } catch {
+    return response;
+  }
+}
 
 /**
  * Auth gate for /dashboard/*.
@@ -87,7 +108,15 @@ export async function middleware(request) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) return response;
+    if (user) {
+      return enforceDashboardReportAccess(
+        supabase,
+        user,
+        response,
+        request,
+        pathname
+      );
+    }
   }
 
   const loginUrl = new URL('/login', request.url);

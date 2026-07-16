@@ -34,13 +34,15 @@ function ClientPicker() {
     error,
     isAllDealer,
     allDealerClient,
+    canUseAllDealers,
   } = useClient();
   const { open, toggle, close, ref } = useDropdown();
 
   const [query, setQuery] = useState('');
 
   const hideAllDealerOption =
-    inventoryReportExcludesAllDealers() && isInventoryReportPath(pathname);
+    !canUseAllDealers ||
+    (inventoryReportExcludesAllDealers() && isInventoryReportPath(pathname));
 
   const listItems = useMemo(() => {
     const q = query.trim().toLowerCase();

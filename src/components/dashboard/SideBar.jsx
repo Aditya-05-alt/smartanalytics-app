@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { memo, useMemo } from 'react';
+import { useClient } from '@/components/dashboard/ClientContext';
+import { canAccessReport } from '@/lib/access/permissions';
 
 const ICONS = {
   overview: (
@@ -78,27 +80,37 @@ const MemoLink = memo(SideBarLink);
 
 export default function SideBar() {
   const pathname = usePathname();
+  const { access, accessLoading } = useClient();
   const activeId = useMemo(() => {
     if (pathname === '/dashboard') return 'overview';
     if (pathname.startsWith('/dashboard/admin')) return 'admin';
     const seg = pathname.replace('/dashboard/', '').split('/')[0];
     return seg || 'overview';
   }, [pathname]);
+  const allowedItems = useMemo(
+    () =>
+      accessLoading
+        ? []
+        : ITEMS.filter((item) => canAccessReport(access, item.id)),
+    [access, accessLoading]
+  );
 
   return (
     <aside className="sidebar">
-      {ITEMS.map((item) => (
+      {allowedItems.map((item) => (
         <MemoLink key={item.id} item={item} active={activeId === item.id} />
       ))}
       <div className="sb-sep" />
-      <Link
-        href="/dashboard/admin"
-        className={`sb-ic ${activeId === 'admin' ? 'active' : ''}`}
-        title="Admin"
-        prefetch={false}
-      >
-        {ICONS.admin}
-      </Link>
+      {access?.role !== 'user' && (
+        <Link
+          href="/dashboard/admin"
+          className={`sb-ic ${activeId === 'admin' ? 'active' : ''}`}
+          title="Admin"
+          prefetch={false}
+        >
+          {ICONS.admin}
+        </Link>
+      )}
       <div className="sb-ic" style={{ marginTop: 'auto' }} title="Settings">
         {ICONS.settings}
       </div>

@@ -6,6 +6,7 @@ import {
   createAdminDealer,
   deleteAdminDealer,
   fetchAdminDealers,
+  setAdminDealerActive,
   updateAdminDealer,
 } from '@/lib/api/adminDealers';
 import { vdpLogicsAdminUrl, GA4_SERVICE_ACCOUNT_EMAIL } from '@/lib/dealers/fields';
@@ -85,8 +86,29 @@ function ConfigBadge({ row }) {
   return <span className="dealers-badge dealers-badge--warn">Missing</span>;
 }
 
+function ActiveSwitch({ row, busy, onToggle }) {
+  const on = row.isActive;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      className={`dealers-switch ${on ? 'dealers-switch--on' : 'dealers-switch--off'}`}
+      disabled={busy}
+      onClick={() => onToggle(row)}
+      title={
+        on
+          ? 'Switch off — hides this dealer from the VDP overview dropdown'
+          : 'Switch on — shows this dealer in the VDP overview dropdown'
+      }
+      aria-label={`${on ? 'Deactivate' : 'Activate'} ${row.customerName || 'dealer'}`}
+    >
+      <span className="dealers-switch-knob" />
+    </button>
+  );
+}
+
 function formatCell(key, row) {
-  if (key === 'isActive') return row.isActive ? 'Yes' : 'No';
   if (key === 'configStatus') return <ConfigBadge row={row} />;
   const val = row[key];
   if (val == null || val === '') return '—';
@@ -139,6 +161,14 @@ export default function DealersPanel() {
   const [modal, setModal] = useState({ open: false, mode: 'create', row: null });
   const [confirm, setConfirm] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  const [togglingId, setTogglingId] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,6 +243,44 @@ export default function DealersPanel() {
     setConfirm({ type: 'deactivate', row });
   };
 
+  const handleToggleActive = async (row) => {
+    if (!row?.id || togglingId) return;
+    const next = !row.isActive;
+    setTogglingId(row.id);
+    setMessage(null);
+    setError(null);
+    // Optimistic flip so the switch feels instant
+    setAllRows((prev) =>
+      prev.map((r) => (r.id === row.id ? { ...r, isActive: next } : r))
+    );
+    try {
+      await setAdminDealerActive(row.id, next);
+      const label = row.customerName || `ID ${row.id}`;
+      const clientId = row.ga4CustomerId || '—';
+      if (next) {
+        console.log(`Activated dealer "${label}" (client_id: ${clientId})`);
+        setToast({
+          kind: 'on',
+          text: `You activated dealer "${label}" (client ID: ${clientId}) — visible in the VDP overview dropdown.`,
+        });
+      } else {
+        console.log(`Deactivated dealer "${label}" (client_id: ${clientId})`);
+        setToast({
+          kind: 'off',
+          text: `You deactivated dealer "${label}" (client ID: ${clientId}) — hidden from the VDP overview dropdown.`,
+        });
+      }
+    } catch (e) {
+      // Revert on failure
+      setAllRows((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, isActive: row.isActive } : r))
+      );
+      setError(e?.message || 'Failed to update dealer status.');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const handleDelete = (row) => {
     if (!row?.id) return;
     setConfirm({ type: 'delete', row });
@@ -266,6 +334,22 @@ export default function DealersPanel() {
 
   return (
     <div className="ga4-count-page vdp-logics-page dealers-page">
+      {toast && (
+        <div
+          className={`dealers-toast ${toast.kind === 'off' ? 'dealers-toast--off' : 'dealers-toast--on'}`}
+          role="status"
+        >
+          <span>{toast.text}</span>
+          <button
+            type="button"
+            className="dealers-toast-dismiss"
+            onClick={() => setToast(null)}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <header className="ga4-count-toolbar">
         <h1 className="ga4-count-title">Dealers</h1>
         <div className="ga4-count-filters-row vdp-logics-filters">
@@ -456,7 +540,15 @@ export default function DealersPanel() {
                         .filter(Boolean)
                         .join(' ')}
                     >
-                      {formatCell(col.key, row)}
+                      {col.key === 'isActive' ? (
+                        <ActiveSwitch
+                          row={row}
+                          busy={togglingId === row.id}
+                          onToggle={handleToggleActive}
+                        />
+                      ) : (
+                        formatCell(col.key, row)
+                      )}
                     </td>
                   ))}
                 </tr>

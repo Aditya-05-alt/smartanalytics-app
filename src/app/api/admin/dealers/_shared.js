@@ -103,6 +103,10 @@ export async function upsertGa4Config(supabase, payload, options = {}) {
 
   const existing = await fetchGa4ConfigByClientId(supabase, payload.ga4CustomerId);
   if (existing?.id) {
+    // Fill missing sync_group on existing rows (created before auto-assign).
+    if (existing.sync_group == null && options.syncGroup != null) {
+      record.sync_group = options.syncGroup;
+    }
     const { data, error } = await supabase
       .from(GA4_TABLE)
       .update(record)
