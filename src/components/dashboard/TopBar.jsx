@@ -24,12 +24,42 @@ const NAV = [
   { id: 'admin', href: '/dashboard/admin/pipeline', label: 'Admin' },
 ];
 
+function DealerCategoryFilter() {
+  const {
+    dealerCategoryFilter,
+    setDealerCategoryFilter,
+    dealerCategoryOptions,
+    loading,
+  } = useClient();
+
+  return (
+    <label className="tb-category-filter">
+      <span className="tb-category-label">Category</span>
+      <select
+        className="tb-category-select"
+        value={dealerCategoryFilter}
+        onChange={(e) => setDealerCategoryFilter(e.target.value)}
+        disabled={loading}
+        aria-label="Filter dealers by category"
+      >
+        <option value="">All categories</option>
+        {(dealerCategoryOptions || []).map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function ClientPicker() {
   const pathname = usePathname();
   const {
     client,
     pickClient,
     dealers,
+    dealerCategoryFilter,
     loading,
     error,
     isAllDealer,
@@ -44,6 +74,10 @@ function ClientPicker() {
     !canUseAllDealers ||
     (inventoryReportExcludesAllDealers() && isInventoryReportPath(pathname));
 
+  const allDealerLabel = dealerCategoryFilter
+    ? `All Dealers (${dealerCategoryFilter})`
+    : allDealerClient.name;
+
   const listItems = useMemo(() => {
     const q = query.trim().toLowerCase();
     const dealerMatches = !q
@@ -53,10 +87,19 @@ function ClientPicker() {
     const allMatches =
       !q
       || allDealerClient.name.toLowerCase().includes(q)
+      || allDealerLabel.toLowerCase().includes(q)
       || q.includes('all');
-    if (allMatches) return [allDealerClient, ...dealerMatches];
+    if (allMatches) {
+      return [{ ...allDealerClient, name: allDealerLabel }, ...dealerMatches];
+    }
     return dealerMatches;
-  }, [dealers, query, allDealerClient, hideAllDealerOption]);
+  }, [
+    dealers,
+    query,
+    allDealerClient,
+    allDealerLabel,
+    hideAllDealerOption,
+  ]);
 
   useEffect(() => {
     if (!open) setQuery('');
@@ -66,7 +109,9 @@ function ClientPicker() {
     ? 'var(--t3)'
     : CATEGORIES[client?.category]?.color || 'var(--acc, #4EE09C)';
 
-  const buttonLabel = client?.name || (loading ? 'Loading dealers…' : 'Select dealer');
+  const buttonLabel = isAllDealer
+    ? allDealerLabel
+    : client?.name || (loading ? 'Loading dealers…' : 'Select dealer');
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -98,7 +143,11 @@ function ClientPicker() {
               <div className="cd-empty cd-error">Failed to load: {error}</div>
             )}
             {!loading && !error && listItems.length === 0 && (
-              <div className="cd-empty">No dealers match “{query}”.</div>
+              <div className="cd-empty">
+                {dealerCategoryFilter
+                  ? `No ${dealerCategoryFilter} dealers found.`
+                  : `No dealers match “${query}”.`}
+              </div>
             )}
             {!loading &&
               !error &&
@@ -112,7 +161,7 @@ function ClientPicker() {
                     key={c.id}
                     className={`cd-item ${selected ? 'sel' : ''}`}
                     onClick={() => {
-                      pickClient(c);
+                      pickClient(isAllDealerClient(c) ? allDealerClient : c);
                       close();
                     }}
                   >
@@ -252,6 +301,7 @@ export default function TopBar() {
       {!hideDealerPicker && (
         <>
           <div className="tb-div" />
+          <DealerCategoryFilter />
           <ClientPicker />
         </>
       )}

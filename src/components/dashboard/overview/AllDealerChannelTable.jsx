@@ -105,7 +105,7 @@ function CompareValueCell({
 }
 
 export default function AllDealerChannelTable() {
-  const { dealers, loading: dealersLoading } = useClient();
+  const { dealers, loading: dealersLoading, dealerCategoryFilter } = useClient();
   const { setSnapshot } = useAllDealerMatrix();
   const {
     tab,
@@ -128,7 +128,9 @@ export default function AllDealerChannelTable() {
   const loadGenRef = useRef(0);
 
   const pageTypeFilter = TAB_PAGE_TYPE[tab] || 'ALL';
-  const panelTitle = `${TAB_LABEL[tab] || 'Page'} views by channel — all dealers`;
+  const panelTitle = dealerCategoryFilter
+    ? `${TAB_LABEL[tab] || 'Page'} views by channel — all ${dealerCategoryFilter} dealers`
+    : `${TAB_LABEL[tab] || 'Page'} views by channel — all dealers`;
   const showCompare = compareEnabled && compareFrom && compareTo;
   const comparePending = showCompare && compareLoading;
   /** Current month only until current period finishes loading. */
@@ -322,7 +324,9 @@ export default function AllDealerChannelTable() {
             <div className="local-empty-state">
               <p className="local-empty-title">No dealer channel data</p>
               <p className="local-empty-sub">
-                Adjust the date range or confirm dealers have GA4 IDs configured.
+                {dealerCategoryFilter && !dealers?.length
+                  ? `No active dealers are tagged as ${dealerCategoryFilter}. Pick another category or set categories in Admin → Dealers.`
+                  : 'Adjust the date range or confirm dealers have GA4 IDs configured.'}
               </p>
             </div>
           )}

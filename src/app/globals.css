@@ -344,6 +344,43 @@ body {
 }
 .tb-div { width: 1px; height: 20px; background: var(--bd); flex-shrink: 0; }
 
+.tb-category-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.tb-category-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--t3);
+  white-space: nowrap;
+}
+.tb-category-select {
+  min-width: 132px;
+  max-width: 168px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t);
+  background: var(--s2);
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.tb-category-select:hover,
+.tb-category-select:focus {
+  border-color: var(--bd2);
+}
+.tb-category-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .client-pick {
   display: flex;
   align-items: center;

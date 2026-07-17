@@ -19,10 +19,38 @@ import {
 } from '@/lib/dashboard/dashboardPrefs';
 import { ALL_DEALER_CLIENT, isAllDealerClient } from '@/lib/dashboard/allDealers';
 import { DEFAULT_ACCESS } from '@/lib/access/permissions';
+import {
+  DEALER_CATEGORY_OPTIONS,
+  normalizeDealerCategory,
+} from '@/lib/dealers/fields';
 
 const ClientContext = createContext(null);
 
 const FALLBACK_CATEGORY = 'rv';
+const DEALER_CATEGORY_FILTER_KEY = 'sa_dealer_category_filter';
+
+function readStoredCategoryFilter() {
+  if (typeof window === 'undefined') return '';
+  try {
+    const raw = localStorage.getItem(DEALER_CATEGORY_FILTER_KEY) || '';
+    return normalizeDealerCategory(raw) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeStoredCategoryFilter(value) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!value) {
+      localStorage.removeItem(DEALER_CATEGORY_FILTER_KEY);
+      return;
+    }
+    localStorage.setItem(DEALER_CATEGORY_FILTER_KEY, value);
+  } catch {
+    /* ignore */
+  }
+}
 
 function normalizeRow(row) {
   return {
@@ -32,9 +60,15 @@ function normalizeRow(row) {
     hootUrl: row.hoot_url || null,
     ga4CustomerId: row.ga4_customer_id || null,
     websitePlatform: row.website_platform || null,
+    dealerCategory: normalizeDealerCategory(row.dealer_category),
     isActive: row.is_active !== false,
     category: FALLBACK_CATEGORY,
   };
+}
+
+function filterDealersByCategory(dealers, categoryFilter) {
+  if (!categoryFilter) return dealers;
+  return dealers.filter((d) => d.dealerCategory === categoryFilter);
 }
 
 export function ClientProvider({ children }) {
@@ -44,11 +78,24 @@ export function ClientProvider({ children }) {
     [pathname],
   );
 
-  const [dealers, setDealers] = useState([]);
+  const [allDealers, setAllDealers] = useState([]);
+  const [dealerCategoryFilter, setDealerCategoryFilterState] = useState('');
   const [client, setClient] = useState(ALL_DEALER_CLIENT);
   const [access, setAccess] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [categoryFilterReady, setCategoryFilterReady] = useState(false);
+
+  useEffect(() => {
+    setDealerCategoryFilterState(readStoredCategoryFilter());
+    setCategoryFilterReady(true);
+  }, []);
+
+  const setDealerCategoryFilter = useCallback((value) => {
+    const next = normalizeDealerCategory(value) || '';
+    setDealerCategoryFilterState(next);
+    writeStoredCategoryFilter(next);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,7 +127,7 @@ export function ClientProvider({ children }) {
       let dealerQuery = supabase
         .from('smart_hoot_config')
         .select(
-          'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, is_active'
+          'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active'
         )
         .eq('is_active', true)
         .order('customer_name', { ascending: true });
@@ -88,7 +135,7 @@ export function ClientProvider({ children }) {
       if (resolvedAccess.role === 'user' && !resolvedAccess.allDealers) {
         if (!resolvedAccess.dealerIds.length) {
           if (!cancelled) {
-            setDealers([]);
+            setAllDealers([]);
             setLoading(false);
           }
           return;
@@ -110,7 +157,7 @@ export function ClientProvider({ children }) {
         .filter((r) => r && r.customer_name)
         .map(normalizeRow);
 
-      setDealers(list);
+      setAllDealers(list);
       setLoading(false);
     }
 
@@ -120,16 +167,48 @@ export function ClientProvider({ children }) {
     };
   }, []);
 
+  const dealers = useMemo(
+    () => filterDealersByCategory(allDealers, dealerCategoryFilter),
+    [allDealers, dealerCategoryFilter]
+  );
+
+  const canUseAllDealers = access?.role !== 'user' || Boolean(access?.allDealers);
+
   useEffect(() => {
-    if (!dealers.length) return;
+    if (!categoryFilterReady || loading) return;
+    if (!allDealers.length) {
+      setClient(ALL_DEALER_CLIENT);
+      return;
+    }
+
     const storedId = readStoredDealerIdForScope(dealerScope);
-    const resolved = resolveDealerForScope(dealers, dealerScope, storedId);
-    setClient(
-      access?.role === 'user' && !access.allDealers && isAllDealerClient(resolved)
-        ? dealers[0]
-        : resolved
-    );
-  }, [dealers, dealerScope, access]);
+    let resolved = resolveDealerForScope(dealers, dealerScope, storedId);
+
+    if (canUseAllDealers === false && isAllDealerClient(resolved)) {
+      resolved = dealers[0] || allDealers[0] || ALL_DEALER_CLIENT;
+    }
+
+    // Selected single dealer left the active category — fall back.
+    if (
+      !isAllDealerClient(resolved) &&
+      dealers.length > 0 &&
+      !dealers.some((d) => String(d.id) === String(resolved.id))
+    ) {
+      resolved = canUseAllDealers
+        ? ALL_DEALER_CLIENT
+        : dealers[0] || ALL_DEALER_CLIENT;
+    }
+
+    setClient(resolved);
+  }, [
+    allDealers,
+    dealers,
+    dealerScope,
+    access,
+    canUseAllDealers,
+    loading,
+    categoryFilterReady,
+  ]);
 
   const pickClient = useCallback((c) => {
     setClient(c);
@@ -149,15 +228,32 @@ export function ClientProvider({ children }) {
       config,
       pickClient,
       dealers,
+      allDealers,
+      dealerCategoryFilter,
+      setDealerCategoryFilter,
+      dealerCategoryOptions: DEALER_CATEGORY_OPTIONS,
       loading,
       error,
       access,
       accessLoading: access == null,
-      canUseAllDealers: access?.role !== 'user' || access.allDealers,
+      canUseAllDealers,
       isAllDealer,
       allDealerClient: ALL_DEALER_CLIENT,
     }),
-    [client, config, pickClient, dealers, loading, error, access, isAllDealer]
+    [
+      client,
+      config,
+      pickClient,
+      dealers,
+      allDealers,
+      dealerCategoryFilter,
+      setDealerCategoryFilter,
+      loading,
+      error,
+      access,
+      canUseAllDealers,
+      isAllDealer,
+    ]
   );
 
   return <ClientContext.Provider value={value}>{children}</ClientContext.Provider>;
