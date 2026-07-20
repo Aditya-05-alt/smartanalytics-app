@@ -2,16 +2,18 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useClient } from '@/components/dashboard/ClientContext';
 import { canAccessReport } from '@/lib/access/permissions';
+
+const SIDEBAR_COLLAPSED_KEY = 'sa_sidebar_collapsed';
 
 const ICONS = {
   overview: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3"  y="3"  width="7" height="7" rx="1.5" />
-      <rect x="14" y="3"  width="7" height="7" rx="1.5" />
-      <rect x="3"  y="14" width="7" height="7" rx="1.5" />
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
       <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </svg>
   ),
@@ -55,22 +57,23 @@ const ICONS = {
 };
 
 const ITEMS = [
-  { id: 'overview',    href: '/dashboard',             title: 'Overview' },
-  { id: 'inventory',   href: '/dashboard/inventory',   title: 'Inventory report' },
-  { id: 'health',      href: '/dashboard/health',      title: 'Portfolio Health', badge: true },
+  { id: 'overview', href: '/dashboard', title: 'Overview' },
+  { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
+  { id: 'health', href: '/dashboard/health', title: 'Portfolio Health', badge: true },
   { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
-  { id: 'local',       href: '/dashboard/local',       title: 'Local Intel' },
+  { id: 'local', href: '/dashboard/local', title: 'Local Intel' },
 ];
 
-function SideBarLink({ item, active }) {
+function SideBarLink({ item, active, collapsed }) {
   return (
     <Link
       href={item.href}
-      className={`sb-ic ${active ? 'active' : ''}`}
+      className={`sb-ic ${active ? 'active' : ''} ${collapsed ? 'sb-ic--collapsed' : ''}`}
       title={item.title}
       prefetch={false}
     >
       {ICONS[item.id]}
+      {!collapsed && <span className="sb-label">{item.title}</span>}
       {item.badge && <div className="sb-badge" />}
     </Link>
   );
@@ -81,12 +84,37 @@ const MemoLink = memo(SideBarLink);
 export default function SideBar() {
   const pathname = usePathname();
   const { access, accessLoading } = useClient();
+  const [collapsed, setCollapsed] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
+    } catch {
+      /* ignore */
+    }
+    setReady(true);
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
   const activeId = useMemo(() => {
     if (pathname === '/dashboard') return 'overview';
     if (pathname.startsWith('/dashboard/admin')) return 'admin';
     const seg = pathname.replace('/dashboard/', '').split('/')[0];
     return seg || 'overview';
   }, [pathname]);
+
   const allowedItems = useMemo(
     () =>
       accessLoading
@@ -96,23 +124,58 @@ export default function SideBar() {
   );
 
   return (
-    <aside className="sidebar">
-      {allowedItems.map((item) => (
-        <MemoLink key={item.id} item={item} active={activeId === item.id} />
-      ))}
-      <div className="sb-sep" />
-      {access?.role !== 'user' && (
-        <Link
-          href="/dashboard/admin"
-          className={`sb-ic ${activeId === 'admin' ? 'active' : ''}`}
-          title="Admin"
-          prefetch={false}
+    <aside
+      className={`sidebar ${collapsed ? 'sidebar--collapsed' : 'sidebar--expanded'}${ready ? '' : ' sidebar--pending'}`}
+      aria-label="Main navigation"
+    >
+      <div className="sb-brand">
+        <button
+          type="button"
+          className="sb-toggle"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand' : 'Collapse'}
         >
-          {ICONS.admin}
-        </Link>
-      )}
-      <div className="sb-ic" style={{ marginTop: 'auto' }} title="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {collapsed ? (
+              <path d="M9 18l6-6-6-6" />
+            ) : (
+              <path d="M15 18l-6-6 6-6" />
+            )}
+          </svg>
+        </button>
+      </div>
+
+      <nav className="sb-nav">
+        {allowedItems.map((item) => (
+          <MemoLink
+            key={item.id}
+            item={item}
+            active={activeId === item.id}
+            collapsed={collapsed}
+          />
+        ))}
+        <div className="sb-sep" />
+        {access?.role !== 'user' && (
+          <Link
+            href="/dashboard/admin"
+            className={`sb-ic ${activeId === 'admin' ? 'active' : ''} ${collapsed ? 'sb-ic--collapsed' : ''}`}
+            title="Admin"
+            prefetch={false}
+          >
+            {ICONS.admin}
+            {!collapsed && <span className="sb-label">Admin</span>}
+          </Link>
+        )}
+      </nav>
+
+      <div
+        className={`sb-ic sb-ic--footer ${collapsed ? 'sb-ic--collapsed' : ''}`}
+        title="Settings"
+      >
         {ICONS.settings}
+        {!collapsed && <span className="sb-label">Settings</span>}
       </div>
     </aside>
   );

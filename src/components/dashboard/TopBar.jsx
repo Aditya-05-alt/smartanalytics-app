@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useMemo, useState, useEffect } from 'react';
 import { useClient } from './ClientContext';
 import { useDropdown } from './useDropdown';
+import { useNavigationLoading } from './NavigationLoading';
 import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -264,6 +265,7 @@ function UserAccountMenu() {
 
 export default function TopBar() {
   const pathname = usePathname();
+  const { pending: navPending } = useNavigationLoading();
   const hideDealerPicker =
     pathname?.startsWith('/dashboard/admin') || pathname?.startsWith('/reports');
 
@@ -304,6 +306,13 @@ export default function TopBar() {
           <DealerCategoryFilter />
           <ClientPicker />
         </>
+      )}
+
+      {navPending && (
+        <div className="tb-nav-loading" role="status" aria-live="polite">
+          <span className="tb-nav-loading-dot" aria-hidden />
+          Loading…
+        </div>
       )}
 
       <nav className="topbar-right" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>

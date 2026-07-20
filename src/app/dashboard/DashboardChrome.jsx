@@ -1,11 +1,11 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { ClientProvider, useClient } from '@/components/dashboard/ClientContext';
 import TopBar from '@/components/dashboard/TopBar';
 import SideBar from '@/components/dashboard/SideBar';
+import { NavigationLoadingProvider } from '@/components/dashboard/NavigationLoading';
 import LoginStsTracker from '@/components/telemetry/LoginStsTracker';
 import InactivityTimeout from '@/components/auth/InactivityTimeout';
 import {
@@ -34,19 +34,23 @@ function DashboardContent({ children }) {
     <>
       {!isAdminRoute && <LoginStsTracker />}
       {!isAdminRoute && <InactivityTimeout />}
-      <div className="dash-root">
-        <TopBar />
-        <div className={`dash-layout ${isAdminRoute ? 'dash-layout--admin' : ''}`}>
-          {!isAdminRoute && <SideBar />}
-          <main className="page-shell">
-            {denied ? (
-              <p className="ga4-count-meta">Redirecting to an allowed report…</p>
-            ) : (
-              children
-            )}
-          </main>
-        </div>
-      </div>
+      <Suspense fallback={null}>
+        <NavigationLoadingProvider>
+          <div className="dash-root">
+            <TopBar />
+            <div className={`dash-layout ${isAdminRoute ? 'dash-layout--admin' : ''}`}>
+              {!isAdminRoute && <SideBar />}
+              <main className="page-shell">
+                {denied ? (
+                  <p className="ga4-count-meta">Redirecting to an allowed report…</p>
+                ) : (
+                  children
+                )}
+              </main>
+            </div>
+          </div>
+        </NavigationLoadingProvider>
+      </Suspense>
     </>
   );
 }
