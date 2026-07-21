@@ -518,6 +518,70 @@ body {
   -ms-overflow-style: none;
 }
 
+.adc-table-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.adc-table-stage--busy .adc-table-wrap {
+  pointer-events: none;
+  user-select: none;
+}
+
+.adc-table-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--s) 62%, transparent);
+  backdrop-filter: blur(1px);
+  animation: adc-overlay-in 0.18s ease-out;
+}
+
+.adc-table-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--s2) 88%, transparent);
+  border: 1px solid var(--bd);
+  box-shadow: var(--shadow-pop, 0 10px 30px rgba(0, 0, 0, 0.28));
+}
+
+.adc-table-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2.5px solid color-mix(in srgb, var(--acc) 25%, transparent);
+  border-top-color: var(--acc);
+  animation: adc-spin 0.75s linear infinite;
+}
+
+.adc-table-loader-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--acc);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+@keyframes adc-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes adc-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .adc-table-wrap::-webkit-scrollbar {
   display: none;
 }
@@ -858,6 +922,38 @@ body {
   background: var(--s3);
   color: var(--t);
   font-weight: 600;
+}
+
+.adc-nav-progress {
+  position: relative;
+  height: 2px;
+  width: 100%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.adc-nav-progress--table-top {
+  flex-shrink: 0;
+}
+
+.adc-nav-progress-bar {
+  height: 100%;
+  width: 40%;
+  background: var(--acc);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--acc) 55%, transparent);
+  animation: nav-progress-slide 1.05s ease-in-out infinite;
+}
+
+.adc-table--loading .adc-td-total,
+.adc-table--loading .adc-td-channel {
+  opacity: 0.55;
+}
+
+.adc-table-loading {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* ── Inventory report (standalone module) ── */
@@ -5980,6 +6076,17 @@ body {
   transition: transform 0.15s ease;
 }
 .dealers-switch--on .dealers-switch-knob {
+  transform: translateX(16px);
+}
+.dealers-switch--compact {
+  width: 34px;
+  height: 18px;
+}
+.dealers-switch--compact .dealers-switch-knob {
+  width: 14px;
+  height: 14px;
+}
+.dealers-switch--compact.dealers-switch--on .dealers-switch-knob {
   transform: translateX(16px);
 }
 .dealers-row--inactive .ga4-count-cell {

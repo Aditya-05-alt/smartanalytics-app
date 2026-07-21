@@ -1,7 +1,8 @@
 import { colorForChannel } from '@/lib/ga4/channelDisplay';
 
-const CHUNK_SIZE = 2;
-const CHUNK_CONCURRENCY = 2;
+/** Parallel chunks from the start — avoids one huge cold first RPC. */
+const CHUNK_SIZE = 12;
+const CHUNK_CONCURRENCY = 6;
 
 function buildColumnOrder(results) {
   const totals = new Map();
@@ -15,12 +16,15 @@ function buildColumnOrder(results) {
     .map(([name]) => name);
 }
 
-function chunkClientIds(dealers, chunkSize = CHUNK_SIZE) {
-  const ids = (dealers || [])
+function dealerClientIds(dealers) {
+  return (dealers || [])
     .filter((d) => d?.name)
     .map((d) => String(d.ga4CustomerId || '').trim())
     .filter(Boolean);
+}
 
+function chunkClientIds(dealers, chunkSize = CHUNK_SIZE) {
+  const ids = dealerClientIds(dealers);
   if (!ids.length) return [];
 
   const chunks = [];
@@ -31,7 +35,9 @@ function chunkClientIds(dealers, chunkSize = CHUNK_SIZE) {
 }
 
 function isTimeoutError(message) {
-  return /statement timeout|canceling statement|timeout/i.test(String(message || ''));
+  return /statement timeout|canceling statement|timeout|57014/i.test(
+    String(message || '')
+  );
 }
 
 export function matrixFromRpcRows(rpcRows, dealers, failedClientIds = null) {
@@ -128,6 +134,10 @@ async function fetchMatrixChunkViaApi({
   return json.data || [];
 }
 
+/**
+ * On timeout, split the chunk in half instead of falling back to 1-by-1
+ * (much faster recovery for large chunks).
+ */
 async function fetchChunkResilient({
   from,
   to,
@@ -156,20 +166,25 @@ async function fetchChunkResilient({
     }
   }
 
+  const mid = Math.ceil(clientIds.length / 2);
+  const left = clientIds.slice(0, mid);
+  const right = clientIds.slice(mid);
   const rows = [];
-  for (const clientId of clientIds) {
-    if (onCancelCheck?.()) break;
+
+  for (const part of [left, right]) {
+    if (onCancelCheck?.() || !part.length) continue;
     try {
-      const part = await fetchMatrixChunkViaApi({
+      const partRows = await fetchChunkResilient({
         from,
         to,
         pageTypeFilter,
-        clientIds: [clientId],
+        clientIds: part,
         onCancelCheck,
+        failedClientIds,
       });
-      rows.push(...part);
+      rows.push(...partRows);
     } catch {
-      failedClientIds.add(clientId);
+      for (const id of part) failedClientIds.add(id);
     }
   }
   return rows;
@@ -192,7 +207,8 @@ async function runChunkPool(chunks, worker, concurrency, onCancelCheck) {
 }
 
 /**
- * All-dealer channel matrix — chunked server RPC calls (avoids gateway timeouts).
+ * All-dealer channel matrix — parallel chunks from the start (no giant first RPC).
+ * Does not stream partial UI updates (caller should render once when this resolves).
  */
 export async function fetchAllDealersChannelMatrix({
   dealers,
@@ -200,23 +216,23 @@ export async function fetchAllDealersChannelMatrix({
   to,
   pageTypeFilter = 'ALL',
   onProgress,
-  onPartial,
   onCancelCheck,
 }) {
   if (!dealers?.length || !from || !to) {
     return { rows: [], columns: [], warning: null };
   }
 
-  const chunks = chunkClientIds(dealers);
-  if (!chunks.length) {
+  const allIds = dealerClientIds(dealers);
+  if (!allIds.length) {
     return { ...matrixFromRpcRows([], dealers), warning: null };
   }
 
+  const failedClientIds = new Set();
+  const chunkErrors = [];
+  const chunks = chunkClientIds(dealers);
   const total = chunks.length;
   let completed = 0;
   const rpcRows = [];
-  const failedClientIds = new Set();
-  const chunkErrors = [];
 
   onProgress?.({ completed: 0, total });
 
@@ -234,7 +250,6 @@ export async function fetchAllDealersChannelMatrix({
         });
 
         if (onCancelCheck?.()) return;
-
         rpcRows.push(...rows);
       } catch (err) {
         if (onCancelCheck?.()) return;
@@ -246,7 +261,6 @@ export async function fetchAllDealersChannelMatrix({
 
       completed += 1;
       onProgress?.({ completed, total });
-      onPartial?.(matrixFromRpcRows(rpcRows, dealers, failedClientIds));
     },
     CHUNK_CONCURRENCY,
     onCancelCheck

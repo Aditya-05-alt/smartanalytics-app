@@ -1,5 +1,6 @@
 -- All-dealer portfolio channel matrix (VDP / All tabs + date range).
--- Optional p_client_ids for chunked fetches (faster, avoids gateway timeouts).
+-- Optimized: avoid casts/TRIM on join keys so (report_date, client_id) indexes apply.
+-- Optional p_client_ids for chunked fetches.
 -- Deploy in Supabase SQL editor.
 
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text);
@@ -30,39 +31,43 @@ BEGIN
   RETURN QUERY
   WITH dealers AS (
     SELECT DISTINCT ON (h.ga4_customer_id)
-      trim(h.ga4_customer_id::text) AS dealer_client_id,
-      h.customer_name              AS dealer_label
+      h.ga4_customer_id::text AS dealer_client_id,
+      h.customer_name         AS dealer_label
     FROM public.smart_hoot_config h
     WHERE h.is_active IS TRUE
       AND h.ga4_customer_id IS NOT NULL
-      AND trim(h.ga4_customer_id::text) <> ''
+      AND h.ga4_customer_id::text <> ''
       AND (
         NOT v_chunked
-        OR trim(h.ga4_customer_id::text) = ANY(p_client_ids)
+        OR h.ga4_customer_id::text = ANY (p_client_ids)
       )
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
+  -- Filter page data by date + client first (index-friendly), then aggregate.
   pages AS (
     SELECT
-      p.client_id::text AS dealer_client_id,
-      p.channel         AS raw_channel,
+      p.client_id AS dealer_client_id,
+      p.channel   AS raw_channel,
       SUM(COALESCE(p.views, 0))::bigint AS page_views
     FROM public.smart_ga4_page_data p
-    INNER JOIN dealers d ON d.dealer_client_id = p.client_id::text
     WHERE p.report_date BETWEEN p_from AND p_to
       AND (
+        NOT v_chunked
+        OR p.client_id = ANY (p_client_ids)
+      )
+      AND (
         v_page_type = 'ALL'
-        OR (v_page_type = 'VDP' AND p.ga4_page_type ILIKE 'VDP%')
+        OR (v_page_type = 'VDP' AND p.ga4_page_type LIKE 'VDP%')
         OR (v_page_type = 'SRP' AND p.ga4_page_type = 'SRP')
         OR (v_page_type IN ('HOME', 'HOMEPAGE') AND p.ga4_page_type ILIKE 'home%')
         OR (
           v_page_type = 'OTHER'
-          AND p.ga4_page_type NOT ILIKE 'VDP%'
+          AND p.ga4_page_type NOT LIKE 'VDP%'
           AND p.ga4_page_type <> 'SRP'
           AND p.ga4_page_type NOT ILIKE 'home%'
         )
       )
-    GROUP BY p.client_id::text, p.channel
+    GROUP BY p.client_id, p.channel
   ),
   normalized AS (
     SELECT
@@ -123,6 +128,10 @@ REVOKE ALL ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, t
 GRANT EXECUTE ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, text[])
   TO anon, authenticated, service_role;
 
--- Speed up chunked date-range scans (run once in SQL editor):
+-- Recommended indexes (run once if not already present):
 -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_smart_ga4_page_data_date_client
 --   ON public.smart_ga4_page_data (report_date, client_id);
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ga4_page_data_client_date_channel
+--   ON public.smart_ga4_page_data (client_id, report_date, channel);
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ga4_page_data_client_date_pagetype
+--   ON public.smart_ga4_page_data (client_id, report_date, ga4_page_type);

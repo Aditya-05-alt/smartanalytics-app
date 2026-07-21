@@ -7,6 +7,7 @@ import {
   deleteAdminDealer,
   fetchAdminDealers,
   setAdminDealerActive,
+  setAdminDealerAllDealersTab,
   setAdminDealerCategory,
   updateAdminDealer,
 } from '@/lib/api/adminDealers';
@@ -69,17 +70,26 @@ const DeleteIcon = () => (
 );
 
 const COLUMNS = [
-  { key: 'customerName', label: 'Dealer', sticky: true, width: '22%' },
-  { key: 'dealerCategory', label: 'Dealer category', width: '11%' },
-  { key: 'ga4CustomerId', label: 'GA4 customer ID', width: '10%' },
-  { key: 'ga4PropertyId', label: 'GA4 property ID', width: '9%' },
-  { key: 'hootUrl', label: 'Hoot URL', wide: true, width: '20%' },
-  { key: 'hootId', label: 'Hoot ID', width: '7%' },
-  { key: 'websitePlatform', label: 'Platform', width: '8%' },
+  { key: 'customerName', label: 'Dealer', sticky: true, width: '18%' },
+  { key: 'dealerCategory', label: 'Dealer category', width: '9%' },
+  { key: 'showAllDealersVdp', label: 'AD VDP', width: '5%' },
+  { key: 'showAllDealersAll', label: 'AD All', width: '5%' },
+  { key: 'showAllDealersSrp', label: 'AD SRP', width: '5%' },
+  { key: 'ga4CustomerId', label: 'GA4 customer ID', width: '9%' },
+  { key: 'ga4PropertyId', label: 'GA4 property ID', width: '8%' },
+  { key: 'hootUrl', label: 'Hoot URL', wide: true, width: '14%' },
+  { key: 'hootId', label: 'Hoot ID', width: '6%' },
+  { key: 'websitePlatform', label: 'Platform', width: '7%' },
   { key: 'syncGroup', label: 'Sync group', width: '5%' },
   { key: 'isActive', label: 'Active', width: '5%' },
-  { key: 'configStatus', label: 'GA4 config', width: '7%' },
+  { key: 'configStatus', label: 'GA4 config', width: '6%' },
 ];
+
+const ALL_DEALERS_TAB_FIELDS = {
+  showAllDealersVdp: 'vdp',
+  showAllDealersAll: 'all',
+  showAllDealersSrp: 'srp',
+};
 
 function ConfigBadge({ row }) {
   if (row.hasGa4Config) {
@@ -104,6 +114,28 @@ function ActiveSwitch({ row, busy, onToggle }) {
           : 'Switch on — shows this dealer in the VDP overview dropdown'
       }
       aria-label={`${on ? 'Deactivate' : 'Activate'} ${row.customerName || 'dealer'}`}
+    >
+      <span className="dealers-switch-knob" />
+    </button>
+  );
+}
+
+function AllDealersTabSwitch({ row, fieldKey, label, busy, onToggle }) {
+  const on = row[fieldKey] !== false;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      className={`dealers-switch dealers-switch--compact ${on ? 'dealers-switch--on' : 'dealers-switch--off'}`}
+      disabled={busy}
+      onClick={() => onToggle(row, fieldKey)}
+      title={
+        on
+          ? `Hide from All Dealers → ${label}`
+          : `Show on All Dealers → ${label}`
+      }
+      aria-label={`${on ? 'Hide' : 'Show'} ${row.customerName || 'dealer'} on All Dealers ${label}`}
     >
       <span className="dealers-switch-knob" />
     </button>
@@ -189,6 +221,7 @@ export default function DealersPanel() {
   const [confirm, setConfirm] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
+  const [tabTogglingKey, setTabTogglingKey] = useState(null);
   const [categorySavingId, setCategorySavingId] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -329,6 +362,30 @@ export default function DealersPanel() {
       setError(e?.message || 'Failed to update dealer status.');
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleToggleAllDealersTab = async (row, fieldKey) => {
+    if (!row?.id || tabTogglingKey) return;
+    const tab = ALL_DEALERS_TAB_FIELDS[fieldKey];
+    if (!tab) return;
+    const prev = row[fieldKey] !== false;
+    const next = !prev;
+    const busyKey = `${row.id}:${fieldKey}`;
+    setTabTogglingKey(busyKey);
+    setError(null);
+    setAllRows((rows) =>
+      rows.map((r) => (r.id === row.id ? { ...r, [fieldKey]: next } : r))
+    );
+    try {
+      await setAdminDealerAllDealersTab(row.id, tab, next);
+    } catch (e) {
+      setAllRows((rows) =>
+        rows.map((r) => (r.id === row.id ? { ...r, [fieldKey]: prev } : r))
+      );
+      setError(e?.message || 'Failed to update All Dealers tab visibility.');
+    } finally {
+      setTabTogglingKey(null);
     }
   };
 
@@ -612,6 +669,20 @@ export default function DealersPanel() {
                           row={row}
                           busy={togglingId === row.id}
                           onToggle={handleToggleActive}
+                        />
+                      ) : ALL_DEALERS_TAB_FIELDS[col.key] ? (
+                        <AllDealersTabSwitch
+                          row={row}
+                          fieldKey={col.key}
+                          label={
+                            col.key === 'showAllDealersVdp'
+                              ? 'VDP'
+                              : col.key === 'showAllDealersSrp'
+                                ? 'SRP'
+                                : 'All'
+                          }
+                          busy={tabTogglingKey === `${row.id}:${col.key}`}
+                          onToggle={handleToggleAllDealersTab}
                         />
                       ) : col.key === 'dealerCategory' ? (
                         <CategorySelect

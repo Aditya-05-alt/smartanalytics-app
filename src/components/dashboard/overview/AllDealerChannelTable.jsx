@@ -16,13 +16,23 @@ import { useAllDealerMatrix } from './AllDealerMatrixContext';
 
 const TAB_PAGE_TYPE = {
   vdp: 'VDP',
+  srp: 'SRP',
   all: 'ALL',
 };
 
 const TAB_LABEL = {
   vdp: 'VDP',
+  srp: 'SRP',
   all: 'All Pages',
 };
+
+function dealerIncludedOnAllDealersTab(dealer, tabId) {
+  // Default on (legacy All Dealers behavior). Switch OFF in Admin → Dealers to hide.
+  if (tabId === 'vdp') return dealer?.showAllDealersVdp !== false;
+  if (tabId === 'all') return dealer?.showAllDealersAll !== false;
+  if (tabId === 'srp') return dealer?.showAllDealersSrp !== false;
+  return true;
+}
 
 function ChannelHeader({ name }) {
   const parts = String(name || '')
@@ -142,15 +152,38 @@ export default function AllDealerChannelTable() {
   const [progress, setProgress] = useState(null);
   const cancelRef = useRef(false);
   const loadGenRef = useRef(0);
+  const columnsRef = useRef([]);
 
   const pageTypeFilter = TAB_PAGE_TYPE[tab] || 'ALL';
+  const portfolioDealers = useMemo(
+    () => (dealers || []).filter((d) => dealerIncludedOnAllDealersTab(d, tab)),
+    [dealers, tab]
+  );
   const panelTitle = dealerCategoryFilter
     ? `${TAB_LABEL[tab] || 'Page'} views by channel — all ${dealerCategoryFilter} dealers`
     : `${TAB_LABEL[tab] || 'Page'} views by channel — all dealers`;
   const showCompare = compareEnabled && compareFrom && compareTo;
-  const comparePending = showCompare && compareLoading;
-  /** Current month only until current period finishes loading. */
-  const showCompareStack = showCompare && !loading;
+  const isBusy = loading || compareLoading;
+  /** Show MoM stack only after both periods finished (no mid-load flicker). */
+  const showCompareStack = showCompare && !isBusy;
+  const dataReady = !isBusy && matrixRows.length > 0;
+
+  const shellRows = useMemo(() => {
+    const rows = (portfolioDealers || [])
+      .filter((d) => d?.name)
+      .map((dealer) => ({
+        dealer,
+        slices: [],
+        total: 0,
+        error: null,
+      }));
+    rows.sort((a, b) => String(a.dealer.name).localeCompare(String(b.dealer.name)));
+    return rows;
+  }, [portfolioDealers]);
+
+  /** Dealers + headers show immediately; numeric data only after full load. */
+  const displayRows = dataReady ? matrixRows : shellRows;
+  const displayColumns = columns.length ? columns : columnsRef.current;
 
   const compareByDealer = useMemo(
     () => compareLookupFromRows(compareMatrixRows),
@@ -158,76 +191,75 @@ export default function AllDealerChannelTable() {
   );
 
   const loadMatrix = useCallback(async () => {
-    if (!dealers?.length || !from || !to) {
+    if (!portfolioDealers?.length || !from || !to) {
       setMatrixRows([]);
       setCompareMatrixRows([]);
       setColumns([]);
+      columnsRef.current = [];
       return;
     }
 
     const loadGen = loadGenRef.current + 1;
     loadGenRef.current = loadGen;
     cancelRef.current = false;
+
     setLoading(true);
-    setCompareLoading(false);
+    setCompareLoading(Boolean(showCompare));
+    setMatrixRows([]);
     setCompareMatrixRows([]);
     setError(null);
-    setProgress(null);
+    setProgress({ completed: 0, total: 1 });
 
     const isStale = () => cancelRef.current || loadGenRef.current !== loadGen;
 
+    const progressCurrent = { completed: 0, total: 1 };
+    const progressCompare = { completed: 0, total: 1 };
+
+    const publishProgress = () => {
+      if (isStale()) return;
+      if (showCompare) {
+        setProgress({
+          completed: progressCurrent.completed + progressCompare.completed,
+          total: progressCurrent.total + progressCompare.total,
+        });
+        return;
+      }
+      setProgress({
+        completed: progressCurrent.completed,
+        total: progressCurrent.total,
+      });
+    };
+
     try {
-      const current = await fetchAllDealersChannelMatrix({
-        dealers,
+      const currentPromise = fetchAllDealersChannelMatrix({
+        dealers: portfolioDealers,
         from,
         to,
         pageTypeFilter,
         onProgress: (p) => {
-          if (!isStale()) {
-            setProgress({ ...p, phase: 'current' });
-          }
-        },
-        onPartial: (partial) => {
-          if (!isStale()) {
-            setMatrixRows(partial.rows || []);
-            setColumns(partial.columns || []);
-            setError(null);
-          }
+          progressCurrent.completed = p.completed;
+          progressCurrent.total = Math.max(1, p.total);
+          publishProgress();
         },
         onCancelCheck: () => isStale(),
       });
 
-      if (isStale()) return;
+      const comparePromise = showCompare
+        ? fetchAllDealersChannelMatrix({
+            dealers: portfolioDealers,
+            from: compareFrom,
+            to: compareTo,
+            pageTypeFilter,
+            onProgress: (p) => {
+              progressCompare.completed = p.completed;
+              progressCompare.total = Math.max(1, p.total);
+              publishProgress();
+            },
+            onCancelCheck: () => isStale(),
+          })
+        : Promise.resolve({ rows: [], columns: [], warning: null });
 
-      setMatrixRows(current.rows || []);
-      setColumns(current.columns || []);
-      setLoading(false);
-      setProgress(null);
-
-      let compare = { rows: [], columns: [], warning: null };
-      if (showCompare) {
-        setCompareLoading(true);
-        compare = await fetchAllDealersChannelMatrix({
-          dealers,
-          from: compareFrom,
-          to: compareTo,
-          pageTypeFilter,
-          onProgress: (p) => {
-            if (!isStale()) {
-              setProgress({
-                ...p,
-                phase: 'compare',
-              });
-            }
-          },
-          onPartial: (partial) => {
-            if (!isStale()) {
-              setCompareMatrixRows(partial.rows || []);
-            }
-          },
-          onCancelCheck: () => isStale(),
-        });
-      }
+      const [current, compare] = await Promise.all([currentPromise, comparePromise]);
 
       if (isStale()) return;
 
@@ -235,13 +267,19 @@ export default function AllDealerChannelTable() {
         ...(current.columns || []),
         ...(compare.columns || []),
       ])];
+      const nextColumns = mergedColumns.length
+        ? mergedColumns
+        : current.columns || [];
 
+      columnsRef.current = nextColumns;
+      setMatrixRows(current.rows || []);
       setCompareMatrixRows(showCompare ? compare.rows || [] : []);
-      setColumns(mergedColumns.length ? mergedColumns : current.columns || []);
+      setColumns(nextColumns);
       setError(current.warning || compare.warning || null);
     } catch (err) {
       if (!isStale()) {
         setError(err?.message || 'Failed to load dealer channel data.');
+        setMatrixRows([]);
         setCompareMatrixRows([]);
       }
     } finally {
@@ -251,7 +289,15 @@ export default function AllDealerChannelTable() {
         setProgress(null);
       }
     }
-  }, [dealers, from, to, pageTypeFilter, showCompare, compareFrom, compareTo]);
+  }, [
+    portfolioDealers,
+    from,
+    to,
+    pageTypeFilter,
+    showCompare,
+    compareFrom,
+    compareTo,
+  ]);
 
   useEffect(() => {
     if (dealersLoading) return undefined;
@@ -261,14 +307,13 @@ export default function AllDealerChannelTable() {
     };
   }, [dealersLoading, loadMatrix]);
 
-  const tableBusy = loading;
-  const exportReady = !dealersLoading && !loading && matrixRows.length > 0 && columns.length > 0;
+  const exportReady = dataReady && displayColumns.length > 0;
 
   useEffect(() => {
     setSnapshot({
       matrixRows,
       compareMatrixRows,
-      columns,
+      columns: displayColumns,
       loading: dealersLoading || loading,
       compareLoading,
       ready: exportReady,
@@ -276,7 +321,7 @@ export default function AllDealerChannelTable() {
   }, [
     matrixRows,
     compareMatrixRows,
-    columns,
+    displayColumns,
     dealersLoading,
     loading,
     compareLoading,
@@ -284,26 +329,14 @@ export default function AllDealerChannelTable() {
     setSnapshot,
   ]);
 
-  const showEmpty = !loading && !compareLoading && !error && matrixRows.length === 0;
+  const showEmpty =
+    !isBusy && !error && !dealersLoading && shellRows.length === 0;
+  const showTable = !dealersLoading && displayRows.length > 0;
 
-  const currentProgressLabel = useMemo(() => {
-    if (!progress || progress.phase === 'compare') return 'Loading current period…';
-    const batch = progress.total > 1
-      ? ` ${progress.completed}/${progress.total} batches`
-      : '';
-    return `Loading current period${batch}…`;
+  const loadingLabel = useMemo(() => {
+    if (!progress || progress.total <= 1) return 'Loading…';
+    return `Loading… ${progress.completed}/${progress.total} batches`;
   }, [progress]);
-
-  const compareProgressLabel = useMemo(() => {
-    const period = shortMonthLabel(comparePeriodLabel) || comparePeriodLabel || 'previous period';
-    if (!progress || progress.phase !== 'compare') {
-      return `Loading previous month (${period})…`;
-    }
-    const batch = progress.total > 1
-      ? ` ${progress.completed}/${progress.total} batches`
-      : '';
-    return `Loading previous month (${period})${batch}…`;
-  }, [progress, comparePeriodLabel]);
 
   return (
     <div className="content all-dealer-overview-content">
@@ -321,16 +354,14 @@ export default function AllDealerChannelTable() {
           }
         />
         <PanelBody className="all-dealer-channel-body">
-          {loading && (
-            <div className="adc-loading-banner" role="status">
-              <span className="data-updating-dot" aria-hidden />
-              {currentProgressLabel}
-            </div>
-          )}
-          {!loading && compareLoading && (
-            <div className="adc-loading-banner adc-loading-banner--compare" role="status">
-              <span className="data-updating-dot" aria-hidden />
-              {compareProgressLabel}
+          {isBusy && (
+            <div
+              className="adc-nav-progress adc-nav-progress--table-top"
+              role="progressbar"
+              aria-label="Loading"
+              aria-busy="true"
+            >
+              <div className="adc-nav-progress-bar" />
             </div>
           )}
           {error && (
@@ -338,88 +369,99 @@ export default function AllDealerChannelTable() {
               {error}
             </div>
           )}
-          {showEmpty && !dealersLoading && (
+          {showEmpty && (
             <div className="local-empty-state">
               <p className="local-empty-title">No dealer channel data</p>
               <p className="local-empty-sub">
                 {dealerCategoryFilter && !dealers?.length
                   ? `No active dealers are tagged as ${dealerCategoryFilter}. Pick another category or set categories in Admin → Dealers.`
-                  : 'Adjust the date range or confirm dealers have GA4 IDs configured.'}
+                  : !portfolioDealers.length
+                    ? `No dealers enabled for All Dealers → ${TAB_LABEL[tab] || tab}. Turn on AD ${tab === 'all' ? 'All' : String(tab).toUpperCase()} in Admin → Dealers.`
+                    : 'Adjust the date range or confirm dealers have GA4 IDs configured.'}
               </p>
             </div>
           )}
-          {(loading || matrixRows.length > 0) && (
-            <div className="adc-table-wrap">
-              <table
-                className={`tbl adc-table${showCompareStack ? ' adc-table--compare' : ''}`}
-              >
-                <thead>
-                  <tr>
-                    <th className="adc-th-dealer">Dealers</th>
-                    <th className="adc-th-total">Total Views</th>
-                    {columns.map((name) => (
-                      <th key={name} className="adc-th-channel">
-                        <ChannelHeader name={name} />
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrixRows.map((row) => {
-                    const sliceMap = sliceMapForRow(row);
-                    const compareEntry = compareEntryForDealer(compareByDealer, row.dealer);
-                    const compareTotal = compareEntry?.total ?? 0;
-
-                    return (
-                      <tr key={row.dealer.id}>
-                        <td className="adc-td-dealer">
-                          <span className="adc-dealer-name" title={row.dealer.name}>
-                            {row.dealer.name}
-                          </span>
-                          {row.error && (
-                            <span className="adc-dealer-err" title={row.error}>
-                              !
-                            </span>
-                          )}
-                        </td>
-                        <td className="adc-td-total">
-                          {row.error ? (
-                            <span className="adc-cell-empty">—</span>
-                          ) : (
-                            <CompareValueCell
-                              current={row.total}
-                              compare={compareTotal}
-                              showCompareStack={showCompareStack}
-                              comparePending={comparePending}
-                              currentLabel={currentPeriodLabel}
-                              compareLabel={comparePeriodLabel}
-                            />
-                          )}
-                        </td>
-                        {columns.map((colName) => (
-                          <td key={`${row.dealer.id}-${colName}`} className="adc-td-channel">
-                            <CompareValueCell
-                              current={sliceMap.get(colName)?.value}
-                              compare={compareEntry?.channels?.get(colName)?.value}
-                              showCompareStack={showCompareStack}
-                              comparePending={comparePending}
-                              currentLabel={currentPeriodLabel}
-                              compareLabel={comparePeriodLabel}
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                  {loading && matrixRows.length === 0 && (
+          {showTable && (
+            <div className={`adc-table-stage${isBusy ? ' adc-table-stage--busy' : ''}`}>
+              <div className="adc-table-wrap">
+                <table
+                  className={`tbl adc-table${showCompareStack ? ' adc-table--compare' : ''}${isBusy ? ' adc-table--loading' : ''}`}
+                >
+                  <thead>
                     <tr>
-                      <td colSpan={Math.max(columns.length + 2, 3)} className="adc-loading-row">
-                        Loading channel breakdown…
-                      </td>
+                      <th className="adc-th-dealer">Dealers</th>
+                      <th className="adc-th-total">Total Views</th>
+                      {displayColumns.map((name) => (
+                        <th key={name} className="adc-th-channel">
+                          <ChannelHeader name={name} />
+                        </th>
+                      ))}
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {displayRows.map((row) => {
+                      const sliceMap = dataReady ? sliceMapForRow(row) : new Map();
+                      const compareEntry = dataReady
+                        ? compareEntryForDealer(compareByDealer, row.dealer)
+                        : null;
+                      const compareTotal = compareEntry?.total ?? 0;
+
+                      return (
+                        <tr key={row.dealer.id}>
+                          <td className="adc-td-dealer">
+                            <span className="adc-dealer-name" title={row.dealer.name}>
+                              {row.dealer.name}
+                            </span>
+                            {dataReady && row.error && (
+                              <span className="adc-dealer-err" title={row.error}>
+                                !
+                              </span>
+                            )}
+                          </td>
+                          <td className="adc-td-total">
+                            {!dataReady || row.error ? (
+                              <span className="adc-cell-empty">—</span>
+                            ) : (
+                              <CompareValueCell
+                                current={row.total}
+                                compare={compareTotal}
+                                showCompareStack={showCompareStack}
+                                comparePending={false}
+                                currentLabel={currentPeriodLabel}
+                                compareLabel={comparePeriodLabel}
+                              />
+                            )}
+                          </td>
+                          {displayColumns.map((colName) => (
+                            <td key={`${row.dealer.id}-${colName}`} className="adc-td-channel">
+                              {!dataReady ? (
+                                <span className="adc-cell-empty">—</span>
+                              ) : (
+                                <CompareValueCell
+                                  current={sliceMap.get(colName)?.value}
+                                  compare={compareEntry?.channels?.get(colName)?.value}
+                                  showCompareStack={showCompareStack}
+                                  comparePending={false}
+                                  currentLabel={currentPeriodLabel}
+                                  compareLabel={comparePeriodLabel}
+                                />
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {isBusy && (
+                <div className="adc-table-overlay" role="status" aria-live="polite" aria-busy="true">
+                  <div className="adc-table-loader">
+                    <span className="adc-table-spinner" aria-hidden />
+                    <span className="adc-table-loader-text">{loadingLabel}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </PanelBody>

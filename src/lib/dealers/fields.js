@@ -19,7 +19,7 @@ export const DEALER_CATEGORY_OPTIONS = [
 const DEALER_CATEGORY_SET = new Set(DEALER_CATEGORY_OPTIONS);
 
 export const HOOT_SELECT =
-  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active, created_at';
+  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp, created_at';
 
 export function normalizeDealerCategory(value) {
   const trimmed = String(value || '').trim();
@@ -124,6 +124,9 @@ export function normalizeDealerRow(hootRow, ga4Row) {
     dealerCategory: normalizeDealerCategory(hootRow.dealer_category),
     websitePlatform: hootRow.website_platform ?? null,
     isActive: hootRow.is_active !== false,
+    showAllDealersVdp: hootRow.show_all_dealers_vdp !== false,
+    showAllDealersAll: hootRow.show_all_dealers_all !== false,
+    showAllDealersSrp: hootRow.show_all_dealers_srp !== false,
     ga4ConfigId: ga4Row?.id ?? null,
     ga4PropertyId: ga4Row?.ga4_property_id
       ? normalizeGa4PropertyId(ga4Row.ga4_property_id)

@@ -62,6 +62,9 @@ function normalizeRow(row) {
     websitePlatform: row.website_platform || null,
     dealerCategory: normalizeDealerCategory(row.dealer_category),
     isActive: row.is_active !== false,
+    showAllDealersVdp: row.show_all_dealers_vdp !== false,
+    showAllDealersAll: row.show_all_dealers_all !== false,
+    showAllDealersSrp: row.show_all_dealers_srp !== false,
     category: FALLBACK_CATEGORY,
   };
 }
@@ -127,7 +130,7 @@ export function ClientProvider({ children }) {
       let dealerQuery = supabase
         .from('smart_hoot_config')
         .select(
-          'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active'
+          'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp'
         )
         .eq('is_active', true)
         .order('customer_name', { ascending: true });

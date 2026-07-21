@@ -58,6 +58,17 @@ export async function setAdminDealerCategory(id, dealerCategory) {
   return parseJson(res);
 }
 
+/** Toggle All Dealers portfolio visibility for a tab: vdp | all | srp. */
+export async function setAdminDealerAllDealersTab(id, tab, enabled) {
+  const res = await fetch(`/api/admin/dealers/${id}/all-dealers-tabs`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tab, enabled: enabled === true }),
+  });
+  return parseJson(res);
+}
+
 export async function deleteAdminDealer(id, { hard = false } = {}) {
   const qs = hard ? '?hard=true' : '';
   const res = await fetch(`/api/admin/dealers/${id}${qs}`, {
