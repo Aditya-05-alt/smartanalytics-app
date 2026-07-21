@@ -25,9 +25,25 @@ const TAB_LABEL = {
 };
 
 function ChannelHeader({ name }) {
+  const parts = String(name || '')
+    .split(/\s*\+\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
   return (
     <div className="adc-col-head" title={name}>
-      <span className="adc-col-label">{name}</span>
+      <span className="adc-col-label">
+        {parts.length <= 1 ? (
+          name
+        ) : (
+          parts.map((part, index) => (
+            <span key={`${part}-${index}`} className="adc-col-label-line">
+              {part}
+              {index < parts.length - 1 ? ' +' : ''}
+            </span>
+          ))
+        )}
+      </span>
     </div>
   );
 }
@@ -294,13 +310,15 @@ export default function AllDealerChannelTable() {
       <Panel className="all-dealer-channel-panel">
         <PanelHeader
           title={panelTitle}
-          badge={{
-            label: showCompare
-              ? `${currentPeriodLabel} · ${comparePeriodLabel} · MoM`
-              : 'Channel combinations',
-            bg: 'var(--s3)',
-            color: 'var(--t2)',
-          }}
+          badge={
+            showCompare
+              ? {
+                  label: `${currentPeriodLabel} · ${comparePeriodLabel} · MoM`,
+                  bg: 'var(--s3)',
+                  color: 'var(--t2)',
+                }
+              : undefined
+          }
         />
         <PanelBody className="all-dealer-channel-body">
           {loading && (

@@ -59,7 +59,7 @@ const ICONS = {
 const ITEMS = [
   { id: 'overview', href: '/dashboard', title: 'Overview' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
-  { id: 'health', href: '/dashboard/health', title: 'Portfolio Health', badge: true },
+  { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
   { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
   { id: 'local', href: '/dashboard/local', title: 'Local Intel' },
 ];
@@ -74,7 +74,6 @@ function SideBarLink({ item, active, collapsed }) {
     >
       {ICONS[item.id]}
       {!collapsed && <span className="sb-label">{item.title}</span>}
-      {item.badge && <div className="sb-badge" />}
     </Link>
   );
 }

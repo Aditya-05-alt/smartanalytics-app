@@ -35,7 +35,6 @@ function DealerCategoryFilter() {
 
   return (
     <label className="tb-category-filter">
-      <span className="tb-category-label">Category</span>
       <select
         className="tb-category-select"
         value={dealerCategoryFilter}

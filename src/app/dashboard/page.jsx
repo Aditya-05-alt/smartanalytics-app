@@ -15,7 +15,6 @@ import CmpTable from '@/components/dashboard/overview/CmpTable';
 // import MakesTable from '@/components/dashboard/overview/MakesTable';
 // import ProximityBars from '@/components/dashboard/overview/ProximityBars';
 // import WarmLeads from '@/components/dashboard/overview/WarmLeads';
-import StatusBar from '@/components/dashboard/StatusBar';
 import AllDealerChannelTable from '@/components/dashboard/overview/AllDealerChannelTable';
 import { AllDealerMatrixProvider } from '@/components/dashboard/overview/AllDealerMatrixContext';
 import { useClient } from '@/components/dashboard/ClientContext';
@@ -38,17 +37,12 @@ function AllDealerOverviewBody() {
       <PageTabs />
       <OverviewFilters />
       <AllDealerChannelTable />
-      <StatusBar
-        items={[
-          { label: 'All Dealer — portfolio view', color: 'var(--t3)' },
-        ]}
-      />
     </AllDealerMatrixProvider>
   );
 }
 
 function DealerOverviewBody() {
-  const { tab, error, clientKey, from, to, compareEnabled } = useOverview();
+  const { tab, clientKey, from, to, compareEnabled } = useOverview();
   const vdpCompareLayout = tab === 'vdp' && compareEnabled;
 
   return (
@@ -182,15 +176,6 @@ function DealerOverviewBody() {
         </div>
         */}
       </div>
-
-      <StatusBar
-        items={[
-          { label: error ? `GA4 error: ${error}` : 'GA4 — connected', color: error ? 'var(--red)' : 'var(--green)' },
-          { label: 'Digital Envoy — not connected', color: 'var(--t3)' },
-          { label: 'Scrape queue 0', color: 'var(--t3)' },
-        ]}
-        right="0 active clients"
-      />
     </>
   );
 }
