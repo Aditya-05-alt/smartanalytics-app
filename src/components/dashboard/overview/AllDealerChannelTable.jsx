@@ -60,11 +60,18 @@ function ChannelHeader({ name }) {
 
 function shortMonthLabel(periodLabel) {
   if (!periodLabel) return '';
-  const match = String(periodLabel).match(/^(\w{3})\w*\s+(\d{4})/);
-  if (match) return `${match[1]} ${match[2]}`;
-  return String(periodLabel).length > 12
-    ? `${String(periodLabel).slice(0, 12)}…`
-    : periodLabel;
+  const raw = String(periodLabel).trim();
+  // "July 2026" / "Jul 2026"
+  const monthYear = raw.match(/^([A-Za-z]{3,9})\s+(\d{4})$/);
+  if (monthYear) {
+    return `${monthYear[1].slice(0, 3)} ${monthYear[2]}`;
+  }
+  // "May 1, 2026 – May 31, 2026" / "May 1, 2026"
+  const rangeStart = raw.match(/^([A-Za-z]{3,9})\s+\d{1,2},?\s+(\d{4})/);
+  if (rangeStart) {
+    return `${rangeStart[1].slice(0, 3)} ${rangeStart[2]}`;
+  }
+  return raw.length > 8 ? `${raw.slice(0, 8)}…` : raw;
 }
 
 function CompareValueCell({

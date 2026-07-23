@@ -822,18 +822,25 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
-  min-width: 96px;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
 }
 
 .adc-compare-line {
   display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 2px;
+  min-width: 0;
 }
 
 .adc-compare-line--pct {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   margin-top: 2px;
   padding-top: 4px;
   border-top: 1px solid var(--bd);
@@ -841,22 +848,30 @@ body {
 
 .adc-compare-lbl {
   flex: 0 0 auto;
-  min-width: 52px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--t3);
   text-align: right;
+  line-height: 1.2;
 }
 
 .adc-compare-num {
   flex: 0 0 auto;
-  min-width: 52px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  line-height: 1.2;
 }
 
 .adc-compare-num--cur {
@@ -870,7 +885,6 @@ body {
 
 .adc-compare-pct {
   flex: 0 0 auto;
-  min-width: 52px;
   text-align: right;
   line-height: 1;
 }
