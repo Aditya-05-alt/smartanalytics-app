@@ -333,10 +333,7 @@ export default function AllDealerChannelTable() {
     !isBusy && !error && !dealersLoading && shellRows.length === 0;
   const showTable = !dealersLoading && displayRows.length > 0;
 
-  const loadingLabel = useMemo(() => {
-    if (!progress || progress.total <= 1) return 'Loading…';
-    return `Loading… ${progress.completed}/${progress.total} batches`;
-  }, [progress]);
+  const loadingLabel = 'Loading…';
 
   return (
     <div className="content all-dealer-overview-content">

@@ -1,7 +1,19 @@
 -- All-dealer portfolio channel matrix (VDP / All tabs + date range).
--- Optimized: avoid casts/TRIM on join keys so (report_date, client_id) indexes apply.
+-- Reads pre-aggregated mv_ga4_channel_daily (not raw smart_ga4_page_data).
 -- Optional p_client_ids for chunked fetches.
 -- Deploy in Supabase SQL editor.
+--
+-- Prerequisite:
+--   CREATE MATERIALIZED VIEW public.mv_ga4_channel_daily AS
+--   SELECT client_id, report_date, channel, ga4_page_type, SUM(views)::bigint AS views
+--   FROM public.smart_ga4_page_data
+--   GROUP BY client_id, report_date, channel, ga4_page_type;
+--   CREATE UNIQUE INDEX ON public.mv_ga4_channel_daily
+--     (client_id, report_date, channel, ga4_page_type);
+--   CREATE INDEX ON public.mv_ga4_channel_daily (report_date, client_id);
+--
+-- After GA4 sync / Step 2 filtration, refresh:
+--   REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;
 
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text);
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text, text[]);
@@ -43,31 +55,31 @@ BEGIN
       )
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
-  -- Filter page data by date + client first (index-friendly), then aggregate.
+  -- Pre-aggregated daily channel totals from materialized view.
   pages AS (
     SELECT
-      p.client_id AS dealer_client_id,
-      p.channel   AS raw_channel,
-      SUM(COALESCE(p.views, 0))::bigint AS page_views
-    FROM public.smart_ga4_page_data p
-    WHERE p.report_date BETWEEN p_from AND p_to
+      m.client_id AS dealer_client_id,
+      m.channel   AS raw_channel,
+      SUM(COALESCE(m.views, 0))::bigint AS page_views
+    FROM public.mv_ga4_channel_daily m
+    WHERE m.report_date BETWEEN p_from AND p_to
       AND (
         NOT v_chunked
-        OR p.client_id = ANY (p_client_ids)
+        OR m.client_id = ANY (p_client_ids)
       )
       AND (
         v_page_type = 'ALL'
-        OR (v_page_type = 'VDP' AND p.ga4_page_type LIKE 'VDP%')
-        OR (v_page_type = 'SRP' AND p.ga4_page_type = 'SRP')
-        OR (v_page_type IN ('HOME', 'HOMEPAGE') AND p.ga4_page_type ILIKE 'home%')
+        OR (v_page_type = 'VDP' AND m.ga4_page_type LIKE 'VDP%')
+        OR (v_page_type = 'SRP' AND m.ga4_page_type = 'SRP')
+        OR (v_page_type IN ('HOME', 'HOMEPAGE') AND m.ga4_page_type ILIKE 'home%')
         OR (
           v_page_type = 'OTHER'
-          AND p.ga4_page_type NOT LIKE 'VDP%'
-          AND p.ga4_page_type <> 'SRP'
-          AND p.ga4_page_type NOT ILIKE 'home%'
+          AND m.ga4_page_type NOT LIKE 'VDP%'
+          AND m.ga4_page_type <> 'SRP'
+          AND m.ga4_page_type NOT ILIKE 'home%'
         )
       )
-    GROUP BY p.client_id, p.channel
+    GROUP BY m.client_id, m.channel
   ),
   normalized AS (
     SELECT
@@ -128,10 +140,5 @@ REVOKE ALL ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, t
 GRANT EXECUTE ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, text[])
   TO anon, authenticated, service_role;
 
--- Recommended indexes (run once if not already present):
--- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_smart_ga4_page_data_date_client
---   ON public.smart_ga4_page_data (report_date, client_id);
--- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ga4_page_data_client_date_channel
---   ON public.smart_ga4_page_data (client_id, report_date, channel);
--- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ga4_page_data_client_date_pagetype
---   ON public.smart_ga4_page_data (client_id, report_date, ga4_page_type);
+-- After page sync or VDP filtration, refresh the MV so All Dealers stays current:
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;

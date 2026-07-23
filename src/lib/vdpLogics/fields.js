@@ -23,7 +23,7 @@ export const EXAMPLE_ROW = {
   data_source: 'GA4',
   hoot_link: 'https://hoot.example/inventory',
   scrap_link: 'off',
-  vdp_logic: '/inventory/.*vdp.*',
+  vdp_logic: '^/inventory/\\d{4}-.+',
   srp_logic: '/inventory/?$',
   home_page_logic: '^/$',
   others: 'Optional notes',
@@ -53,10 +53,28 @@ export function splitVdpLogicPatterns(value) {
   return parts.length ? parts : [''];
 }
 
+/**
+ * Normalize one VDP regex so it matches GA4 page_path (usually starts with `/`).
+ * Fixes common save mistakes like `^inventory/...` → `^/inventory/...`.
+ */
+export function normalizeVdpLogicPattern(pattern) {
+  let p = String(pattern ?? '').trim();
+  if (!p) return p;
+  if (/^true$/i.test(p) || /^false$/i.test(p)) return p;
+  // ^inventory/... → ^/inventory/...
+  if (/^\^[A-Za-z0-9]/.test(p)) {
+    p = `^/${p.slice(1)}`;
+  } else if (/^[A-Za-z0-9]/.test(p) && !/^https?:\/\//i.test(p)) {
+    // inventory/... → /inventory/...
+    p = `/${p}`;
+  }
+  return p;
+}
+
 /** Join UI patterns for smart_vdp_logic.vdp_logic (pipeline Step 2 understands ` OR `). */
 export function joinVdpLogicPatterns(patterns) {
   return (patterns || [])
-    .map((p) => String(p ?? '').trim())
+    .map((p) => normalizeVdpLogicPattern(p))
     .filter(Boolean)
     .join(' OR ');
 }
@@ -124,8 +142,8 @@ export function bodyToDbRecord(body) {
     const joined = joinVdpLogicPatterns(body.vdpLogicPatterns);
     record.vdp_logic = joined === '' ? null : joined;
   } else if (body?.vdpLogic !== undefined) {
-    const s = body.vdpLogic == null ? null : String(body.vdpLogic).trim();
-    record.vdp_logic = s === '' ? null : s;
+    const joined = joinVdpLogicPatterns(splitVdpLogicPatterns(body.vdpLogic));
+    record.vdp_logic = joined === '' ? null : joined;
   }
   if (!record.dealer_name) {
     throw new Error('Dealer name is required.');

@@ -354,6 +354,12 @@ export default function VdpLogicsPanel() {
         <code>smart_scrap_inventory.customer_id</code> (matches <code>dealer_id</code>). Refresh
         syncs <code>scrap_link</code> to on/off in the database.
       </p>
+      <p className="ga4-count-meta vdp-logics-example-hint">
+        VDP logic must match GA4 <code>page_path</code> (usually starts with <code>/</code>).
+        Example for B&amp;E-style URLs: <code>{'^/inventory/\\d{4}-.+'}</code>
+        {' '}— not <code>{'^inventory/...'}</code> (missing slash after <code>^</code> makes
+        Step 2 “pass” but mark 0 VDPs, so Step 3 stays empty).
+      </p>
 
       <p className="ga4-count-meta vdp-logics-example-hint">
         {loading && 'Loading smart_vdp_logic…'}
