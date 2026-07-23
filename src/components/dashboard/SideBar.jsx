@@ -169,6 +169,7 @@ export default function SideBar() {
         )}
       </nav>
 
+      {/* Settings — hidden until used
       <div
         className={`sb-ic sb-ic--footer ${collapsed ? 'sb-ic--collapsed' : ''}`}
         title="Settings"
@@ -176,6 +177,7 @@ export default function SideBar() {
         {ICONS.settings}
         {!collapsed && <span className="sb-label">Settings</span>}
       </div>
+      */}
     </aside>
   );
 }
