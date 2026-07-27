@@ -724,6 +724,13 @@ export default function DealersPanel() {
         saving={saving}
         onClose={closeModal}
         onSave={handleSave}
+        onDealerUpdated={(row) => {
+          if (!row?.id) return;
+          setAllRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...row } : r)));
+          setModal((prev) =>
+            prev.open && prev.row?.id === row.id ? { ...prev, row: { ...prev.row, ...row } } : prev
+          );
+        }}
       />
 
       <AdminConfirmDialog

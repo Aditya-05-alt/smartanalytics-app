@@ -30,6 +30,35 @@ export function vdpFiltersActive(vdpFilters, tab) {
   );
 }
 
+/**
+ * Channel Breakdown: same filters as VDP except location (location blanks the GA4 join).
+ * Make / model / type / year / condition still update channel totals.
+ */
+export function channelBreakdownVdpFilters(vdpFilters) {
+  return {
+    ...normalizeVdpFilters(vdpFilters),
+    location: 'All',
+  };
+}
+
+/** True when channel-relevant inventory filters are active (excludes location). */
+export function channelFiltersActive(vdpFilters, tab) {
+  if (tab !== 'vdp') return false;
+  const f = channelBreakdownVdpFilters(vdpFilters);
+  return (
+    f.year !== 'All' ||
+    (f.condition !== 'All' && f.condition !== 'Used + New') ||
+    f.make !== 'All' ||
+    f.model !== 'All' ||
+    f.type !== 'All'
+  );
+}
+
+/** Cache key for channel fetches — ignores location. */
+export function channelFilterCacheSuffix(vdpFilters, tab) {
+  return vdpFilterCacheSuffix(channelBreakdownVdpFilters(vdpFilters), tab);
+}
+
 /** Map UI filters → Supabase RPC params (VDP tab only). */
 export function vdpFiltersToRpcParams(vdpFilters, tab) {
   if (tab !== 'vdp') return {};

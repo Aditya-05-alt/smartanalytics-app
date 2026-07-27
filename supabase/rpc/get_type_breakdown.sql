@@ -1,4 +1,6 @@
--- Type breakdown from smart_final_data (VDP tab). Deploy in Supabase SQL editor.
+-- Type breakdown from smart_final_data (VDP tab).
+-- Prefers inv_custom_type (from type_ or dealer raw_data key). Falls back to inv_type.
+-- Deploy AFTER: supabase/migrations/smart_final_data_inv_custom_type.sql
 
 DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date);
 DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date, int);
@@ -28,25 +30,42 @@ SET search_path = public
 AS $$
   WITH base AS (
     SELECT
-      COALESCE(NULLIF(TRIM(inv_type), ''), 'Unknown') AS type_bucket,
-      COALESCE(views, 0)::bigint AS views
-    FROM smart_final_data
-    WHERE client_id::text = trim(p_client_id)
-      AND report_date BETWEEN p_from AND p_to
-      AND (COALESCE(array_length(p_types, 1), 0) = 0 OR inv_type = ANY(p_types))
-      AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR inv_make = ANY(p_makes))
-      AND (COALESCE(array_length(p_models, 1), 0) = 0 OR inv_model = ANY(p_models))
+      COALESCE(
+        NULLIF(TRIM(s.inv_custom_type), ''),
+        NULLIF(TRIM(s.inv_type), ''),
+        'Unknown'
+      ) AS type_bucket,
+      COALESCE(s.views, 0)::bigint AS views
+    FROM smart_final_data s
+    WHERE s.client_id::text = trim(p_client_id)
+      AND s.report_date BETWEEN p_from AND p_to
+      AND (
+        COALESCE(array_length(p_types, 1), 0) = 0
+        OR EXISTS (
+          SELECT 1
+          FROM unnest(COALESCE(p_types, ARRAY[]::text[])) AS t
+          WHERE lower(TRIM(t)) = lower(
+            COALESCE(
+              NULLIF(TRIM(s.inv_custom_type), ''),
+              NULLIF(TRIM(s.inv_type), ''),
+              'Unknown'
+            )
+          )
+        )
+      )
+      AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR s.inv_make = ANY(p_makes))
+      AND (COALESCE(array_length(p_models, 1), 0) = 0 OR s.inv_model = ANY(p_models))
       AND (
         COALESCE(array_length(p_locations, 1), 0) = 0
-        OR TRIM(inv_location) = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
+        OR public.vdp_location_filter_match(trim(p_client_id), s.inv_location, p_locations)
       )
       AND (
         COALESCE(array_length(p_years, 1), 0) = 0
-        OR (inv_year ~ '^\d{4}$' AND inv_year::int = ANY(p_years))
+        OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years))
       )
       AND (
         UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH'
-        OR UPPER(inv_condition) = UPPER(p_condition)
+        OR UPPER(s.inv_condition) = UPPER(p_condition)
       )
   ),
   agg AS (

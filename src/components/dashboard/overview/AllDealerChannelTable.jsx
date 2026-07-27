@@ -81,6 +81,7 @@ function CompareValueCell({
   comparePending,
   currentLabel,
   compareLabel,
+  deltaLabel = 'MoM',
 }) {
   const cur = Number(current) || 0;
   const cmp = Number(compare) || 0;
@@ -124,7 +125,7 @@ function CompareValueCell({
         </span>
       </div>
       <div className="adc-compare-line adc-compare-line--pct">
-        <span className="adc-compare-lbl">MoM</span>
+        <span className="adc-compare-lbl">{deltaLabel}</span>
         <span className="adc-compare-pct">
           {comparePending ? (
             <span className="adc-compare-pending">…</span>
@@ -170,8 +171,14 @@ export default function AllDealerChannelTable() {
     ? `${TAB_LABEL[tab] || 'Page'} views by channel — all ${dealerCategoryFilter} dealers`
     : `${TAB_LABEL[tab] || 'Page'} views by channel — all dealers`;
   const showCompare = compareEnabled && compareFrom && compareTo;
+  const compareDeltaLabel = useMemo(() => {
+    if (!from || !compareFrom) return 'MoM';
+    const curYear = String(from).slice(0, 4);
+    const cmpYear = String(compareFrom).slice(0, 4);
+    return curYear !== cmpYear ? 'YoY' : 'MoM';
+  }, [from, compareFrom]);
   const isBusy = loading || compareLoading;
-  /** Show MoM stack only after both periods finished (no mid-load flicker). */
+  /** Show MoM/YoY stack only after both periods finished (no mid-load flicker). */
   const showCompareStack = showCompare && !isBusy;
   const dataReady = !isBusy && matrixRows.length > 0;
 
@@ -433,6 +440,7 @@ export default function AllDealerChannelTable() {
                                 comparePending={false}
                                 currentLabel={currentPeriodLabel}
                                 compareLabel={comparePeriodLabel}
+                                deltaLabel={compareDeltaLabel}
                               />
                             )}
                           </td>
@@ -448,6 +456,7 @@ export default function AllDealerChannelTable() {
                                   comparePending={false}
                                   currentLabel={currentPeriodLabel}
                                   compareLabel={comparePeriodLabel}
+                                  deltaLabel={compareDeltaLabel}
                                 />
                               )}
                             </td>

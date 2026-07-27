@@ -1,7 +1,7 @@
--- Location breakdown: smart_dealer_locations + smart_ga4_page_data (VDP views).
--- Same page grain as get_ga4_channel_breakdown (channel lives on page rows).
--- Inventory filters join via smart_final_data paths. Does NOT replace get_location_breakdown.
--- Deploy smart_dealer_locations.sql first. Run in Supabase SQL editor.
+-- Thin wrapper over get_location_breakdown.
+-- Old logic stays unchanged. If dealer has exactly ONE row in
+-- smart_dealer_locations, rename Unknown → that hardcoded location name.
+-- Deploy in Supabase SQL editor (replaces the heavy matching version).
 
 DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text
@@ -31,195 +31,67 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_filter_active boolean;
-  v_condition text := UPPER(COALESCE(p_condition, 'BOTH'));
+  v_loc_count int;
+  v_single_location text;
 BEGIN
-  v_filter_active :=
-       COALESCE(array_length(p_types, 1), 0)     > 0
-    OR COALESCE(array_length(p_makes, 1), 0)     > 0
-    OR COALESCE(array_length(p_models, 1), 0)    > 0
-    OR v_condition <> 'BOTH'
-    OR COALESCE(array_length(p_years, 1), 0)     > 0
-    OR COALESCE(array_length(p_locations, 1), 0) > 0;
+  SELECT
+    COUNT(*)::int,
+    MIN(TRIM(dl.location_name))
+  INTO v_loc_count, v_single_location
+  FROM public.smart_dealer_locations dl
+  WHERE dl.customer_id::text = trim(p_client_id)
+    AND TRIM(dl.location_name) <> '';
 
+  -- 0 or 2+ configured names → exact old breakdown (no remap).
+  IF COALESCE(v_loc_count, 0) <> 1 THEN
+    RETURN QUERY
+    SELECT * FROM public.get_location_breakdown(
+      p_client_id, p_from, p_to, p_limit,
+      p_types, p_makes, p_models, p_locations, p_years, p_condition
+    );
+    RETURN;
+  END IF;
+
+  -- Exactly one hardcoded name: run old logic, then Unknown → that name.
   RETURN QUERY
-  WITH dealer_locs AS (
+  WITH base AS (
     SELECT
-      dl.id,
-      dl.sort_order,
       CASE
-        WHEN NULLIF(TRIM(dl.location_number), '') IS NOT NULL
-        THEN TRIM(dl.location_number) || ' - ' || TRIM(dl.location_name)
-        ELSE TRIM(dl.location_name)
+        WHEN LOWER(TRIM(lb.location_bucket)) IN ('unknown', '')
+          THEN v_single_location
+        ELSE lb.location_bucket
       END AS location_bucket,
-      COALESCE(NULLIF(TRIM(dl.inv_match_value), ''), TRIM(dl.location_name)) AS inv_match_value,
-      COALESCE(
-        NULLIF(TRIM(dl.page_match_value), ''),
-        NULLIF(TRIM(dl.inv_match_value), ''),
-        TRIM(dl.location_name)
-      ) AS page_match_value
-    FROM public.smart_dealer_locations dl
-    WHERE dl.client_id::text = trim(p_client_id)
-      AND dl.is_active IS TRUE
-      AND (
-        COALESCE(array_length(p_locations, 1), 0) = 0
-        OR TRIM(dl.location_name) = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
-        OR COALESCE(NULLIF(TRIM(dl.inv_match_value), ''), TRIM(dl.location_name))
-             = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
-      )
-  ),
-  pages AS (
-    SELECT
-      p.client_id,
-      p.report_date,
-      TRIM(p.page_path) AS page_path,
-      p.page_location,
-      COALESCE(p.views, 0)::bigint AS views
-    FROM public.smart_ga4_page_data p
-    WHERE p.client_id::text = trim(p_client_id)
-      AND p.report_date BETWEEN p_from AND p_to
-      AND p.ga4_page_type ILIKE 'VDP%'
-  ),
-  filtered_final AS (
-    SELECT DISTINCT
-      s.client_id,
-      s.report_date,
-      TRIM(s.page_path) AS page_path,
-      TRIM(s.inv_location) AS inv_location
-    FROM public.smart_final_data s
-    WHERE s.client_id::text = trim(p_client_id)
-      AND s.report_date BETWEEN p_from AND p_to
-      AND (COALESCE(array_length(p_types, 1), 0) = 0 OR s.inv_type = ANY(p_types))
-      AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR s.inv_make = ANY(p_makes))
-      AND (COALESCE(array_length(p_models, 1), 0) = 0 OR s.inv_model = ANY(p_models))
-      AND (
-        COALESCE(array_length(p_locations, 1), 0) = 0
-        OR TRIM(s.inv_location) = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
-      )
-      AND (
-        COALESCE(array_length(p_years, 1), 0) = 0
-        OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years))
-      )
-      AND (
-        v_condition = 'BOTH'
-        OR UPPER(s.inv_condition) = v_condition
-      )
-  ),
-  eligible_pages AS (
-    SELECT p.client_id, p.report_date, p.page_path, p.page_location, p.views
-    FROM pages p
-    WHERE NOT v_filter_active
-
-    UNION ALL
-
-    SELECT p.client_id, p.report_date, p.page_path, p.page_location, p.views
-    FROM pages p
-    WHERE v_filter_active
-      AND EXISTS (
-        SELECT 1
-        FROM filtered_final f
-        WHERE f.client_id::text = p.client_id::text
-          AND f.report_date = p.report_date
-          AND (
-            p.page_path = f.page_path
-            OR (
-              COALESCE(p.page_path, '') <> ''
-              AND COALESCE(f.page_path, '') <> ''
-              AND LOWER(TRIM(p.page_location)) LIKE '%' || LOWER(p.page_path) || '%'
-            )
-            OR (
-              COALESCE(p.page_path, '') <> ''
-              AND EXISTS (
-                SELECT 1
-                FROM public.smart_final_data s2
-                WHERE s2.client_id::text = p.client_id::text
-                  AND s2.report_date = p.report_date
-                  AND TRIM(s2.page_path) = f.page_path
-                  AND LOWER(TRIM(s2.page_location)) LIKE '%' || LOWER(p.page_path) || '%'
-              )
-            )
-          )
-      )
-  ),
-  assigned AS (
-    SELECT
-      COALESCE(loc_pick.location_bucket, 'Other') AS location_bucket,
-      ep.views
-    FROM eligible_pages ep
-    LEFT JOIN LATERAL (
-      SELECT dl.location_bucket
-      FROM dealer_locs dl
-      WHERE
-        ep.page_path = TRIM(dl.page_match_value)
-        OR LOWER(COALESCE(ep.page_location, '')) LIKE '%' || LOWER(dl.page_match_value) || '%'
-        OR LOWER(COALESCE(ep.page_path, '')) LIKE '%' || LOWER(dl.page_match_value) || '%'
-        OR EXISTS (
-          SELECT 1
-          FROM filtered_final f
-          WHERE f.client_id::text = ep.client_id::text
-            AND f.report_date = ep.report_date
-            AND f.page_path = ep.page_path
-            AND f.inv_location = dl.inv_match_value
-        )
-        OR (
-          NOT v_filter_active
-          AND EXISTS (
-            SELECT 1
-            FROM public.smart_final_data s
-            WHERE s.client_id::text = ep.client_id::text
-              AND s.report_date = ep.report_date
-              AND TRIM(s.page_path) = ep.page_path
-              AND TRIM(s.inv_location) = dl.inv_match_value
-          )
-        )
-      ORDER BY dl.sort_order, dl.id
-      LIMIT 1
-    ) loc_pick ON TRUE
+      lb.views
+    FROM public.get_location_breakdown(
+      p_client_id, p_from, p_to, p_limit,
+      p_types, p_makes, p_models, p_locations, p_years, p_condition
+    ) lb
   ),
   agg AS (
-    SELECT a.location_bucket, SUM(a.views)::bigint AS views
-    FROM assigned a
-    GROUP BY a.location_bucket
+    SELECT b.location_bucket, SUM(b.views)::bigint AS views
+    FROM base b
+    GROUP BY b.location_bucket
   ),
   ranked AS (
     SELECT
-      ag.location_bucket,
-      ag.views,
-      ROW_NUMBER() OVER (ORDER BY ag.views DESC, ag.location_bucket) AS rn
-    FROM agg ag
-    WHERE ag.views > 0
-  ),
-  top_n AS (
-    SELECT r.location_bucket, r.views, r.rn::int AS rank
-    FROM ranked r
-    WHERE p_limit IS NULL OR r.rn <= p_limit
-  ),
-  other_bucket AS (
-    SELECT
-      'Other'::text AS location_bucket,
-      COALESCE(SUM(r.views), 0)::bigint AS views,
-      999::int AS rank
-    FROM ranked r
-    WHERE p_limit IS NOT NULL AND r.rn > p_limit
-    HAVING COALESCE(SUM(r.views), 0) > 0
-  ),
-  combined AS (
-    SELECT * FROM top_n
-    UNION ALL
-    SELECT * FROM other_bucket
+      a.location_bucket,
+      a.views,
+      ROW_NUMBER() OVER (ORDER BY a.views DESC, a.location_bucket)::int AS rank
+    FROM agg a
+    WHERE a.views > 0
   ),
   grand AS (
-    SELECT NULLIF(SUM(c.views), 0)::numeric AS total
-    FROM combined c
+    SELECT NULLIF(SUM(r.views), 0)::numeric AS total
+    FROM ranked r
   )
   SELECT
-    c.location_bucket,
-    c.views,
-    ROUND(100.0 * c.views / g.total, 2) AS pct,
-    c.rank
-  FROM combined c
+    r.location_bucket,
+    r.views,
+    ROUND(100.0 * r.views / g.total, 2) AS pct,
+    r.rank
+  FROM ranked r
   CROSS JOIN grand g
-  ORDER BY c.rank;
+  ORDER BY r.rank;
 END;
 $$;
 

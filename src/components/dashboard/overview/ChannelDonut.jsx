@@ -7,8 +7,8 @@ import {
   hasChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
 import {
-  vdpFilterCacheSuffix,
-  vdpFiltersActive,
+  channelFilterCacheSuffix,
+  channelFiltersActive,
 } from '@/lib/vdp/vdpFilterParams';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { channelRowsToDonutData } from '@/lib/ga4/channelDisplay';
@@ -111,7 +111,7 @@ function useChannelBreakdownRows({
     setError(null);
     if (trackBreakdownLoad && initialLoad) beginBreakdownLoad?.();
 
-    const invFiltered = vdpFiltersActive(vdpFilters, tab);
+    const invFiltered = channelFiltersActive(vdpFilters, tab);
 
     fetchChannelBreakdownBundle({
       clientId,
@@ -471,7 +471,8 @@ export default function ChannelDonut({
   const tabId = resolveTabId(pageTypeProp, tab);
   const pageTypeFilter = TAB_TO_FILTER[tabId] || 'ALL';
   const centerLabel = CENTER_LABEL[tabId] || 'ALL VIEWS';
-  const filterCacheSuffix = vdpFilterCacheSuffix(vdpFilters, tabId);
+  // Location excluded from channel cache key / filters.
+  const filterCacheSuffix = channelFilterCacheSuffix(vdpFilters, tabId);
 
   const clientId = clientIdProp ?? clientKey;
   const from = fromProp ?? ctxFrom;

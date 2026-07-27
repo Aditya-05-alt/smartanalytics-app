@@ -38,7 +38,7 @@ AS $$
       AND (COALESCE(array_length(p_models, 1), 0) = 0 OR inv_model = ANY(p_models))
       AND (
         COALESCE(array_length(p_locations, 1), 0) = 0
-        OR TRIM(inv_location) = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
+        OR public.vdp_location_filter_match(trim(p_client_id), inv_location, p_locations)
       )
       AND (
         COALESCE(array_length(p_years, 1), 0) = 0

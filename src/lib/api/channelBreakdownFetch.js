@@ -10,10 +10,11 @@ import {
   setChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
 import {
-  vdpFiltersActive,
-  vdpRpcExtraParams,
-  vdpFilterCacheSuffix,
   appendVdpFiltersToSearchParams,
+  channelBreakdownVdpFilters,
+  channelFilterCacheSuffix,
+  channelFiltersActive,
+  vdpRpcExtraParams,
 } from '@/lib/vdp/vdpFilterParams';
 
 async function fetchChannelBreakdownViaApi({
@@ -28,13 +29,16 @@ async function fetchChannelBreakdownViaApi({
   if (typeof window === 'undefined') return null;
   if (onCancelCheck?.()) return null;
 
+  // Same filters as VDP except location (location blanks channel join).
+  const channelFilters = channelBreakdownVdpFilters(vdpFilters);
+
   const qs = new URLSearchParams({
     clientId,
     from,
     to,
     pageType: pageTypeFilter,
   });
-  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
+  appendVdpFiltersToSearchParams(qs, channelFilters, tab);
 
   const res = await fetch(`/api/dashboard/channel-breakdown?${qs}`, {
     credentials: 'same-origin',
@@ -66,12 +70,13 @@ async function fetchViaClientProgressive({
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
+  const channelFilters = channelBreakdownVdpFilters(vdpFilters);
   const extraParams = {
     p_page_type: pageTypeFilter,
-    ...vdpRpcExtraParams(vdpFilters, tab),
+    ...vdpRpcExtraParams(channelFilters, tab),
   };
 
-  const invFilters = vdpFiltersActive(vdpFilters, tab);
+  const invFilters = channelFiltersActive(vdpFilters, tab);
   let resolvedChunkDays = chunkDays ?? BREAKDOWN_UI_CHUNK_DAYS;
   let resolvedConcurrency = concurrency ?? 1;
   if (adaptiveChunks) {
@@ -109,6 +114,7 @@ async function fetchViaClientProgressive({
 /**
  * Fetch channel breakdown for ONE page type only (ALL | VDP | SRP | Home | Other).
  * Streams partial results every BREAKDOWN_UI_CHUNK_DAYS as chunks complete.
+ * Applies make/model/type/year/condition filters; location is ignored for channel.
  */
 export async function fetchChannelBreakdownBundle({
   clientId,
@@ -127,7 +133,7 @@ export async function fetchChannelBreakdownBundle({
 }) {
   if (!clientId || !from || !to) return [];
 
-  const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
+  const cacheSuffix = channelFilterCacheSuffix(vdpFilters, tab);
 
   if (!skipCache) {
     const cached = getChannelBreakdownCache(

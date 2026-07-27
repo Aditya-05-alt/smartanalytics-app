@@ -1,5 +1,6 @@
 -- Distinct VDP filter dropdown values for a dealer + date range.
--- Deploy in Supabase SQL editor.
+-- Locations = inventory inv_location UNION configured smart_dealer_locations.
+-- Deploy in Supabase SQL editor (after smart_dealer_locations_simplify.sql).
 
 DROP FUNCTION IF EXISTS public.get_vdp_filter_options(text, date, date);
 DROP FUNCTION IF EXISTS public.get_vdp_filter_options(
@@ -29,10 +30,27 @@ AS $$
       NULLIF(TRIM(inv_make), '') AS inv_make,
       NULLIF(TRIM(inv_model), '') AS inv_model,
       NULLIF(TRIM(inv_location), '') AS inv_location,
-      NULLIF(TRIM(inv_type), '') AS inv_type
+      COALESCE(
+        NULLIF(TRIM(inv_custom_type), ''),
+        NULLIF(TRIM(inv_type), '')
+      ) AS inv_type
     FROM smart_final_data
     WHERE client_id::text = trim(p_client_id)
       AND report_date BETWEEN p_from AND p_to
+  ),
+  configured_locs AS (
+    SELECT DISTINCT TRIM(dl.location_name) AS location_name
+    FROM public.smart_dealer_locations dl
+    WHERE dl.customer_id::text = trim(p_client_id)
+      AND TRIM(dl.location_name) <> ''
+  ),
+  all_locs AS (
+    SELECT b.inv_location AS location_name
+    FROM base b
+    WHERE b.inv_location IS NOT NULL
+      AND LOWER(b.inv_location) <> 'unknown'
+    UNION
+    SELECT c.location_name FROM configured_locs c
   )
   SELECT
     COALESCE((
@@ -51,9 +69,8 @@ AS $$
       WHERE b.inv_model IS NOT NULL
     ), ARRAY[]::text[]) AS models,
     COALESCE((
-      SELECT array_agg(DISTINCT b.inv_location ORDER BY b.inv_location)
-      FROM base b
-      WHERE b.inv_location IS NOT NULL
+      SELECT array_agg(a.location_name ORDER BY a.location_name)
+      FROM all_locs a
     ), ARRAY[]::text[]) AS locations,
     COALESCE((
       SELECT array_agg(DISTINCT b.inv_type ORDER BY b.inv_type)

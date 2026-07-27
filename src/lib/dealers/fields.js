@@ -19,12 +19,17 @@ export const DEALER_CATEGORY_OPTIONS = [
 const DEALER_CATEGORY_SET = new Set(DEALER_CATEGORY_OPTIONS);
 
 export const HOOT_SELECT =
-  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp, created_at';
+  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, inv_type_raw_key, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp, created_at';
 
 export function normalizeDealerCategory(value) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return null;
   return DEALER_CATEGORY_SET.has(trimmed) ? trimmed : null;
+}
+
+export function normalizeInvTypeRawKey(value) {
+  const trimmed = String(value || '').trim();
+  return trimmed || null;
 }
 
 export const FORM_FIELDS = [
@@ -39,6 +44,14 @@ export const FORM_FIELDS = [
     type: 'select',
     options: DEALER_CATEGORY_OPTIONS,
     placeholder: 'Select category',
+  },
+  {
+    key: 'invTypeRawKey',
+    db: 'inv_type_raw_key',
+    label: 'Custom type raw_data key',
+    section: 'hoot',
+    placeholder: 'e.g. Custom label 1, Vehicle Type, Body Style',
+    hint: 'Hoot only — exact raw_data key. Refresh runs 1 day/batch with pause (fast inventory join). Cron/Step 3 keeps future rows updated.',
   },
   {
     key: 'websitePlatform',
@@ -84,6 +97,7 @@ export function emptyFormState() {
     hootUrl: '',
     hootId: '',
     dealerCategory: '',
+    invTypeRawKey: '',
     websitePlatform: '',
     isActive: true,
     ga4CustomerId: '',
@@ -100,6 +114,7 @@ export function rowToFormState(row) {
   state.hootUrl = row.hootUrl ?? '';
   state.hootId = row.hootId ?? '';
   state.dealerCategory = row.dealerCategory ?? '';
+  state.invTypeRawKey = row.invTypeRawKey ?? '';
   state.websitePlatform = row.websitePlatform ?? '';
   state.isActive = row.isActive !== false;
   state.ga4CustomerId = row.ga4CustomerId ?? '';
@@ -122,6 +137,7 @@ export function normalizeDealerRow(hootRow, ga4Row) {
     hootId: hootRow.hoot_id ?? null,
     ga4CustomerId,
     dealerCategory: normalizeDealerCategory(hootRow.dealer_category),
+    invTypeRawKey: normalizeInvTypeRawKey(hootRow.inv_type_raw_key),
     websitePlatform: hootRow.website_platform ?? null,
     isActive: hootRow.is_active !== false,
     showAllDealersVdp: hootRow.show_all_dealers_vdp !== false,
@@ -174,6 +190,7 @@ export function bodyToPayload(body) {
   if (rawCategory && !dealerCategory) {
     throw new Error('Invalid dealer category.');
   }
+  const invTypeRawKey = normalizeInvTypeRawKey(body?.invTypeRawKey);
   const websitePlatform = String(body?.websitePlatform || '').trim() || null;
   const ga4CustomerId = String(body?.ga4CustomerId || '').trim();
   const ga4PropertyId = normalizeGa4PropertyId(body?.ga4PropertyId);
@@ -192,6 +209,7 @@ export function bodyToPayload(body) {
     hootUrl,
     hootId,
     dealerCategory,
+    invTypeRawKey,
     websitePlatform,
     isActive,
     ga4CustomerId,

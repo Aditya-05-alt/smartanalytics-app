@@ -65,6 +65,7 @@ export async function POST(request) {
       hoot_id: payload.hootId,
       website_platform: payload.websitePlatform,
       dealer_category: payload.dealerCategory,
+      inv_type_raw_key: payload.invTypeRawKey,
       ga4_customer_id: payload.ga4CustomerId,
       is_active: payload.isActive,
     };

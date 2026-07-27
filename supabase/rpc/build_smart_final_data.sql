@@ -36,7 +36,7 @@ BEGIN
     views, total_users, sessions, new_users, ga4_page_type,
     hoot_customer_name, hoot_id, hoot_url, website_platform,
     inv_sk, inv_vin, inv_url, inv_make, inv_model, inv_year, inv_trim,
-    inv_price, inv_msrp, inv_condition, inv_type, inv_stock_number,
+    inv_price, inv_msrp, inv_condition, inv_type, inv_custom_type, inv_stock_number,
     inv_location, inv_first_seen, inv_last_seen,
     vdp_conditions, vdp_vehicle_condition, cms
   )
@@ -72,7 +72,8 @@ BEGIN
       h.customer_name,
       h.hoot_id,
       h.hoot_url,
-      h.website_platform
+      h.website_platform,
+      NULLIF(TRIM(h.inv_type_raw_key), '') AS inv_type_raw_key
     FROM public.smart_hoot_config h
     WHERE h.ga4_customer_id IS NOT NULL
     ORDER BY h.ga4_customer_id, h.id DESC
@@ -83,7 +84,7 @@ BEGIN
       LOWER(TRIM(i.url)) AS url_lower,
       i.sk, i.vin, i.url, i.make, i.model, i.year, i.trim,
       i.price, i.msrp, i.condition, i.type_, i.stock_number,
-      i.location, i.first_seen, i.last_seen
+      i.location, i.first_seen, i.last_seen, i.raw_data
     FROM public.smart_hoot_inventory i
     WHERE i.url IS NOT NULL
       AND i.url <> ''
@@ -109,9 +110,10 @@ BEGIN
       c.hoot_id,
       c.hoot_url,
       c.website_platform,
+      c.inv_type_raw_key,
       iu.sk, iu.vin, iu.url, iu.make, iu.model, iu.year, iu.trim,
       iu.price, iu.msrp, iu.condition, iu.type_, iu.stock_number,
-      iu.location, iu.first_seen, iu.last_seen
+      iu.location, iu.first_seen, iu.last_seen, iu.raw_data
     FROM ga4_unique u
     LEFT JOIN config_unique c
            ON trim(c.ga4_customer_id::text) = trim(u.client_id)
@@ -151,6 +153,13 @@ BEGIN
     m.msrp,
     m.condition,
     m.type_,
+    COALESCE(
+      NULLIF(TRIM(m.type_), ''),
+      CASE
+        WHEN m.inv_type_raw_key IS NULL THEN NULL
+        ELSE NULLIF(TRIM(m.raw_data ->> m.inv_type_raw_key), '')
+      END
+    ) AS inv_custom_type,
     m.stock_number,
     m.location,
     m.first_seen,

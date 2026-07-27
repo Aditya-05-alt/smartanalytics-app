@@ -28,7 +28,10 @@ AS $$
     AND (COALESCE(array_length(p_types, 1), 0) = 0 OR f.inv_type = ANY(p_types))
     AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR f.inv_make = ANY(p_makes))
     AND (COALESCE(array_length(p_models, 1), 0) = 0 OR f.inv_model = ANY(p_models))
-    AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR f.inv_location = ANY(p_locations))
+    AND (
+      COALESCE(array_length(p_locations, 1), 0) = 0
+      OR public.vdp_location_filter_match(trim(p_client_id), f.inv_location, p_locations)
+    )
     AND (
       COALESCE(array_length(p_years, 1), 0) = 0
       OR (f.inv_year ~ '^\d{4}$' AND f.inv_year::int = ANY(p_years))

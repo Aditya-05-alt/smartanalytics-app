@@ -1,19 +1,17 @@
 -- All-dealer portfolio channel matrix (VDP / All tabs + date range).
--- Reads pre-aggregated mv_ga4_channel_daily (not raw smart_ga4_page_data).
+-- Auto-selects grain for speed + previous-year coverage:
+--   yearly  → mv_ga4_channel_yearly   (full calendar year / YTD)
+--   monthly → mv_ga4_channel_monthly  (month-aligned or 60+ day ranges)
+--   daily   → mv_ga4_channel_daily    (short / mid-month ranges)
 -- Optional p_client_ids for chunked fetches.
--- Deploy in Supabase SQL editor.
+-- Deploy in Supabase SQL editor AFTER mv_ga4_channel_monthly_yearly.sql
 --
--- Prerequisite:
---   CREATE MATERIALIZED VIEW public.mv_ga4_channel_daily AS
---   SELECT client_id, report_date, channel, ga4_page_type, SUM(views)::bigint AS views
---   FROM public.smart_ga4_page_data
---   GROUP BY client_id, report_date, channel, ga4_page_type;
---   CREATE UNIQUE INDEX ON public.mv_ga4_channel_daily
---     (client_id, report_date, channel, ga4_page_type);
---   CREATE INDEX ON public.mv_ga4_channel_daily (report_date, client_id);
+-- Prerequisite MVs:
+--   mv_ga4_channel_daily
+--   mv_ga4_channel_monthly
+--   mv_ga4_channel_yearly
 --
--- After GA4 sync / Step 2 filtration, refresh:
---   REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;
+-- After GA4 sync / Step 2 filtration, refresh all three (see cron).
 
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text);
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text, text[]);
@@ -39,7 +37,45 @@ AS $$
 DECLARE
   v_page_type text := UPPER(COALESCE(p_page_type, 'ALL'));
   v_chunked   boolean := COALESCE(array_length(p_client_ids, 1), 0) > 0;
+  v_grain     text;
+  v_year_from int;
+  v_year_to   int;
+  v_year_end  date;
+  v_month_from date;
+  v_month_to   date;
 BEGIN
+  IF p_from IS NULL OR p_to IS NULL OR p_from > p_to THEN
+    RAISE EXCEPTION 'Invalid date range: % .. %', p_from, p_to;
+  END IF;
+
+  v_year_from := EXTRACT(YEAR FROM p_from)::int;
+  v_year_to   := EXTRACT(YEAR FROM p_to)::int;
+  v_year_end  := make_date(v_year_from, 12, 31);
+  v_month_from := date_trunc('month', p_from)::date;
+  v_month_to   := date_trunc('month', p_to)::date;
+
+  -- Full calendar year, or YTD for the current year → yearly MV (fast + has history).
+  IF v_year_from = v_year_to
+     AND EXTRACT(MONTH FROM p_from)::int = 1
+     AND EXTRACT(DAY FROM p_from)::int = 1
+     AND (
+       p_to = v_year_end
+       OR (v_year_from = EXTRACT(YEAR FROM CURRENT_DATE)::int AND p_to <= CURRENT_DATE)
+     )
+  THEN
+    v_grain := 'yearly';
+  -- Month-aligned range (1st → last day of month) → monthly MV.
+  ELSIF EXTRACT(DAY FROM p_from)::int = 1
+     AND p_to = (v_month_to + INTERVAL '1 month' - INTERVAL '1 day')::date
+  THEN
+    v_grain := 'monthly';
+  -- Long ranges (60+ days): use monthly months covering the span.
+  ELSIF (p_to - p_from) >= 60 THEN
+    v_grain := 'monthly';
+  ELSE
+    v_grain := 'daily';
+  END IF;
+
   RETURN QUERY
   WITH dealers AS (
     SELECT DISTINCT ON (h.ga4_customer_id)
@@ -55,31 +91,68 @@ BEGIN
       )
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
-  -- Pre-aggregated daily channel totals from materialized view.
-  pages AS (
+  base AS (
     SELECT
-      m.client_id AS dealer_client_id,
-      m.channel   AS raw_channel,
-      SUM(COALESCE(m.views, 0))::bigint AS page_views
-    FROM public.mv_ga4_channel_daily m
-    WHERE m.report_date BETWEEN p_from AND p_to
+      y.client_id,
+      y.channel,
+      y.ga4_page_type,
+      y.views
+    FROM public.mv_ga4_channel_yearly y
+    WHERE v_grain = 'yearly'
+      AND y.report_year = v_year_from
+      AND (
+        NOT v_chunked
+        OR y.client_id = ANY (p_client_ids)
+      )
+
+    UNION ALL
+
+    SELECT
+      m.client_id,
+      m.channel,
+      m.ga4_page_type,
+      m.views
+    FROM public.mv_ga4_channel_monthly m
+    WHERE v_grain = 'monthly'
+      AND m.month_start BETWEEN v_month_from AND v_month_to
       AND (
         NOT v_chunked
         OR m.client_id = ANY (p_client_ids)
       )
+
+    UNION ALL
+
+    SELECT
+      d.client_id,
+      d.channel,
+      d.ga4_page_type,
+      d.views
+    FROM public.mv_ga4_channel_daily d
+    WHERE v_grain = 'daily'
+      AND d.report_date BETWEEN p_from AND p_to
       AND (
-        v_page_type = 'ALL'
-        OR (v_page_type = 'VDP' AND m.ga4_page_type LIKE 'VDP%')
-        OR (v_page_type = 'SRP' AND m.ga4_page_type = 'SRP')
-        OR (v_page_type IN ('HOME', 'HOMEPAGE') AND m.ga4_page_type ILIKE 'home%')
-        OR (
-          v_page_type = 'OTHER'
-          AND m.ga4_page_type NOT LIKE 'VDP%'
-          AND m.ga4_page_type <> 'SRP'
-          AND m.ga4_page_type NOT ILIKE 'home%'
-        )
+        NOT v_chunked
+        OR d.client_id = ANY (p_client_ids)
       )
-    GROUP BY m.client_id, m.channel
+  ),
+  pages AS (
+    SELECT
+      b.client_id AS dealer_client_id,
+      b.channel   AS raw_channel,
+      SUM(COALESCE(b.views, 0))::bigint AS page_views
+    FROM base b
+    WHERE
+      v_page_type = 'ALL'
+      OR (v_page_type = 'VDP' AND b.ga4_page_type LIKE 'VDP%')
+      OR (v_page_type = 'SRP' AND b.ga4_page_type = 'SRP')
+      OR (v_page_type IN ('HOME', 'HOMEPAGE') AND b.ga4_page_type ILIKE 'home%')
+      OR (
+        v_page_type = 'OTHER'
+        AND b.ga4_page_type NOT LIKE 'VDP%'
+        AND b.ga4_page_type <> 'SRP'
+        AND b.ga4_page_type NOT ILIKE 'home%'
+      )
+    GROUP BY b.client_id, b.channel
   ),
   normalized AS (
     SELECT
@@ -140,5 +213,7 @@ REVOKE ALL ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, t
 GRANT EXECUTE ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, text[])
   TO anon, authenticated, service_role;
 
--- After page sync or VDP filtration, refresh the MV so All Dealers stays current:
+-- After page sync or VDP filtration:
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_monthly;
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_yearly;

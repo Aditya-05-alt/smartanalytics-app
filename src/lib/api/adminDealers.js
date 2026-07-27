@@ -77,3 +77,53 @@ export async function deleteAdminDealer(id, { hard = false } = {}) {
   });
   return parseJson(res);
 }
+
+/**
+ * Backfill one date chunk for a dealer (1 day — avoids statement timeout).
+ * Body: { invTypeRawKey?, from, to, saveKey?: boolean }
+ */
+export async function refreshAdminDealerCustomType(
+  id,
+  { invTypeRawKey, from, to, saveKey = true } = {}
+) {
+  const res = await fetch(`/api/admin/dealers/${id}/refresh-custom-type`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from,
+      to,
+      saveKey,
+      ...(invTypeRawKey !== undefined ? { invTypeRawKey } : {}),
+    }),
+  });
+  return parseJson(res);
+}
+
+export async function fetchAdminDealerLocations(dealerId) {
+  const res = await fetch(`/api/admin/dealers/${dealerId}/locations`, {
+    credentials: 'same-origin',
+  });
+  return parseJson(res);
+}
+
+export async function addAdminDealerLocation(dealerId, locationName) {
+  const res = await fetch(`/api/admin/dealers/${dealerId}/locations`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locationName }),
+  });
+  return parseJson(res);
+}
+
+export async function deleteAdminDealerLocation(dealerId, locationId) {
+  const res = await fetch(
+    `/api/admin/dealers/${dealerId}/locations?locationId=${encodeURIComponent(locationId)}`,
+    {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }
+  );
+  return parseJson(res);
+}

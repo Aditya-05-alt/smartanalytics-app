@@ -6222,6 +6222,102 @@ body {
 .dealers-field--wide {
   grid-column: 1 / -1;
 }
+.dealers-raw-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dealers-raw-key-row .admin-date-input {
+  flex: 1;
+  min-width: 0;
+}
+.dealers-raw-key-refresh {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.dealers-refresh-success {
+  margin: 0 0 0.75rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+.dealers-refresh-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin: 0 0 12px;
+}
+.dealers-refresh-range-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.dealers-refresh-log {
+  margin: 0 0 14px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0b1220;
+}
+.dealers-refresh-log-head {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+  background: #111827;
+  border-bottom: 1px solid #1f2937;
+}
+.dealers-refresh-log-body {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dealers-locations-block {
+  margin: 0 0 16px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border, #2a2f3a);
+}
+.dealers-locations-add-row {
+  margin-bottom: 10px;
+}
+.dealers-locations-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dealers-locations-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border, #2a2f3a);
+}
+.dealers-locations-name {
+  font-size: 13px;
+  color: var(--t1, #f3f4f6);
+}
+.dealers-locations-remove {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 10px;
+}
 .dealers-field--checkbox {
   flex-direction: row;
   align-items: center;

@@ -13,21 +13,42 @@ const TAB_SHEET_NAME = {
 const HEADER_FILL = {
   type: 'pattern',
   pattern: 'solid',
-  fgColor: { argb: 'FFC8E87A' },
+  fgColor: { argb: 'FF1A2332' },
 };
 
-/** Light green — Dealers + Total Views columns */
-const DEALER_TOTAL_FILL = {
+const HEADER_FONT = {
+  bold: true,
+  color: { argb: 'FFE8F0FF' },
+  size: 10,
+};
+
+const DEALER_FILL = {
   type: 'pattern',
   pattern: 'solid',
-  fgColor: { argb: 'FFD4E8A8' },
+  fgColor: { argb: 'FF243044' },
 };
 
-/** Same family, slightly lighter — channel columns */
+const TOTAL_FILL = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FF2A3A52' },
+};
+
 const CHANNEL_FILL = {
   type: 'pattern',
   pattern: 'solid',
-  fgColor: { argb: 'FFE8F4D9' },
+  fgColor: { argb: 'FF1E2A3C' },
+};
+
+const BODY_FONT = {
+  bold: true,
+  color: { argb: 'FFE8F0FF' },
+  size: 10,
+};
+
+const THIN_BORDER = {
+  style: 'thin',
+  color: { argb: 'FF3A4A62' },
 };
 
 function slugPart(value) {
@@ -36,125 +57,110 @@ function slugPart(value) {
     .slice(0, 48);
 }
 
-function formatMom(current, previous) {
+/** Match AllDealerChannelTable short month tags (e.g. "JUL 2026"). */
+function shortMonthLabel(periodLabel) {
+  if (!periodLabel) return '';
+  const raw = String(periodLabel).trim();
+  const monthYear = raw.match(/^([A-Za-z]{3,9})\s+(\d{4})$/);
+  if (monthYear) {
+    return `${monthYear[1].slice(0, 3).toUpperCase()} ${monthYear[2]}`;
+  }
+  const rangeStart = raw.match(/^([A-Za-z]{3,9})\s+\d{1,2},?\s+(\d{4})/);
+  if (rangeStart) {
+    return `${rangeStart[1].slice(0, 3).toUpperCase()} ${rangeStart[2]}`;
+  }
+  return raw.length > 10 ? `${raw.slice(0, 10)}…` : raw.toUpperCase();
+}
+
+function deltaLabelForRange(from, compareFrom) {
+  if (!from || !compareFrom) return 'MoM';
+  return String(from).slice(0, 4) !== String(compareFrom).slice(0, 4)
+    ? 'YoY'
+    : 'MoM';
+}
+
+/** UI-style delta: "↑ 16%" / "↓ 4%" / "0%". */
+function formatDeltaArrow(current, previous) {
   const pct = pctChange(current, previous);
-  return `${pct > 0 ? '+' : ''}${pct}%`;
+  if (pct > 0) return `↑ ${pct}%`;
+  if (pct < 0) return `↓ ${Math.abs(pct)}%`;
+  return '0%';
 }
 
-function buildHeaders(columns, showCompare, currentLabel, compareLabel) {
-  if (!showCompare) {
-    return ['Dealers', 'Total Views', ...columns];
-  }
+function formatViews(n) {
+  const v = Number(n) || 0;
+  return v.toLocaleString('en-US');
+}
 
-  const headers = [
-    'Dealers',
-    `Total Views (${currentLabel})`,
-    `Total Views (${compareLabel})`,
-    'Total Views (MoM)',
+/**
+ * One Excel cell matching the on-screen compare stack:
+ *   JUL 2026   93,857
+ *   JUN 2026   98,094
+ *   MoM        ↓ 4%
+ */
+function stackCellValue(current, compare, curTag, prevTag, deltaLabel) {
+  const cur = Number(current) || 0;
+  const cmp = Number(compare) || 0;
+  if (cur <= 0 && cmp <= 0) return '—';
+
+  const curLine = `${curTag}   ${cur > 0 ? formatViews(cur) : '—'}`;
+  const prevLine = `${prevTag}   ${formatViews(cmp)}`;
+  const deltaLine = `${deltaLabel}   ${formatDeltaArrow(cur, cmp)}`;
+  return `${curLine}\n${prevLine}\n${deltaLine}`;
+}
+
+function applyBorders(cell) {
+  cell.border = {
+    top: THIN_BORDER,
+    left: THIN_BORDER,
+    bottom: THIN_BORDER,
+    right: THIN_BORDER,
+  };
+}
+
+function buildHeaders(columns) {
+  return ['DEALERS', 'TOTAL VIEWS', ...columns.map((c) => String(c).toUpperCase())];
+}
+
+function buildPlainRow(row, columns) {
+  const sliceMap = sliceMapForRow(row);
+  const dealerName = row.dealer?.name || 'Unnamed dealer';
+  if (row.error) {
+    return [dealerName, '—', ...columns.map(() => '—')];
+  }
+  return [
+    dealerName,
+    Number(row.total) || 0,
+    ...columns.map((col) => Number(sliceMap.get(col)?.value) || 0),
   ];
-
-  for (const col of columns) {
-    headers.push(`${col} (${currentLabel})`);
-    headers.push(`${col} (${compareLabel})`);
-    headers.push(`${col} (MoM)`);
-  }
-
-  return headers;
 }
 
-function buildDataRow(row, columns, showCompare, compareEntry) {
+function buildCompareRow(row, columns, compareEntry, curTag, prevTag, deltaLabel) {
   const sliceMap = sliceMapForRow(row);
   const dealerName = row.dealer?.name || 'Unnamed dealer';
 
   if (row.error) {
-    const empty = showCompare
-      ? ['—', '—', '—', ...columns.flatMap(() => ['—', '—', '—'])]
-      : ['—', ...columns.map(() => '—')];
-    return [dealerName, ...empty];
-  }
-
-  if (!showCompare) {
-    return [
-      dealerName,
-      Number(row.total) || 0,
-      ...columns.map((col) => Number(sliceMap.get(col)?.value) || 0),
-    ];
+    return [dealerName, '—', ...columns.map(() => '—')];
   }
 
   const compareTotal = Number(compareEntry?.total) || 0;
-  const data = [
+  const cells = [
     dealerName,
-    Number(row.total) || 0,
-    compareTotal,
-    formatMom(row.total, compareTotal),
+    stackCellValue(row.total, compareTotal, curTag, prevTag, deltaLabel),
   ];
 
   for (const col of columns) {
     const cur = Number(sliceMap.get(col)?.value) || 0;
     const cmp = Number(compareEntry?.channels?.get(col)?.value) || 0;
-    data.push(cur, cmp, formatMom(cur, cmp));
+    cells.push(stackCellValue(cur, cmp, curTag, prevTag, deltaLabel));
   }
 
-  return data;
-}
-
-function dealerTotalColumnCount(showCompare) {
-  return showCompare ? 4 : 2;
-}
-
-function styleSheet(sheet, headers, showCompare, rowCount) {
-  const dealerTotalCols = dealerTotalColumnCount(showCompare);
-  const headerRow = sheet.getRow(1);
-
-  headers.forEach((_, idx) => {
-    const cell = headerRow.getCell(idx + 1);
-    cell.font = { bold: true };
-    cell.fill = HEADER_FILL;
-  });
-
-  for (let rowNumber = 2; rowNumber <= rowCount + 1; rowNumber += 1) {
-    const row = sheet.getRow(rowNumber);
-    for (let colNumber = 1; colNumber <= headers.length; colNumber += 1) {
-      const cell = row.getCell(colNumber);
-      cell.font = { bold: true };
-      cell.fill = colNumber <= dealerTotalCols ? DEALER_TOTAL_FILL : CHANNEL_FILL;
-    }
-  }
-
-  sheet.getColumn(1).width = 28;
-  sheet.getColumn(2).width = 14;
-
-  for (let c = 2; c <= headers.length; c += 1) {
-    const col = sheet.getColumn(c);
-    if (c > 1) col.width = Math.min(18, Math.max(12, col.width || 12));
-    const header = headers[c - 1] || '';
-    if (!header.includes('MoM')) {
-      col.numFmt = '#,##0';
-    }
-  }
-}
-
-function buildWorkbookRows(matrixRows, compareRows, columns, showCompare, labels) {
-  const compareByDealer = compareLookupFromRows(compareRows);
-  const headers = buildHeaders(
-    columns,
-    showCompare,
-    labels.currentPeriodLabel,
-    labels.comparePeriodLabel,
-  );
-
-  const dataRows = (matrixRows || []).map((row) => {
-    const compareEntry = showCompare
-      ? compareEntryForDealer(compareByDealer, row.dealer)
-      : null;
-    return buildDataRow(row, columns, showCompare, compareEntry);
-  });
-
-  return { headers, dataRows };
+  return cells;
 }
 
 /**
- * Build XLSX from matrix data already loaded on the frontend (no API re-fetch).
+ * Build XLSX matching the All Dealers on-screen matrix
+ * (stacked current / compare / MoM|YoY per cell when compare is on).
  */
 export async function downloadAllDealerChannelXlsx({
   matrixRows,
@@ -176,31 +182,108 @@ export async function downloadAllDealerChannelXlsx({
   const fromIso = String(from).slice(0, 10);
   const toIso = String(to).slice(0, 10);
   const showCompare = Boolean(compareEnabled && compareFrom && compareTo);
+  const deltaLabel = deltaLabelForRange(from, compareFrom);
+  const curTag = shortMonthLabel(currentPeriodLabel) || 'CURRENT';
+  const prevTag = shortMonthLabel(comparePeriodLabel) || 'PREVIOUS';
+  const headers = buildHeaders(columns);
+
+  const compareByDealer = compareLookupFromRows(compareMatrixRows);
+  const dataRows = (matrixRows || []).map((row) => {
+    if (!showCompare) return buildPlainRow(row, columns);
+    const compareEntry = compareEntryForDealer(compareByDealer, row.dealer);
+    return buildCompareRow(
+      row,
+      columns,
+      compareEntry,
+      curTag,
+      prevTag,
+      deltaLabel,
+    );
+  });
 
   // Yield so "Preparing…" can paint before Excel work.
   await new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
 
-  const { headers, dataRows } = buildWorkbookRows(
-    matrixRows,
-    compareMatrixRows,
-    columns,
-    showCompare,
-    { currentPeriodLabel, comparePeriodLabel },
-  );
-
   const ExcelJS = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   const sheetName = TAB_SHEET_NAME[tab] || 'All Pages';
   const sheet = workbook.addWorksheet(sheetName.slice(0, 31));
+
+  const title = showCompare
+    ? `${tab === 'vdp' ? 'VDP' : 'All Pages'} views by channel — all dealers (${curTag} – ${prevTag} – ${deltaLabel})`
+    : `${tab === 'vdp' ? 'VDP' : 'All Pages'} views by channel — all dealers (${fromIso} to ${toIso})`;
+
+  const colCount = Math.max(headers.length, 1);
+  sheet.mergeCells(1, 1, 1, colCount);
+  const titleCell = sheet.getCell(1, 1);
+  titleCell.value = title;
+  titleCell.font = { bold: true, size: 12, color: { argb: 'FFE8F0FF' } };
+  titleCell.fill = HEADER_FILL;
+  titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+  sheet.getRow(1).height = 24;
 
   sheet.addRow(headers);
   if (dataRows.length) {
     sheet.addRows(dataRows);
   }
 
-  styleSheet(sheet, headers, showCompare, dataRows.length);
+  const headerRow = sheet.getRow(2);
+  headerRow.height = 36;
+  headers.forEach((header, idx) => {
+    const cell = headerRow.getCell(idx + 1);
+    cell.value = header;
+    cell.font = HEADER_FONT;
+    cell.fill = HEADER_FILL;
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: idx === 0 ? 'left' : 'center',
+      wrapText: true,
+    };
+    applyBorders(cell);
+  });
+
+  const dataStart = 3;
+  const dataEnd = 2 + dataRows.length;
+  for (let rowNumber = dataStart; rowNumber <= dataEnd; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber);
+    row.height = showCompare ? 58 : 22;
+    for (let colNumber = 1; colNumber <= headers.length; colNumber += 1) {
+      const cell = row.getCell(colNumber);
+      cell.font = BODY_FONT;
+      if (colNumber === 1) {
+        cell.fill = DEALER_FILL;
+        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      } else if (colNumber === 2) {
+        cell.fill = TOTAL_FILL;
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: showCompare ? 'left' : 'right',
+          wrapText: true,
+        };
+      } else {
+        cell.fill = CHANNEL_FILL;
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: showCompare ? 'left' : 'right',
+          wrapText: true,
+        };
+      }
+      applyBorders(cell);
+      if (!showCompare && colNumber > 1 && typeof cell.value === 'number') {
+        cell.numFmt = '#,##0';
+      }
+    }
+  }
+
+  sheet.getColumn(1).width = 34;
+  sheet.getColumn(2).width = showCompare ? 24 : 14;
+  for (let c = 3; c <= headers.length; c += 1) {
+    sheet.getColumn(c).width = showCompare ? 24 : 16;
+  }
+
+  sheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {

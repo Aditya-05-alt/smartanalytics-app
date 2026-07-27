@@ -671,7 +671,7 @@ export function OverviewProvider({ children }) {
     };
   }, [clientKey, lyFrom, lyTo, vdpFilters]);
 
-  // ── VDP channel breakdown (same source as Period Comparison table — KPI MoM/YoY) ──
+  // ── VDP channel breakdown (all filters except location; KPI uses filtered daily) ──
   useEffect(() => {
     if (!clientKey || !from || !to || !compareFrom || !compareTo) {
       setVdpChannelCurRows([]);
@@ -692,6 +692,7 @@ export function OverviewProvider({ children }) {
     const fetchOpts = {
       clientId: clientKey,
       pageTypeFilter: 'VDP',
+      // Location ignored for channel; make/model/type/year/condition still apply.
       vdpFilters,
       tab: 'vdp',
       onCancelCheck: () => cancelled,
