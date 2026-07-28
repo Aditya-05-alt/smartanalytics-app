@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { sanitizeVdpLocationOptions } from '@/lib/vdp/locationFilterOptions';
 
 function normalizeFilterOptionsRow(row) {
   const asList = (key) => {
@@ -11,7 +12,7 @@ function normalizeFilterOptionsRow(row) {
     years: ['All', ...asList('years')],
     makes: ['All', ...asList('makes')],
     models: ['All', ...asList('models')],
-    locations: ['All', ...asList('locations')],
+    locations: sanitizeVdpLocationOptions(['All', ...asList('locations')]),
     types: ['All', ...asList('types')],
   };
 }

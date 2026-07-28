@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { sanitizeVdpLocationOptions } from '@/lib/vdp/locationFilterOptions';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
 import { aggregateLocationBuckets } from '@/lib/api/locationBreakdownAggregate';
@@ -111,7 +112,12 @@ export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck 
 
   try {
     const viaApi = await fetchVdpFilterOptionsViaApi({ clientId, from, to, onCancelCheck });
-    if (viaApi) return viaApi;
+    if (viaApi) {
+      return {
+        ...viaApi,
+        locations: sanitizeVdpLocationOptions(viaApi.locations),
+      };
+    }
   } catch {
     // fall through to direct RPC
   }
@@ -138,7 +144,7 @@ export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck 
     years: ['All', ...asList('years')],
     makes: ['All', ...asList('makes')],
     models: ['All', ...asList('models')],
-    locations: ['All', ...asList('locations')],
+    locations: sanitizeVdpLocationOptions(['All', ...asList('locations')]),
     types: ['All', ...asList('types')],
   };
 }
