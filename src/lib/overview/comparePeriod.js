@@ -73,7 +73,7 @@ export function formatRangeLabel(from, to) {
 export function pctChange(current, previous) {
   const c = Number(current) || 0;
   const p = Number(previous) || 0;
-  if (p === 0) return c > 0 ? 100 : 0;
+  if (p === 0) return 0;
   return Math.round(((c - p) / p) * 100);
 }
 

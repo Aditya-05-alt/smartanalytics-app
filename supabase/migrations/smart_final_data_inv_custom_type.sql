@@ -101,6 +101,7 @@ BEGIN
   END IF;
 
   -- Build URL → type map once for this dealer (no per-row inventory subquery).
+  -- Always re-resolve from current inv_type_raw_key so a wrong-key refresh can be overwritten.
   WITH inv_map AS (
     SELECT DISTINCT ON (lower(btrim(i.url)))
       lower(btrim(i.url)) AS url_lower,
@@ -130,17 +131,12 @@ BEGIN
     WHERE s.client_id::text = trim(p_client_id)
       AND s.report_date BETWEEN p_date_from AND p_date_to
   ),
-  to_apply AS (
-    SELECT x.row_ctid, x.inv_url, x.new_type
-    FROM matched x
-    WHERE x.new_type IS NOT NULL
-  ),
   upd AS (
     UPDATE public.smart_final_data AS s
     SET inv_custom_type = t.new_type
-    FROM to_apply t
+    FROM matched t
     WHERE s.ctid = t.row_ctid
-      AND NULLIF(TRIM(s.inv_custom_type), '') IS DISTINCT FROM t.new_type
+      AND NULLIF(TRIM(s.inv_custom_type), '') IS DISTINCT FROM NULLIF(TRIM(t.new_type), '')
     RETURNING NULLIF(TRIM(s.inv_url), '') AS inv_url
   )
   SELECT
@@ -154,12 +150,13 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.backfill_inv_custom_type(text, date, date) IS
-  'Fill inv_custom_type for one dealer + short date range (prefer 1 day). '
-  'Joins inventory URL map once — no per-row raw_data scan.';
+  'Re-map inv_custom_type for one dealer + short date range (prefer 1 day). '
+  'Overwrites previous values from the current inv_type_raw_key (clears when unresolved).';
 
 GRANT EXECUTE ON FUNCTION public.backfill_inv_custom_type(text, date, date)
   TO service_role;
 
--- After deploy: set key in Admin → Dealers, pick date range, Refresh types (1 day/batch).
+-- After deploy: set the CORRECT key in Admin → Dealers, pick date range, Refresh types.
+-- Re-running with a fixed key overrides a mistaken earlier refresh.
 -- Manual:
 --   SELECT * FROM public.backfill_inv_custom_type('YOUR_GA4_CLIENT_ID', '2026-07-02', '2026-07-02');

@@ -110,7 +110,7 @@ SQL definitions live under `supabase/rpc/*.sql`. Deploy in Supabase SQL Editor w
 | `p_days_back` | Legacy lookback from today. |
 | `p_date_from` / `p_date_to` | **Preferred** — exact UI date range. |
 
-**What it does:** Deletes/rebuilds `smart_final_data` for the range; joins page data with inventory (Hoot match).
+**What it does:** Deletes/rebuilds `smart_final_data` for the range; joins page data with Hoot inventory. Dealer name match is **case-insensitive** (`Zoomers Rv` ↔ `Zoomers RV`).
 
 **Frontend caller:** `runFinalVdpSync()` → `src/lib/pipeline/pipelineRpc.js`  
 **API:** `POST /api/admin/pipeline/final-sync`  

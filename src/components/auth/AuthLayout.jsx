@@ -2,12 +2,19 @@ import Logo from '@/components/ui/Logo';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
 const STATS = [
-  { label: 'VDP Views',      value: '0', delta: '—', tone: 'ne' },
-  { label: 'Warm Leads',     value: '0', delta: '—', tone: 'ne' },
-  { label: 'Local Visitors', value: '0', delta: '—', tone: 'ne' },
+  { label: 'VDP Views', value: '48.2K', delta: '+12%', tone: 'up' },
+  { label: 'Warm Leads', value: '1,240', delta: '+8%', tone: 'up' },
+  { label: 'Local Visitors', value: '63%', delta: '+3pp', tone: 'up' },
 ];
 
-const BARS = Array(12).fill(0);
+/** Fixed heights (%) so SSR/client match and the preview looks like a real series. */
+const BARS = [42, 55, 48, 68, 61, 74, 58, 82, 70, 88, 76, 92];
+
+const TONE_COLOR = {
+  up: 'var(--acc)',
+  ne: 'var(--t3)',
+  dn: '#f87171',
+};
 
 export default function AuthLayout({ children }) {
   return (
@@ -51,7 +58,7 @@ export default function AuthLayout({ children }) {
             RV, Auto, Powersports & Marine — in a single, fast dashboard.
           </p>
 
-          {/* fake chart preview */}
+          {/* decorative chart preview (mock data for design only) */}
           <div
             className="mt-10 rounded-[14px] p-5 max-w-md animate-fade-up"
             style={{
@@ -66,19 +73,20 @@ export default function AuthLayout({ children }) {
               </div>
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded"
-                style={{ background: 'var(--s3)', color: 'var(--t3)' }}
+                style={{ background: 'rgba(200,232,122,.15)', color: 'var(--acc)' }}
               >
-                — MoM
+                +12% MoM
               </span>
             </div>
-            <div className="flex items-end gap-1 h-20">
-              {BARS.map((_, i) => (
+            <div className="flex items-end gap-1.5 h-24" aria-hidden="true">
+              {BARS.map((height, i) => (
                 <div
                   key={i}
-                  className="flex-1 rounded-t-[3px]"
+                  className="flex-1 rounded-t-[4px]"
                   style={{
-                    height: '4%',
-                    background: 'var(--s3)',
+                    height: `${height}%`,
+                    background: 'var(--acc)',
+                    opacity: 0.45 + (height / 100) * 0.55,
                   }}
                 />
               ))}
@@ -93,7 +101,10 @@ export default function AuthLayout({ children }) {
                     <span className="font-display font-bold text-[16px]" style={{ color: 'var(--t)' }}>
                       {s.value}
                     </span>
-                    <span className="text-[10px] font-bold" style={{ color: 'var(--t3)' }}>
+                    <span
+                      className="text-[10px] font-bold"
+                      style={{ color: TONE_COLOR[s.tone] || TONE_COLOR.ne }}
+                    >
                       {s.delta}
                     </span>
                   </div>

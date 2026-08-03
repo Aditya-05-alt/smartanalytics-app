@@ -1,6 +1,7 @@
 -- Deploy in Supabase SQL editor. Called by Admin Pipeline Step 3 (build_smart_final_data).
 -- Prefer p_date_from / p_date_to (matches UI From -> To). Falls back to p_days_back.
 -- Hoot inventory only (smart_hoot_inventory). For scrap fallback use build_smart_final_data_scrap.
+-- Inventory dealer name match is case-insensitive (e.g. "Zoomers Rv" ↔ "Zoomers RV").
 
 CREATE OR REPLACE FUNCTION public.build_smart_final_data(
   p_client_id text DEFAULT NULL,
@@ -79,8 +80,9 @@ BEGIN
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
   inv_norm AS (
-    SELECT DISTINCT ON (i.customer_name, LOWER(TRIM(i.url)))
+    SELECT DISTINCT ON (LOWER(TRIM(i.customer_name)), LOWER(TRIM(i.url)))
       i.customer_name,
+      LOWER(TRIM(i.customer_name)) AS customer_name_key,
       LOWER(TRIM(i.url)) AS url_lower,
       i.sk, i.vin, i.url, i.make, i.model, i.year, i.trim,
       i.price, i.msrp, i.condition, i.type_, i.stock_number,
@@ -88,7 +90,7 @@ BEGIN
     FROM public.smart_hoot_inventory i
     WHERE i.url IS NOT NULL
       AND i.url <> ''
-    ORDER BY i.customer_name, LOWER(TRIM(i.url)),
+    ORDER BY LOWER(TRIM(i.customer_name)), LOWER(TRIM(i.url)),
              i.last_seen DESC NULLS LAST,
              i.first_seen DESC NULLS LAST
   ),
@@ -118,7 +120,7 @@ BEGIN
     LEFT JOIN config_unique c
            ON trim(c.ga4_customer_id::text) = trim(u.client_id)
     LEFT JOIN inv_norm iu
-           ON iu.customer_name = c.customer_name
+           ON iu.customer_name_key = LOWER(TRIM(c.customer_name))
           AND u.page_path IS NOT NULL
           AND u.page_path <> ''
           AND iu.url_lower LIKE '%' || LOWER(TRIM(u.page_path)) || '%'

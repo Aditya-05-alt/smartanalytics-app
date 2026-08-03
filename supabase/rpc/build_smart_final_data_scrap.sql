@@ -2,6 +2,7 @@
 -- Requires: extract_vin_from_text.sql, inventory_matches_ga4_page_path.sql (run those first).
 -- Same params + return shape as build_smart_final_data.
 -- Match: VIN from page_path ↔ scrap/hoot inventory (OR legacy URL contains page_path).
+-- Hoot/scrap dealer name match is case-insensitive (e.g. "Zoomers Rv" ↔ "Zoomers RV").
 -- Call explicitly from cron/edge or admin — does NOT replace build_smart_final_data.
 
 CREATE OR REPLACE FUNCTION public.build_smart_final_data_scrap(
@@ -81,8 +82,9 @@ BEGIN
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
   hoot_inv_norm AS (
-    SELECT DISTINCT ON (i.customer_name, LOWER(TRIM(i.url)))
+    SELECT DISTINCT ON (LOWER(TRIM(i.customer_name)), LOWER(TRIM(i.url)))
       i.customer_name::text AS customer_name,
+      LOWER(TRIM(i.customer_name)) AS customer_name_key,
       NULL::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
       COALESCE(
@@ -107,16 +109,17 @@ BEGIN
     FROM public.smart_hoot_inventory i
     WHERE i.url IS NOT NULL
       AND i.url <> ''
-    ORDER BY i.customer_name, LOWER(TRIM(i.url)),
+    ORDER BY LOWER(TRIM(i.customer_name)), LOWER(TRIM(i.url)),
              i.last_seen DESC NULLS LAST,
              i.first_seen DESC NULLS LAST
   ),
   scrap_inv_norm AS (
     SELECT DISTINCT ON (
-      COALESCE(NULLIF(TRIM(i.customer_id), ''), i.customer_name),
+      COALESCE(NULLIF(TRIM(i.customer_id), ''), LOWER(TRIM(i.customer_name))),
       LOWER(TRIM(i.url))
     )
       i.customer_name::text AS customer_name,
+      LOWER(TRIM(i.customer_name)) AS customer_name_key,
       NULLIF(TRIM(i.customer_id), '')::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
       COALESCE(
@@ -141,14 +144,14 @@ BEGIN
     FROM public.smart_scrap_inventory i
     WHERE i.url IS NOT NULL
       AND i.url <> ''
-    ORDER BY COALESCE(NULLIF(TRIM(i.customer_id), ''), i.customer_name),
+    ORDER BY COALESCE(NULLIF(TRIM(i.customer_id), ''), LOWER(TRIM(i.customer_name))),
              LOWER(TRIM(i.url)),
              i.last_seen DESC NULLS LAST,
              i.first_seen DESC NULLS LAST
   ),
   inv_pool AS (
     SELECT
-      h.customer_name, h.ga4_customer_id,
+      h.customer_name, h.customer_name_key, h.ga4_customer_id,
       h.url_lower, h.vin_key, h.sk, h.vin, h.url, h.make, h.model, h.year, h.trim,
       h.price, h.msrp, h.condition, h.type_, h.stock_number,
       h.location, h.first_seen, h.last_seen,
@@ -156,7 +159,7 @@ BEGIN
     FROM hoot_inv_norm h
     UNION ALL
     SELECT
-      s.customer_name, s.ga4_customer_id,
+      s.customer_name, s.customer_name_key, s.ga4_customer_id,
       s.url_lower, s.vin_key, s.sk, s.vin, s.url, s.make, s.model, s.year, s.trim,
       s.price, s.msrp, s.condition, s.type_, s.stock_number,
       s.location, s.first_seen, s.last_seen,
@@ -190,7 +193,10 @@ BEGIN
     LEFT JOIN inv_pool iu
            ON (
                 iu.ga4_customer_id = trim(u.client_id)
-             OR (c.customer_name IS NOT NULL AND iu.customer_name = c.customer_name)
+             OR (
+                  c.customer_name IS NOT NULL
+                  AND iu.customer_name_key = LOWER(TRIM(c.customer_name))
+                )
               )
           AND u.page_path IS NOT NULL
           AND u.page_path <> ''

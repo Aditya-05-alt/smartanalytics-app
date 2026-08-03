@@ -51,7 +51,7 @@ export const FORM_FIELDS = [
     label: 'Custom type raw_data key',
     section: 'hoot',
     placeholder: 'e.g. Custom label 1, Vehicle Type, Body Style',
-    hint: 'Hoot only — exact raw_data key. Refresh runs 1 day/batch with pause (fast inventory join). Cron/Step 3 keeps future rows updated.',
+    hint: 'Hoot only — exact raw_data key. Re-run Refresh with the correct key to overwrite a mistaken refresh. Cron/Step 3 keeps future rows updated.',
   },
   {
     key: 'websitePlatform',

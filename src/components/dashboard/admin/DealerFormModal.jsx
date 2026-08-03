@@ -379,7 +379,8 @@ export default function DealerFormModal({
               <p className="dealers-modal-hint dealers-refresh-range-hint">
                 Step 1-style batching: <strong>1 day per batch</strong> with a{' '}
                 {PAUSE_BETWEEN_BATCHES_MS / 1000}s pause (avoids statement timeout on large
-                dealers). Does not change pipeline — only maps <code>inv_custom_type</code>.
+                dealers). Re-run with the correct key to <strong>overwrite</strong> a mistaken
+                refresh — clears rows that no longer resolve. Does not change pipeline.
               </p>
             </div>
           )}
