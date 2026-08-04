@@ -5563,6 +5563,106 @@ body {
   color: var(--t3);
 }
 .cmp-table-error { color: var(--red); }
+
+/* VDP page title × channel matrix */
+.vdp-page-title-panel { width: 100%; }
+.vdp-page-title-note {
+  margin: 0 0 .75rem;
+  padding: 0 .125rem;
+  font-size: 11px;
+  color: var(--t3);
+}
+.vdp-page-title-wrap { max-height: 420px; }
+.vdp-page-title-tbl thead tr:first-child th {
+  text-align: right;
+  padding: 0;
+}
+.vdp-page-title-tbl .vdp-pt-th-title,
+.vdp-page-title-tbl .vdp-pt-td-title {
+  text-align: left;
+  min-width: 280px;
+  max-width: none;
+  width: 42%;
+}
+/* Do not treat last data row as a totals row (shared .cmp-tbl style). */
+.vdp-page-title-tbl tbody tr:last-child td {
+  background: transparent;
+  font-weight: inherit;
+  color: inherit;
+  border-bottom: 1px solid var(--bd);
+}
+.vdp-page-title-tbl tbody tr:hover td {
+  background: var(--s2);
+}
+.vdp-pt-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  cursor: pointer;
+}
+.vdp-pt-th-title .vdp-pt-sort-btn {
+  justify-content: flex-start;
+}
+.vdp-pt-sort-btn:hover,
+.vdp-pt-sort-btn.is-active {
+  color: var(--t);
+}
+.vdp-pt-sort-icons {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 0.85;
+  font-size: 7px;
+  opacity: 0.35;
+}
+.vdp-pt-sort-btn.is-active .vdp-pt-sort-icons {
+  opacity: 1;
+}
+.vdp-pt-sort-icons .is-on {
+  color: var(--acc);
+}
+.vdp-pt-th-num,
+.vdp-pt-td-num {
+  text-align: right !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  min-width: 88px;
+}
+.vdp-pt-td-title {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.35;
+  word-break: break-word;
+  vertical-align: top;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.vdp-pt-link {
+  color: var(--blue, #6fa0ff);
+  text-decoration: none;
+  display: inline;
+  white-space: normal;
+}
+.vdp-pt-link:hover {
+  text-decoration: underline;
+  color: var(--acc);
+}
+.vdp-pt-td-total {
+  font-weight: 600;
+  color: var(--t);
+}
+
 .cmp-table-foot {
   padding: .5rem .875rem;
   border-top: 1px solid var(--bd);

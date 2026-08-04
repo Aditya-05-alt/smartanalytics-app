@@ -287,6 +287,36 @@ export async function fetchMakeBreakdown({
   return data || [];
 }
 
+/** VDP page title × channel matrix (Top 5 / Top 10 / All). */
+export async function fetchVdpPageTitleByChannel({
+  clientId,
+  from,
+  to,
+  limit = 10,
+  vdpFilters,
+  tab = 'vdp',
+  onCancelCheck,
+}) {
+  const supabase = createClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  if (onCancelCheck?.()) return null;
+
+  const params = {
+    p_client_id: String(clientId).trim(),
+    p_from: toDateOnly(from),
+    p_to: toDateOnly(to),
+    p_limit: limit,
+    ...vdpRpcExtraParams(vdpFilters, tab),
+  };
+
+  const { data, error } = await supabase.rpc('get_vdp_page_title_by_channel', params);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to fetch VDP page title channels.');
+  }
+  return data || [];
+}
+
 /** Type breakdown from smart_final_data (VDP tab only). */
 export async function fetchTypeBreakdown({
   clientId,

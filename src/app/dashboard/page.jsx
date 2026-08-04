@@ -12,6 +12,7 @@ import YearBreakdown from '@/components/dashboard/YearBreakdown';
 import ConditionBreakdown from '@/components/dashboard/ConditionBreakdown';
 // import TopCampaigns from '@/components/dashboard/TopCampaigns';
 import CmpTable from '@/components/dashboard/overview/CmpTable';
+import VdpPageTitleChannelTable from '@/components/dashboard/overview/VdpPageTitleChannelTable';
 // import MakesTable from '@/components/dashboard/overview/MakesTable';
 // import ProximityBars from '@/components/dashboard/overview/ProximityBars';
 // import WarmLeads from '@/components/dashboard/overview/WarmLeads';
@@ -151,6 +152,14 @@ function DealerOverviewBody() {
                 clientId={clientKey}
                 from={from}
                 to={to}
+              />
+            </div>
+            <div className="dashboard-full-row">
+              <VdpPageTitleChannelTable
+                clientId={clientKey}
+                from={from}
+                to={to}
+                limit={10}
               />
             </div>
           </>
