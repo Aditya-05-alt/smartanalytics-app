@@ -5,17 +5,44 @@ import {
   BREAKDOWN_UI_CHUNK_DAYS,
   resolveRpcChunkPlan,
 } from '@/lib/api/rpcChunkPlan';
+import { dayCountInclusive } from '@/lib/ga4/dateRange';
 import {
   getChannelBreakdownCache,
   setChannelBreakdownCache,
 } from '@/lib/data/channelBreakdownCache';
 import {
   appendVdpFiltersToSearchParams,
+  channelBreakdownLabVdpFilters,
   channelBreakdownVdpFilters,
   channelFilterCacheSuffix,
+  channelFilterLabCacheSuffix,
   channelFiltersActive,
+  channelFiltersActiveLab,
+  normalizeVdpFilters,
   vdpRpcExtraParams,
 } from '@/lib/vdp/vdpFilterParams';
+
+const LIVE_RPC = 'get_ga4_channel_breakdown';
+const LAB_RPC = 'get_ga4_channel_breakdown_lab';
+
+function resolveChannelFilterMode(vdpFilters, labMode) {
+  if (labMode) {
+    return {
+      channelFilters: channelBreakdownLabVdpFilters(vdpFilters),
+      filtersActive: channelFiltersActiveLab(vdpFilters, 'vdp'),
+      cacheSuffix: channelFilterLabCacheSuffix(vdpFilters, 'vdp'),
+      rpcName: LAB_RPC,
+      apiPath: '/api/dashboard/channel-breakdown-lab',
+    };
+  }
+  return {
+    channelFilters: channelBreakdownVdpFilters(vdpFilters),
+    filtersActive: channelFiltersActive(vdpFilters, 'vdp'),
+    cacheSuffix: channelFilterCacheSuffix(vdpFilters, 'vdp'),
+    rpcName: LIVE_RPC,
+    apiPath: '/api/dashboard/channel-breakdown',
+  };
+}
 
 async function fetchChannelBreakdownViaApi({
   clientId,
@@ -24,13 +51,13 @@ async function fetchChannelBreakdownViaApi({
   pageTypeFilter,
   vdpFilters,
   tab,
+  labMode = false,
   onCancelCheck,
 }) {
   if (typeof window === 'undefined') return null;
   if (onCancelCheck?.()) return null;
 
-  // Same filters as VDP except location (location blanks channel join).
-  const channelFilters = channelBreakdownVdpFilters(vdpFilters);
+  const { channelFilters, apiPath } = resolveChannelFilterMode(vdpFilters, labMode);
 
   const qs = new URLSearchParams({
     clientId,
@@ -40,7 +67,7 @@ async function fetchChannelBreakdownViaApi({
   });
   appendVdpFiltersToSearchParams(qs, channelFilters, tab);
 
-  const res = await fetch(`/api/dashboard/channel-breakdown?${qs}`, {
+  const res = await fetch(`${apiPath}?${qs}`, {
     credentials: 'same-origin',
   });
   const json = await res.json().catch(() => ({}));
@@ -61,6 +88,7 @@ async function fetchViaClientProgressive({
   pageTypeFilter,
   vdpFilters,
   tab,
+  labMode = false,
   onCancelCheck,
   onProgress,
   chunkDays,
@@ -70,42 +98,46 @@ async function fetchViaClientProgressive({
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
 
-  const channelFilters = channelBreakdownVdpFilters(vdpFilters);
+  const { channelFilters, filtersActive, rpcName } = resolveChannelFilterMode(
+    vdpFilters,
+    labMode
+  );
   const extraParams = {
     p_page_type: pageTypeFilter,
     ...vdpRpcExtraParams(channelFilters, tab),
   };
 
-  const invFilters = channelFiltersActive(vdpFilters, tab);
   let resolvedChunkDays = chunkDays ?? BREAKDOWN_UI_CHUNK_DAYS;
   let resolvedConcurrency = concurrency ?? 1;
   if (adaptiveChunks) {
     const plan = resolveRpcChunkPlan(from, to, {
-      invFilters,
+      invFilters: filtersActive,
       pageType: pageTypeFilter,
     });
     resolvedChunkDays = chunkDays ?? plan.chunkDays;
     resolvedConcurrency = concurrency ?? plan.concurrency;
   }
 
-  const raw = await rpcByDateChunksProgressive(
-    supabase,
-    'get_ga4_channel_breakdown',
-    {
-      clientId,
-      from,
-      to,
-      extraParams,
-      chunkDays: resolvedChunkDays,
-      concurrency: resolvedConcurrency,
-      onCancelCheck,
-      onBatch: (batchRows, meta) => {
-        if (onCancelCheck?.()) return;
-        const merged = mergeChannelBreakdownRows(batchRows);
-        onProgress?.(merged, meta);
-      },
-    }
-  );
+  // Lab VDP: one wider window (simple final⋈ga4 join). Bisect handles timeouts.
+  if (labMode && String(pageTypeFilter).toUpperCase() === 'VDP') {
+    resolvedChunkDays = Math.max(dayCountInclusive(from, to) || 31, 1);
+    resolvedConcurrency = 1;
+  }
+
+  const raw = await rpcByDateChunksProgressive(supabase, rpcName, {
+    clientId,
+    from,
+    to,
+    extraParams,
+    chunkDays: resolvedChunkDays,
+    concurrency: resolvedConcurrency,
+    onCancelCheck,
+    onBatch: (batchRows, meta) => {
+      if (onCancelCheck?.()) return;
+      const merged = mergeChannelBreakdownRows(batchRows);
+      onProgress?.(merged, meta);
+    },
+  });
 
   if (onCancelCheck?.()) return null;
   return mergeChannelBreakdownRows(raw || []);
@@ -113,8 +145,9 @@ async function fetchViaClientProgressive({
 
 /**
  * Fetch channel breakdown for ONE page type only (ALL | VDP | SRP | Home | Other).
- * Streams partial results every BREAKDOWN_UI_CHUNK_DAYS as chunks complete.
- * Applies make/model/type/year/condition filters; location is ignored for channel.
+ * Live: location ignored (channelBreakdownVdpFilters).
+ * Lab (labMode=true): location included — same filter room as make/year/type/KPI
+ *   via get_ga4_channel_breakdown_lab + vdp_location_filter_match.
  */
 export async function fetchChannelBreakdownBundle({
   clientId,
@@ -123,6 +156,7 @@ export async function fetchChannelBreakdownBundle({
   pageTypeFilter = 'ALL',
   vdpFilters,
   tab = 'all',
+  labMode = false,
   onCancelCheck,
   onProgress,
   skipCache = false,
@@ -133,7 +167,13 @@ export async function fetchChannelBreakdownBundle({
 }) {
   if (!clientId || !from || !to) return [];
 
-  const cacheSuffix = channelFilterCacheSuffix(vdpFilters, tab);
+  const { cacheSuffix } = resolveChannelFilterMode(vdpFilters, labMode);
+  const cacheTab = labMode ? 'vdp' : tab;
+
+  // Lab: always hit server API (service role + full-range RPC). Avoid anon RLS gaps.
+  if (labMode) {
+    preferServer = true;
+  }
 
   if (!skipCache) {
     const cached = getChannelBreakdownCache(
@@ -157,12 +197,18 @@ export async function fetchChannelBreakdownBundle({
         to,
         pageTypeFilter,
         vdpFilters,
-        tab,
+        tab: cacheTab,
+        labMode,
         onCancelCheck,
       });
-      if (viaApi) {
+      if (viaApi != null) {
         onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
-        if (!skipCache) {
+        // Don't cache empty lab results when location is set — avoids sticky 0 after RPC fix
+        const locActive =
+          labMode &&
+          normalizeVdpFilters(vdpFilters).location &&
+          normalizeVdpFilters(vdpFilters).location !== 'All';
+        if (!skipCache && !(locActive && viaApi.length === 0)) {
           setChannelBreakdownCache(
             clientId,
             from,
@@ -186,7 +232,8 @@ export async function fetchChannelBreakdownBundle({
     to,
     pageTypeFilter,
     vdpFilters,
-    tab,
+    tab: cacheTab,
+    labMode,
     onCancelCheck,
     onProgress,
     chunkDays,

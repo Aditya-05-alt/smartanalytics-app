@@ -31,14 +31,22 @@ export function vdpFiltersActive(vdpFilters, tab) {
 }
 
 /**
- * Channel Breakdown: same filters as VDP except location (location blanks the GA4 join).
- * Make / model / type / year / condition still update channel totals.
+ * Channel Breakdown filters for live Overview.
+ * Location is stripped — live channel SQL historically blanked with location.
  */
 export function channelBreakdownVdpFilters(vdpFilters) {
   return {
     ...normalizeVdpFilters(vdpFilters),
     location: 'All',
   };
+}
+
+/**
+ * VDP Lab only: FULL inventory filter contract (same as make/year/type/KPI).
+ * Location is included and sent as p_locations → get_ga4_channel_breakdown_lab.
+ */
+export function channelBreakdownLabVdpFilters(vdpFilters) {
+  return normalizeVdpFilters(vdpFilters);
 }
 
 /** True when channel-relevant inventory filters are active (excludes location). */
@@ -54,9 +62,28 @@ export function channelFiltersActive(vdpFilters, tab) {
   );
 }
 
-/** Cache key for channel fetches — ignores location. */
+/** Lab: location is a first-class filter (same room as make/year/type). */
+export function channelFiltersActiveLab(vdpFilters, tab) {
+  if (tab !== 'vdp') return false;
+  const f = channelBreakdownLabVdpFilters(vdpFilters);
+  return (
+    f.year !== 'All' ||
+    (f.condition !== 'All' && f.condition !== 'Used + New') ||
+    f.make !== 'All' ||
+    f.model !== 'All' ||
+    f.type !== 'All' ||
+    f.location !== 'All'
+  );
+}
+
+/** Cache key for channel fetches — ignores location (live). */
 export function channelFilterCacheSuffix(vdpFilters, tab) {
   return vdpFilterCacheSuffix(channelBreakdownVdpFilters(vdpFilters), tab);
+}
+
+/** Lab cache key — includes location (v7: Unassigned fallback RPC). */
+export function channelFilterLabCacheSuffix(vdpFilters, tab) {
+  return `|labv7${vdpFilterCacheSuffix(channelBreakdownLabVdpFilters(vdpFilters), tab)}`;
 }
 
 /** Map UI filters → Supabase RPC params (VDP tab only). */
@@ -112,7 +139,10 @@ export function appendInvParamsToSearchParams(searchParams, inv) {
   if (inv.p_makes?.length) searchParams.set('makes', inv.p_makes.join(','));
   if (inv.p_models?.length) searchParams.set('models', inv.p_models.join(','));
   if (inv.p_types?.length) searchParams.set('types', inv.p_types.join(','));
-  if (inv.p_locations?.length) searchParams.set('locations', inv.p_locations.join(','));
+  // Location names contain commas ("Jackson, TN") — use | delimiter, not comma
+  if (inv.p_locations?.length) {
+    searchParams.set('locations', inv.p_locations.join('|'));
+  }
   if (inv.p_condition && inv.p_condition !== 'BOTH') {
     searchParams.set('condition', inv.p_condition);
   }
@@ -156,6 +186,16 @@ export function parseInvRpcFromSearchParams(searchParams) {
   const locations = searchParams.get('locations')?.trim();
   const condition = searchParams.get('condition')?.trim()?.toUpperCase();
 
+  // Location names contain commas ("Jackson, TN"). Prefer | delimiter;
+  // if no | present, treat the whole string as one location (UI is single-select).
+  const parseLocations = (raw) => {
+    if (!raw) return undefined;
+    if (raw.includes('|')) {
+      return raw.split('|').map((s) => s.trim()).filter(Boolean);
+    }
+    return [raw.trim()];
+  };
+
   return {
     ...(years
       ? { p_years: years.split(',').map((y) => parseInt(y, 10)).filter(Number.isFinite) }
@@ -163,9 +203,7 @@ export function parseInvRpcFromSearchParams(searchParams) {
     ...(makes ? { p_makes: makes.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
     ...(models ? { p_models: models.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
     ...(types ? { p_types: types.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
-    ...(locations
-      ? { p_locations: locations.split(',').map((s) => s.trim()).filter(Boolean) }
-      : {}),
+    ...(parseLocations(locations) ? { p_locations: parseLocations(locations) } : {}),
     ...(condition && condition !== 'BOTH' ? { p_condition: condition } : { p_condition: 'BOTH' }),
   };
 }

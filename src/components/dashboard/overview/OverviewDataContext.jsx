@@ -27,6 +27,7 @@ import {
 } from '@/lib/data/overviewCache';
 import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
 import { enumerateDatesInclusive, toCalendarISO } from '@/lib/ga4/dateRange';
+import { useIsVdpLab } from '@/components/dashboard/overview/VdpLabContext';
 import {
   previousMonthAlignedRange,
   periodMonthLabel,
@@ -201,6 +202,7 @@ function chartDateListAndSeries(dateList, seriesByTab) {
 
 export function OverviewProvider({ children }) {
   const { client, isAllDealer } = useClient();
+  const labMode = useIsVdpLab();
 
   const [tab, setTabState] = useState(() => readStoredOverviewTab() || 'vdp');
   const setTab = useCallback((nextTab) => {
@@ -671,7 +673,8 @@ export function OverviewProvider({ children }) {
     };
   }, [clientKey, lyFrom, lyTo, vdpFilters]);
 
-  // ── VDP channel breakdown (all filters except location; KPI uses filtered daily) ──
+  // ── VDP channel breakdown ──
+  // Live: location stripped in JS. Lab: full filters incl. location → lab RPC.
   useEffect(() => {
     if (!clientKey || !from || !to || !compareFrom || !compareTo) {
       setVdpChannelCurRows([]);
@@ -692,9 +695,10 @@ export function OverviewProvider({ children }) {
     const fetchOpts = {
       clientId: clientKey,
       pageTypeFilter: 'VDP',
-      // Location ignored for channel; make/model/type/year/condition still apply.
+      // Live: location ignored. Lab: location applied via lab RPC.
       vdpFilters,
       tab: 'vdp',
+      labMode,
       onCancelCheck: () => cancelled,
       adaptiveChunks: true,
       preferServer: true,
@@ -749,6 +753,7 @@ export function OverviewProvider({ children }) {
     lyFrom,
     lyTo,
     vdpFilters,
+    labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
   ]);

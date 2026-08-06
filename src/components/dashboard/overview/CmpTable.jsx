@@ -6,6 +6,7 @@ import Delta from '../Delta';
 import ChannelGroupToggle from './ChannelGroupToggle';
 import CompareBreakdownSection from '../CompareBreakdownSection';
 import { useOverview } from './OverviewDataContext';
+import { useIsVdpLab } from './VdpLabContext';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { colorForChannel } from '@/lib/ga4/channelDisplay';
 import {
@@ -56,6 +57,7 @@ export default function CmpTable() {
     vdpChannelComparison,
   } = useOverview();
 
+  const labMode = useIsVdpLab();
   const [allCurRows, setAllCurRows] = useState([]);
   const [allCmpRows, setAllCmpRows] = useState([]);
   const [allLyCurRows, setAllLyCurRows] = useState(null);
@@ -104,6 +106,7 @@ export default function CmpTable() {
       pageTypeFilter: 'ALL',
       vdpFilters,
       tab: 'all',
+      labMode,
       onCancelCheck: () => cancelled,
       adaptiveChunks: true,
     };
@@ -158,6 +161,7 @@ export default function CmpTable() {
     lyFrom,
     lyTo,
     vdpFilters,
+    labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
   ]);

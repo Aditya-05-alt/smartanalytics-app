@@ -42,6 +42,13 @@ const ICONS = {
       <circle cx="16.5" cy="17" r="1.5" />
     </svg>
   ),
+  vdplab: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M9 3h6" />
+      <path d="M10 3v7.5L5.5 18a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3L14 10.5V3" />
+      <path d="M8.5 14h7" />
+    </svg>
+  ),
   admin: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="8" r="4" />
@@ -58,6 +65,7 @@ const ICONS = {
 
 const ITEMS = [
   { id: 'overview', href: '/dashboard', title: 'Overview' },
+  { id: 'vdplab', href: '/dashboard/vdp-lab', title: 'VDP Lab' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
   { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
   { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
@@ -110,6 +118,7 @@ export default function SideBar() {
   const activeId = useMemo(() => {
     if (pathname === '/dashboard') return 'overview';
     if (pathname.startsWith('/dashboard/admin')) return 'admin';
+    if (pathname.startsWith('/dashboard/vdp-lab')) return 'vdplab';
     const seg = pathname.replace('/dashboard/', '').split('/')[0];
     return seg || 'overview';
   }, [pathname]);
@@ -118,7 +127,11 @@ export default function SideBar() {
     () =>
       accessLoading
         ? []
-        : ITEMS.filter((item) => canAccessReport(access, item.id)),
+        : ITEMS.filter((item) =>
+            item.id === 'vdplab'
+              ? canAccessReport(access, 'overview')
+              : canAccessReport(access, item.id)
+          ),
     [access, accessLoading]
   );
 

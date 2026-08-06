@@ -24,7 +24,14 @@ function isMissingRpcError(error) {
   return /function.*does not exist|could not find the function|schema cache/i.test(msg);
 }
 
-async function rpcLocationBreakdown(supabase, params) {
+async function rpcLocationBreakdown(supabase, params, labMode = false) {
+  if (labMode) {
+    let result = await supabase.rpc('get_dealer_location_breakdown_lab', params);
+    if (result.error && isMissingRpcError(result.error)) {
+      result = await supabase.rpc('get_location_breakdown_lab', params);
+    }
+    return result;
+  }
   let result = await supabase.rpc('get_dealer_location_breakdown', params);
   if (result.error && isMissingRpcError(result.error)) {
     result = await supabase.rpc('get_location_breakdown', params);
@@ -486,7 +493,7 @@ async function fetchLocationFromTable(supabase, params, onCancelCheck) {
 }
 
 /** Server route using service role when anon RPC returns [] (RLS). */
-async function fetchLocationBreakdownViaApi(params, onCancelCheck) {
+async function fetchLocationBreakdownViaApi(params, onCancelCheck, labMode = false) {
   if (onCancelCheck?.()) return undefined;
   if (typeof window === 'undefined') return null;
 
@@ -495,10 +502,15 @@ async function fetchLocationBreakdownViaApi(params, onCancelCheck) {
     from: params.p_from,
     to: params.p_to,
   });
+  if (params.p_limit != null) qs.set('limit', String(params.p_limit));
   appendInvParamsToSearchParams(qs, params);
 
+  const apiPath = labMode
+    ? '/api/dashboard/location-breakdown-lab'
+    : '/api/dashboard/location-breakdown';
+
   try {
-    const res = await fetch(`/api/dashboard/location-breakdown?${qs}`);
+    const res = await fetch(`${apiPath}?${qs}`);
     if (!res.ok) return null;
     const json = await res.json();
     if (onCancelCheck?.()) return undefined;
@@ -509,8 +521,9 @@ async function fetchLocationBreakdownViaApi(params, onCancelCheck) {
 }
 
 /**
- * Location breakdown — get_dealer_location_breakdown RPC (configured locations table).
- * Falls back to get_location_breakdown, server API, then direct table read if needed.
+ * Location breakdown — live: get_dealer_location_breakdown.
+ * Lab (labMode): get_dealer_location_breakdown_lab (same filters as channel lab).
+ * Falls back to non-dealer RPC, server API, then direct table read if needed.
  */
 export async function fetchLocationBreakdown({
   clientId,
@@ -519,6 +532,7 @@ export async function fetchLocationBreakdown({
   limit = null,
   vdpFilters,
   tab = 'vdp',
+  labMode = false,
   onCancelCheck,
 }) {
   const supabase = createClient();
@@ -533,15 +547,22 @@ export async function fetchLocationBreakdown({
     ...vdpRpcExtraParams(vdpFilters, tab),
   };
 
-  const { data, error } = await rpcLocationBreakdown(supabase, params);
+  const { data, error } = await rpcLocationBreakdown(supabase, params, labMode);
 
-  if (error) throw new Error(error.message || 'Failed to fetch location breakdown.');
+  if (error) {
+    // Lab RPCs may not be deployed yet — fall through to API / live table read.
+    if (!(labMode && isMissingRpcError(error))) {
+      throw new Error(error.message || 'Failed to fetch location breakdown.');
+    }
+  } else {
+    if (onCancelCheck?.()) return undefined;
+    const rpcRows = normalizeLocationRows(data);
+    if (rpcRows.length > 0) return rpcRows;
+  }
+
   if (onCancelCheck?.()) return undefined;
 
-  const rpcRows = normalizeLocationRows(data);
-  if (rpcRows.length > 0) return rpcRows;
-
-  const apiRows = await fetchLocationBreakdownViaApi(params, onCancelCheck);
+  const apiRows = await fetchLocationBreakdownViaApi(params, onCancelCheck, labMode);
   if (onCancelCheck?.()) return undefined;
   if (apiRows?.length) return apiRows;
 
@@ -549,7 +570,7 @@ export async function fetchLocationBreakdown({
   if (onCancelCheck?.()) return undefined;
   if (tableRows?.length) return tableRows;
 
-  return rpcRows;
+  return [];
 }
 
 /** Active dealers from smart_hoot_config (same source as ClientContext). */

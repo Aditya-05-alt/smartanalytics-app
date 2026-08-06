@@ -8,6 +8,7 @@ import {
 } from '@/lib/data/channelBreakdownCache';
 import {
   channelFilterCacheSuffix,
+  channelFilterLabCacheSuffix,
   channelFiltersActive,
 } from '@/lib/vdp/vdpFilterParams';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
@@ -20,6 +21,7 @@ import { buildDonutCompareDeltas } from '@/lib/overview/comparePeriod';
 import { formatViewsK } from '@/lib/format/viewsK';
 import CompareBreakdownSection from '../CompareBreakdownSection';
 import { useOverview } from './OverviewDataContext';
+import { useIsVdpLab } from './VdpLabContext';
 import BreakdownDonut from './BreakdownDonut';
 
 const TAB_TO_FILTER = {
@@ -61,6 +63,7 @@ function useChannelBreakdownRows({
   vdpFilters,
   tab,
   filterCacheSuffix,
+  labMode = false,
   beginBreakdownLoad,
   endBreakdownLoad,
   reportBreakdownChunk,
@@ -111,7 +114,9 @@ function useChannelBreakdownRows({
     setError(null);
     if (trackBreakdownLoad && initialLoad) beginBreakdownLoad?.();
 
-    const invFiltered = channelFiltersActive(vdpFilters, tab);
+    const invFiltered = labMode
+      ? true
+      : channelFiltersActive(vdpFilters, tab);
 
     fetchChannelBreakdownBundle({
       clientId,
@@ -120,8 +125,9 @@ function useChannelBreakdownRows({
       pageTypeFilter,
       vdpFilters,
       tab,
-      adaptiveChunks: true,
-      preferServer: invFiltered,
+      labMode,
+      adaptiveChunks: !labMode,
+      preferServer: invFiltered || labMode,
       onCancelCheck: () => cancelled,
       onProgress: (partial, meta) => {
         if (cancelled) return;
@@ -157,6 +163,7 @@ function useChannelBreakdownRows({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
     reportBreakdownChunk,
@@ -237,6 +244,7 @@ function ChannelDonutPane({
   tab,
   vdpFilters,
   filterCacheSuffix,
+  labMode = false,
   periodLabel,
   centerLabel,
   chartTopN,
@@ -255,6 +263,7 @@ function ChannelDonutPane({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
     reportBreakdownChunk,
@@ -286,6 +295,7 @@ function ChannelDonutCompare({
   tab,
   vdpFilters,
   filterCacheSuffix,
+  labMode = false,
   currentPeriodLabel,
   comparePeriodLabel,
   centerLabel,
@@ -304,6 +314,7 @@ function ChannelDonutCompare({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
     reportBreakdownChunk,
@@ -318,6 +329,7 @@ function ChannelDonutCompare({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
     reportBreakdownChunk,
@@ -375,6 +387,7 @@ function ChannelDonutSingle({
   tab,
   vdpFilters,
   filterCacheSuffix,
+  labMode = false,
   centerLabel,
   overviewLoading,
   beginBreakdownLoad,
@@ -390,6 +403,7 @@ function ChannelDonutSingle({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
     reportBreakdownChunk,
@@ -467,12 +481,15 @@ export default function ChannelDonut({
     endBreakdownLoad,
     reportBreakdownChunk,
   } = useOverview();
+  const labMode = useIsVdpLab();
 
   const tabId = resolveTabId(pageTypeProp, tab);
   const pageTypeFilter = TAB_TO_FILTER[tabId] || 'ALL';
   const centerLabel = CENTER_LABEL[tabId] || 'ALL VIEWS';
-  // Location excluded from channel cache key / filters.
-  const filterCacheSuffix = channelFilterCacheSuffix(vdpFilters, tabId);
+  // Live ignores location; Lab includes location in cache key / filters.
+  const filterCacheSuffix = labMode
+    ? channelFilterLabCacheSuffix(vdpFilters, tabId)
+    : channelFilterCacheSuffix(vdpFilters, tabId);
 
   const clientId = clientIdProp ?? clientKey;
   const from = fromProp ?? ctxFrom;
@@ -492,6 +509,7 @@ export default function ChannelDonut({
         tab={tabId}
         vdpFilters={vdpFilters}
         filterCacheSuffix={filterCacheSuffix}
+        labMode={labMode}
         currentPeriodLabel={currentPeriodLabel}
         comparePeriodLabel={comparePeriodLabel}
         centerLabel={centerLabel}
@@ -512,6 +530,7 @@ export default function ChannelDonut({
       tab={tabId}
       vdpFilters={vdpFilters}
       filterCacheSuffix={filterCacheSuffix}
+      labMode={labMode}
       centerLabel={centerLabel}
       overviewLoading={overviewLoading}
       beginBreakdownLoad={beginBreakdownLoad}

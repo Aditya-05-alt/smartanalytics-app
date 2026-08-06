@@ -3921,6 +3921,36 @@ body {
   gap: 1rem;
 }
 
+/* VDP Lab — safe clone of live VDP tab */
+.vdp-lab-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 1.25rem .25rem;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--acc) 35%, var(--bd));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--acc) 10%, var(--s2));
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.vdp-lab-banner strong {
+  color: var(--acc);
+  margin-right: 4px;
+}
+.vdp-lab-banner-link {
+  flex-shrink: 0;
+  color: var(--acc);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.vdp-lab-banner-link:hover {
+  text-decoration: underline;
+}
+
 /* ── PANEL ── */
 .panel {
   background: var(--s2);

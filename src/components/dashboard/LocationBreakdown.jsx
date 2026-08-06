@@ -1,6 +1,8 @@
 'use client';
 
+import { useCallback } from 'react';
 import VdpInventoryDonut from '@/components/dashboard/VdpInventoryDonut';
+import { useIsVdpLab } from '@/components/dashboard/overview/VdpLabContext';
 import { fetchLocationBreakdown } from '@/lib/api/dashboardApi';
 
 const LOCATION_COLORS = [
@@ -50,11 +52,17 @@ function toDonutRow(row) {
 }
 
 export default function LocationBreakdown(props) {
+  const labMode = useIsVdpLab();
+  const fetchFn = useCallback(
+    (args) => fetchLocationBreakdown({ ...args, labMode }),
+    [labMode]
+  );
+
   return (
     <VdpInventoryDonut
       title="Location Breakdown"
       centerLabel="VDP VIEWS"
-      fetchFn={fetchLocationBreakdown}
+      fetchFn={fetchFn}
       normalize={normalizeRows}
       errorMessage="Failed to load location breakdown."
       toDonutRow={toDonutRow}
