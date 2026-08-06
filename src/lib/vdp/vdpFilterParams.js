@@ -1,3 +1,5 @@
+import { expandLocationsForRpc } from '@/lib/vdp/locationFilterOptions';
+
 /** Default VDP tab inventory filters (All = no restriction). */
 export const DEFAULT_VDP_FILTERS = {
   year: 'All',
@@ -5,11 +7,32 @@ export const DEFAULT_VDP_FILTERS = {
   make: 'All',
   model: 'All',
   type: 'All',
-  location: 'All',
+  /** Empty array = all locations; otherwise selected location names. */
+  location: [],
 };
 
+/** Normalize location filter to a string[] (empty = All). Accepts legacy 'All' / single string. */
+export function selectedLocations(value) {
+  if (value == null || value === 'All' || value === '') return [];
+  if (Array.isArray(value)) {
+    return [
+      ...new Set(
+        value
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => v && v !== 'All')
+      ),
+    ];
+  }
+  const one = String(value).trim();
+  return one && one !== 'All' ? [one] : [];
+}
+
 export function normalizeVdpFilters(input) {
-  return { ...DEFAULT_VDP_FILTERS, ...(input || {}) };
+  const merged = { ...DEFAULT_VDP_FILTERS, ...(input || {}) };
+  return {
+    ...merged,
+    location: selectedLocations(merged.location),
+  };
 }
 
 function slugPart(value) {
@@ -26,30 +49,26 @@ export function vdpFiltersActive(vdpFilters, tab) {
     f.make !== 'All' ||
     f.model !== 'All' ||
     f.type !== 'All' ||
-    f.location !== 'All'
+    f.location.length > 0
   );
 }
 
 /**
- * Channel Breakdown filters for live Overview.
- * Location is stripped — live channel SQL historically blanked with location.
+ * Channel Breakdown filters — same inventory contract as make/year/type/KPI.
+ * Location is included (aligned with Lab after live SQL path-join fix).
  */
 export function channelBreakdownVdpFilters(vdpFilters) {
-  return {
-    ...normalizeVdpFilters(vdpFilters),
-    location: 'All',
-  };
+  return normalizeVdpFilters(vdpFilters);
 }
 
 /**
- * VDP Lab only: FULL inventory filter contract (same as make/year/type/KPI).
- * Location is included and sent as p_locations → get_ga4_channel_breakdown_lab.
+ * VDP Lab: same full inventory filter contract as live channel.
  */
 export function channelBreakdownLabVdpFilters(vdpFilters) {
   return normalizeVdpFilters(vdpFilters);
 }
 
-/** True when channel-relevant inventory filters are active (excludes location). */
+/** True when any inventory filter (including location) is active for channel. */
 export function channelFiltersActive(vdpFilters, tab) {
   if (tab !== 'vdp') return false;
   const f = channelBreakdownVdpFilters(vdpFilters);
@@ -58,32 +77,24 @@ export function channelFiltersActive(vdpFilters, tab) {
     (f.condition !== 'All' && f.condition !== 'Used + New') ||
     f.make !== 'All' ||
     f.model !== 'All' ||
-    f.type !== 'All'
-  );
-}
-
-/** Lab: location is a first-class filter (same room as make/year/type). */
-export function channelFiltersActiveLab(vdpFilters, tab) {
-  if (tab !== 'vdp') return false;
-  const f = channelBreakdownLabVdpFilters(vdpFilters);
-  return (
-    f.year !== 'All' ||
-    (f.condition !== 'All' && f.condition !== 'Used + New') ||
-    f.make !== 'All' ||
-    f.model !== 'All' ||
     f.type !== 'All' ||
-    f.location !== 'All'
+    f.location.length > 0
   );
 }
 
-/** Cache key for channel fetches — ignores location (live). */
-export function channelFilterCacheSuffix(vdpFilters, tab) {
-  return vdpFilterCacheSuffix(channelBreakdownVdpFilters(vdpFilters), tab);
+/** Lab: same as live channelFiltersActive. */
+export function channelFiltersActiveLab(vdpFilters, tab) {
+  return channelFiltersActive(vdpFilters, tab);
 }
 
-/** Lab cache key — includes location (v7: Unassigned fallback RPC). */
+/** Cache key for live channel — includes location (v2: location-aware). */
+export function channelFilterCacheSuffix(vdpFilters, tab) {
+  return `|chv2${vdpFilterCacheSuffix(channelBreakdownVdpFilters(vdpFilters), tab)}`;
+}
+
+/** Lab cache key — includes location (v9: chunked + fast path join). */
 export function channelFilterLabCacheSuffix(vdpFilters, tab) {
-  return `|labv7${vdpFilterCacheSuffix(channelBreakdownLabVdpFilters(vdpFilters), tab)}`;
+  return `|labv9${vdpFilterCacheSuffix(channelBreakdownLabVdpFilters(vdpFilters), tab)}`;
 }
 
 /** Map UI filters → Supabase RPC params (VDP tab only). */
@@ -99,7 +110,10 @@ export function vdpFiltersToRpcParams(vdpFilters, tab) {
   if (f.make && f.make !== 'All') params.p_makes = [f.make];
   if (f.model && f.model !== 'All') params.p_models = [f.model];
   if (f.type && f.type !== 'All') params.p_types = [f.type];
-  if (f.location && f.location !== 'All') params.p_locations = [f.location];
+  if (f.location.length > 0) {
+    // Include comma / accent spellings so inventory rows still match.
+    params.p_locations = expandLocationsForRpc(f.location);
+  }
 
   if (f.condition === 'Used') params.p_condition = 'USED';
   else if (f.condition === 'New') params.p_condition = 'NEW';
@@ -124,7 +138,14 @@ export function vdpFilterCacheSuffix(vdpFilters, tab) {
   if (f.make !== 'All') parts.push(`mk${slugPart(f.make)}`);
   if (f.model !== 'All') parts.push(`md${slugPart(f.model)}`);
   if (f.type !== 'All') parts.push(`t${slugPart(f.type)}`);
-  if (f.location !== 'All') parts.push(`l${slugPart(f.location)}`);
+  if (f.location.length > 0) {
+    parts.push(
+      `l${[...f.location]
+        .sort()
+        .map((loc) => slugPart(loc))
+        .join('~')}`
+    );
+  }
   return parts.length ? `|${parts.join('-')}` : '';
 }
 
@@ -163,7 +184,13 @@ export function parseVdpFiltersFromSearchParams(searchParams) {
   const makes = parseList('makes');
   const models = parseList('models');
   const types = parseList('types');
-  const locations = parseList('locations');
+  // Location names contain commas ("Jackson, TN") — use | delimiter
+  const locationsRaw = searchParams.get('locations')?.trim();
+  const locations = locationsRaw
+    ? locationsRaw.includes('|')
+      ? locationsRaw.split('|').map((s) => s.trim()).filter(Boolean)
+      : [locationsRaw]
+    : null;
   const condition = searchParams.get('condition')?.trim()?.toUpperCase();
 
   const filters = { ...DEFAULT_VDP_FILTERS };
@@ -171,11 +198,11 @@ export function parseVdpFiltersFromSearchParams(searchParams) {
   if (makes?.length) filters.make = makes[0];
   if (models?.length) filters.model = models[0];
   if (types?.length) filters.type = types[0];
-  if (locations?.length) filters.location = locations[0];
+  if (locations?.length) filters.location = locations;
   if (condition === 'USED') filters.condition = 'Used';
   else if (condition === 'NEW') filters.condition = 'New';
 
-  return filters;
+  return normalizeVdpFilters(filters);
 }
 
 export function parseInvRpcFromSearchParams(searchParams) {
@@ -187,7 +214,7 @@ export function parseInvRpcFromSearchParams(searchParams) {
   const condition = searchParams.get('condition')?.trim()?.toUpperCase();
 
   // Location names contain commas ("Jackson, TN"). Prefer | delimiter;
-  // if no | present, treat the whole string as one location (UI is single-select).
+  // if no | present, treat the whole string as one location.
   const parseLocations = (raw) => {
     if (!raw) return undefined;
     if (raw.includes('|')) {

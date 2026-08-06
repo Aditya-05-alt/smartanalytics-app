@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { sanitizeVdpLocationOptions } from '@/lib/vdp/locationFilterOptions';
 
 function normalizeFilterOptionsRow(row) {
   const asList = (key) => {
@@ -12,7 +11,8 @@ function normalizeFilterOptionsRow(row) {
     years: ['All', ...asList('years')],
     makes: ['All', ...asList('makes')],
     models: ['All', ...asList('models')],
-    locations: sanitizeVdpLocationOptions(['All', ...asList('locations')]),
+    // Raw locations — client sanitizes/dedupes so variant map is available for RPC.
+    locations: ['All', ...asList('locations')],
     types: ['All', ...asList('types')],
   };
 }

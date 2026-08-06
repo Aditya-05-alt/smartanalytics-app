@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -49,33 +50,48 @@ function isInternalNavClick(event) {
 export function NavigationLoadingProvider({ children }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [pending, setPending] = useState(false);
+  const [navPending, setNavPending] = useState(false);
+  const dataLoadsRef = useRef(0);
+  const [dataPending, setDataPending] = useState(false);
 
-  const start = useCallback(() => setPending(true), []);
-  const stop = useCallback(() => setPending(false), []);
+  const start = useCallback(() => setNavPending(true), []);
+  const stop = useCallback(() => setNavPending(false), []);
 
+  const beginData = useCallback(() => {
+    dataLoadsRef.current += 1;
+    setDataPending(true);
+  }, []);
+
+  const endData = useCallback(() => {
+    dataLoadsRef.current = Math.max(0, dataLoadsRef.current - 1);
+    if (dataLoadsRef.current === 0) setDataPending(false);
+  }, []);
+
+  // Route changes clear nav-only pending; in-page data loads keep the line via dataPending.
   useEffect(() => {
-    setPending(false);
+    setNavPending(false);
   }, [pathname, searchParams]);
 
   useEffect(() => {
     const onClick = (event) => {
-      if (isInternalNavClick(event)) setPending(true);
+      if (isInternalNavClick(event)) setNavPending(true);
     };
     document.addEventListener('click', onClick, true);
     return () => document.removeEventListener('click', onClick, true);
   }, []);
 
-  // Safety: clear if navigation stalls (e.g. same soft-nav edge cases).
+  // Safety: clear nav pending if navigation stalls.
   useEffect(() => {
-    if (!pending) return undefined;
-    const timer = window.setTimeout(() => setPending(false), 12000);
+    if (!navPending) return undefined;
+    const timer = window.setTimeout(() => setNavPending(false), 12000);
     return () => window.clearTimeout(timer);
-  }, [pending]);
+  }, [navPending]);
+
+  const pending = navPending || dataPending;
 
   const value = useMemo(
-    () => ({ pending, start, stop }),
-    [pending, start, stop]
+    () => ({ pending, start, stop, beginData, endData }),
+    [pending, start, stop, beginData, endData]
   );
 
   return (
@@ -93,7 +109,13 @@ export function NavigationLoadingProvider({ children }) {
 export function useNavigationLoading() {
   const ctx = useContext(NavigationLoadingContext);
   if (!ctx) {
-    return { pending: false, start: () => {}, stop: () => {} };
+    return {
+      pending: false,
+      start: () => {},
+      stop: () => {},
+      beginData: () => {},
+      endData: () => {},
+    };
   }
   return ctx;
 }

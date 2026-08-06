@@ -16,8 +16,9 @@ function isPinnedOption(option, defaultAll) {
  * Filter chip dropdown — search + pagination when the list is long.
  *
  *  options: [{ value: 'All', label: 'All Types' }, ...]
- *  value:   currently selected value
+ *  value:   currently selected value (string) or string[] when multi
  *  onChange(value): callback
+ *  multi:   allow multiple selections (value is string[]; empty = All)
  */
 export default function FilterDropdown({
   options,
@@ -28,16 +29,38 @@ export default function FilterDropdown({
   className = '',
   disabled = false,
   clearable = false,
+  multi = false,
 }) {
   const { open, toggle, close, ref } = useDropdown();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
 
-  const current = options.find((o) => o.value === value) || options[0];
-  const isAll =
-    current.value === defaultAll ||
-    current.label?.startsWith?.('All') ||
-    current.label === 'Used + New';
+  const selectedList = useMemo(() => {
+    if (!multi) return [];
+    if (Array.isArray(value)) return value.filter((v) => v && v !== defaultAll);
+    if (value && value !== defaultAll) return [value];
+    return [];
+  }, [multi, value, defaultAll]);
+
+  const current = multi
+    ? null
+    : options.find((o) => o.value === value) || options[0];
+
+  const isAll = multi
+    ? selectedList.length === 0
+    : current.value === defaultAll ||
+      current.label?.startsWith?.('All') ||
+      current.label === 'Used + New';
+
+  const chipLabel = useMemo(() => {
+    if (!multi) return current?.label ?? '';
+    if (selectedList.length === 0) {
+      const allOpt = options.find((o) => o.value === defaultAll);
+      return allOpt?.label || 'All Locations';
+    }
+    if (selectedList.length === 1) return selectedList[0];
+    return `${selectedList.length} Locations`;
+  }, [multi, current, selectedList, options, defaultAll]);
 
   const { pinned, rest } = useMemo(() => {
     const pin = [];
@@ -78,7 +101,7 @@ export default function FilterDropdown({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !value) return;
+    if (!open || multi || !value) return;
     const selected = options.find((o) => o.value === value);
     if (!selected || isPinnedOption(selected, defaultAll)) return;
     const idx = filteredRest.findIndex((o) => o.value === value);
@@ -99,15 +122,36 @@ export default function FilterDropdown({
   };
 
   const handleSelect = (nextValue) => {
+    if (multi) {
+      if (nextValue === defaultAll) {
+        onChange([]);
+        return;
+      }
+      const exists = selectedList.includes(nextValue);
+      onChange(
+        exists
+          ? selectedList.filter((v) => v !== nextValue)
+          : [...selectedList, nextValue]
+      );
+      return;
+    }
     onChange(nextValue);
     close();
+  };
+
+  const isOptionSelected = (optionValue) => {
+    if (multi) {
+      if (optionValue === defaultAll) return selectedList.length === 0;
+      return selectedList.includes(optionValue);
+    }
+    return optionValue === value;
   };
 
   const showClear = clearable && !isAll && !disabled;
 
   const handleClear = (e) => {
     e.stopPropagation();
-    onChange(defaultAll);
+    onChange(multi ? [] : defaultAll);
     close();
   };
 
@@ -121,9 +165,16 @@ export default function FilterDropdown({
         aria-disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={disabled ? 'Coming soon' : undefined}
+        aria-multiselectable={multi || undefined}
+        title={
+          disabled
+            ? 'Coming soon'
+            : multi && selectedList.length > 1
+              ? selectedList.join(', ')
+              : undefined
+        }
       >
-        <span className="fc-label">{current.label}</span>
+        <span className="fc-label">{chipLabel}</span>
         {showClear && (
           <button
             type="button"
@@ -156,7 +207,7 @@ export default function FilterDropdown({
 
           <div className="dm-list">
             {pinned.map((o) => {
-              const sel = o.value === value;
+              const sel = isOptionSelected(o.value);
               return (
                 <div
                   key={o.value}
@@ -180,7 +231,7 @@ export default function FilterDropdown({
             )}
 
             {pageSlice.map((o) => {
-              const sel = o.value === value;
+              const sel = isOptionSelected(o.value);
               return (
                 <div
                   key={o.value}

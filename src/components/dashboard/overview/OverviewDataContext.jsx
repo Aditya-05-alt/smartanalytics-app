@@ -35,6 +35,8 @@ import {
   mergeChannelComparison,
 } from '@/lib/overview/comparePeriod';
 import { useClient } from '../ClientContext';
+import { useNavigationLoading } from '../NavigationLoading';
+import { locationIdentityKey } from '@/lib/vdp/locationFilterOptions';
 import {
   readStoredOverviewTab,
   writeStoredOverviewTab,
@@ -58,13 +60,30 @@ const EMPTY_VDP_FILTER_OPTIONS = {
 
 function pruneInvalidFilterSelections(filters, options) {
   const next = { ...filters };
-  const keys = ['year', 'make', 'model', 'type', 'location'];
-  for (const key of keys) {
+  const singleKeys = ['year', 'make', 'model', 'type'];
+  for (const key of singleKeys) {
     const list = options[`${key}s`] || options[key] || ['All'];
     if (next[key] !== 'All' && !list.includes(next[key])) {
       next[key] = 'All';
     }
   }
+  // Location is multi-select (string[]); drop names no longer in options.
+  // Match by identity so "Fresno CA" maps to canonical "Fresno, CA".
+  const locList = options.locations || ['All'];
+  const selected = Array.isArray(next.location)
+    ? next.location
+    : next.location && next.location !== 'All'
+      ? [next.location]
+      : [];
+  next.location = selected
+    .map((loc) => {
+      if (locList.includes(loc)) return loc;
+      const key = locationIdentityKey(loc);
+      return (
+        locList.find((o) => o !== 'All' && locationIdentityKey(o) === key) || null
+      );
+    })
+    .filter(Boolean);
   return next;
 }
 
@@ -370,6 +389,20 @@ export function OverviewProvider({ children }) {
   const reportBreakdownChunk = useCallback((progress) => {
     if (progress) setBreakdownChunkProgress(progress);
   }, []);
+
+  const { beginData, endData } = useNavigationLoading();
+  const layoutBusy =
+    loading ||
+    vdpFiltersLoading ||
+    vdpChannelLoading ||
+    breakdownUpdating ||
+    (compareEnabled && compareLoading);
+
+  useEffect(() => {
+    if (!layoutBusy) return undefined;
+    beginData();
+    return () => endData();
+  }, [layoutBusy, beginData, endData]);
 
   useEffect(() => {
     vdpFilteredDailyRef.current = vdpFilteredDaily;
@@ -695,7 +728,7 @@ export function OverviewProvider({ children }) {
     const fetchOpts = {
       clientId: clientKey,
       pageTypeFilter: 'VDP',
-      // Live: location ignored. Lab: location applied via lab RPC.
+      // Live + Lab: location applied via channel RPC (path join + location match).
       vdpFilters,
       tab: 'vdp',
       labMode,

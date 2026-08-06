@@ -5,7 +5,6 @@ import {
   BREAKDOWN_UI_CHUNK_DAYS,
   resolveRpcChunkPlan,
 } from '@/lib/api/rpcChunkPlan';
-import { dayCountInclusive } from '@/lib/ga4/dateRange';
 import {
   getChannelBreakdownCache,
   setChannelBreakdownCache,
@@ -118,12 +117,6 @@ async function fetchViaClientProgressive({
     resolvedConcurrency = concurrency ?? plan.concurrency;
   }
 
-  // Lab VDP: one wider window (simple final⋈ga4 join). Bisect handles timeouts.
-  if (labMode && String(pageTypeFilter).toUpperCase() === 'VDP') {
-    resolvedChunkDays = Math.max(dayCountInclusive(from, to) || 31, 1);
-    resolvedConcurrency = 1;
-  }
-
   const raw = await rpcByDateChunksProgressive(supabase, rpcName, {
     clientId,
     from,
@@ -145,9 +138,8 @@ async function fetchViaClientProgressive({
 
 /**
  * Fetch channel breakdown for ONE page type only (ALL | VDP | SRP | Home | Other).
- * Live: location ignored (channelBreakdownVdpFilters).
- * Lab (labMode=true): location included — same filter room as make/year/type/KPI
- *   via get_ga4_channel_breakdown_lab + vdp_location_filter_match.
+ * Live + Lab: full inventory filters including location.
+ * Both use adaptive date chunking; Lab hits channel-breakdown-lab API.
  */
 export async function fetchChannelBreakdownBundle({
   clientId,
@@ -170,9 +162,10 @@ export async function fetchChannelBreakdownBundle({
   const { cacheSuffix } = resolveChannelFilterMode(vdpFilters, labMode);
   const cacheTab = labMode ? 'vdp' : tab;
 
-  // Lab: always hit server API (service role + full-range RPC). Avoid anon RLS gaps.
+  // Lab: prefer server API (service role). Still chunked like live.
   if (labMode) {
     preferServer = true;
+    adaptiveChunks = true;
   }
 
   if (!skipCache) {
@@ -203,11 +196,8 @@ export async function fetchChannelBreakdownBundle({
       });
       if (viaApi != null) {
         onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
-        // Don't cache empty lab results when location is set — avoids sticky 0 after RPC fix
-        const locActive =
-          labMode &&
-          normalizeVdpFilters(vdpFilters).location &&
-          normalizeVdpFilters(vdpFilters).location !== 'All';
+        const locActive = normalizeVdpFilters(vdpFilters).location.length > 0;
+        // Don't cache empty results when location is set — avoids sticky 0 after RPC fix
         if (!skipCache && !(locActive && viaApi.length === 0)) {
           setChannelBreakdownCache(
             clientId,

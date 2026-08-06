@@ -1,6 +1,7 @@
 -- Channel breakdown: one row per GA4 session channel (no "Other" rollup).
--- Fast path when no inventory filters; VDP + filters match smart_final_data grain.
--- Run in Supabase SQL editor.
+-- Fast path when no inventory filters; filtered path = path equality +
+-- vdp_location_filter_match (same approach as Lab — location included).
+-- Deploy in Supabase SQL editor.
 
 DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(text, date, date, text);
 DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
@@ -30,6 +31,7 @@ LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
+SET statement_timeout = '55s'
 AS $$
 DECLARE
   v_filter_active boolean;
@@ -45,7 +47,7 @@ BEGIN
     OR COALESCE(array_length(p_years, 1), 0)     > 0
     OR COALESCE(array_length(p_locations, 1), 0) > 0;
 
-  -- Fast path: no inventory filters — aggregate smart_ga4_page_data directly (no smart_final_data join).
+  -- Fast path: no inventory filters — aggregate smart_ga4_page_data only.
   IF NOT v_filter_active THEN
     RETURN QUERY
     WITH base AS (
@@ -109,6 +111,7 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Filtered path: path equality join + location match (no LIKE — avoids timeout).
   RETURN QUERY
   WITH pages AS (
     SELECT
@@ -116,8 +119,7 @@ BEGIN
       p.views,
       p.client_id,
       p.report_date,
-      p.page_path,
-      p.page_location,
+      TRIM(p.page_path) AS page_path,
       p.ga4_page_type
     FROM smart_ga4_page_data p
     WHERE p.client_id::text = trim(p_client_id)
@@ -134,21 +136,24 @@ BEGIN
       AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
            OR p.channel = ANY(p_channels))
   ),
-  filtered_final AS (
+  filtered_paths AS (
     SELECT DISTINCT
-      s.client_id,
+      s.client_id::text AS client_id,
       s.report_date,
-      TRIM(s.page_path) AS page_path,
-      s.page_location
+      TRIM(s.page_path) AS page_path
     FROM smart_final_data s
     WHERE s.client_id::text = trim(p_client_id)
       AND s.report_date BETWEEN p_from AND p_to
-      AND (COALESCE(array_length(p_types, 1), 0) = 0 OR s.inv_type = ANY(p_types))
+      AND (
+        COALESCE(array_length(p_types, 1), 0) = 0
+        OR s.inv_type = ANY(p_types)
+        OR NULLIF(TRIM(s.inv_custom_type), '') = ANY(p_types)
+      )
       AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR s.inv_make = ANY(p_makes))
       AND (COALESCE(array_length(p_models, 1), 0) = 0 OR s.inv_model = ANY(p_models))
       AND (
         COALESCE(array_length(p_locations, 1), 0) = 0
-        OR TRIM(s.inv_location) = ANY(SELECT TRIM(loc) FROM unnest(p_locations) AS loc)
+        OR public.vdp_location_filter_match(trim(p_client_id), s.inv_location, p_locations)
       )
       AND (
         COALESCE(array_length(p_years, 1), 0) = 0
@@ -173,47 +178,21 @@ BEGIN
       )
   ),
   combined AS (
-    -- Branch 1: no inventory filters — return all pages directly
     SELECT p.channel, p.views
     FROM pages p
-    WHERE NOT v_filter_active
+    WHERE p.ga4_page_type NOT ILIKE 'VDP%'
 
     UNION ALL
 
-    -- Branch 2: filters active, non-VDP pages — pass through (no inventory rows exist)
     SELECT p.channel, p.views
     FROM pages p
-    WHERE v_filter_active
-      AND p.ga4_page_type NOT ILIKE 'VDP%'
-
-    UNION ALL
-
-    -- Branch 3: filters active, VDP — GA4 channels for filtered smart_final_data paths
-    SELECT p.channel, p.views
-    FROM pages p
-    WHERE v_filter_active
-      AND p.ga4_page_type ILIKE 'VDP%'
-      AND EXISTS (
-        SELECT 1
-        FROM filtered_final f
-        WHERE f.client_id::text = p.client_id::text
-          AND f.report_date = p.report_date
-          AND (
-            TRIM(p.page_path) = f.page_path
-            OR (
-              COALESCE(TRIM(p.page_path), '') <> ''
-              AND COALESCE(f.page_path, '') <> ''
-              AND LOWER(TRIM(p.page_location)) LIKE '%' || LOWER(TRIM(p.page_path)) || '%'
-            )
-            OR (
-              COALESCE(TRIM(p.page_path), '') <> ''
-              AND COALESCE(f.page_path, '') <> ''
-              AND LOWER(TRIM(f.page_location)) LIKE '%' || LOWER(TRIM(p.page_path)) || '%'
-            )
-          )
-      )
+    INNER JOIN filtered_paths f
+      ON f.client_id = p.client_id::text
+     AND f.report_date = p.report_date
+     AND f.page_path = p.page_path
+    WHERE p.ga4_page_type ILIKE 'VDP%'
   ),
-  filtered AS (
+  mapped AS (
     SELECT
       CASE lower(trim(COALESCE(c.channel, '')))
         WHEN 'organic_search'  THEN 'Organic Search'
@@ -239,9 +218,9 @@ BEGIN
     FROM combined c
   ),
   agg AS (
-    SELECT f.channel_bucket, SUM(f.views)::bigint AS views
-    FROM filtered f
-    GROUP BY f.channel_bucket
+    SELECT m.channel_bucket, SUM(m.views)::bigint AS views
+    FROM mapped m
+    GROUP BY m.channel_bucket
   ),
   grand AS (
     SELECT NULLIF(SUM(a.views), 0)::numeric AS total FROM agg a
@@ -257,6 +236,15 @@ BEGIN
 END;
 $$;
 
+COMMENT ON FUNCTION public.get_ga4_channel_breakdown(
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
+) IS
+  'Live channel breakdown — location-aware (same fast filtered join as Lab). Chunk on API.';
+
+REVOKE ALL ON FUNCTION public.get_ga4_channel_breakdown(
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
+) FROM PUBLIC;
+
 GRANT EXECUTE ON FUNCTION public.get_ga4_channel_breakdown(
   text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
-) TO authenticated, service_role;
+) TO anon, authenticated, service_role;

@@ -45,18 +45,13 @@ export default function OverviewFilters() {
     setVdpFilter,
     clearVdpFilters,
     vdpFilterOptions,
-    breakdownUpdating,
-    breakdownChunkProgress,
     compareEnabled,
     toggleCompareEnabled,
     compareDateRange,
     setCompareDateRange,
     compareFrom,
     compareTo,
-    compareLoading,
   } = useOverview();
-
-  const showDataUpdating = breakdownUpdating || (compareEnabled && compareLoading);
 
   const showVdpFilters = tab === 'vdp';
 
@@ -149,9 +144,10 @@ export default function OverviewFilters() {
           />
           {config.showLoc !== false && (
             <FilterDropdown
+              multi
               clearable
               options={toOpts(vdpFilterOptions.locations, 'All Locations')}
-              value={vdpFilters.location}
+              value={Array.isArray(vdpFilters.location) ? vdpFilters.location : []}
               onChange={(v) => setVdpFilter('location', v)}
             />
           )}
@@ -164,17 +160,6 @@ export default function OverviewFilters() {
         </div>
       )}
       <div className="f-right">
-        {showDataUpdating && (
-          <span className="data-updating-badge" role="status" aria-live="polite">
-            <span className="data-updating-dot" aria-hidden />
-            Data is updating
-            {breakdownChunkProgress?.total > 1 && (
-              <span className="data-updating-chunk">
-                {breakdownChunkProgress.completed}/{breakdownChunkProgress.total}
-              </span>
-            )}
-          </span>
-        )}
         <ComparePeriodSwitch enabled={compareEnabled} onChange={toggleCompareEnabled} />
         {compareEnabled && (
           <>

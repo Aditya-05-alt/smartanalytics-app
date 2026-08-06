@@ -2,14 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
-import { dayCountInclusive } from '@/lib/ga4/dateRange';
+import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
 export const maxDuration = 120;
 
 /**
- * VDP Lab only — get_ga4_channel_breakdown_lab (location-aware).
- * Tries one full-range RPC first (matches diagnostic SQL); bisects on timeout.
+ * VDP Lab only — get_ga4_channel_breakdown_lab.
+ * Same chunking plan as live channel-breakdown (not one giant full-range RPC).
  */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -18,6 +18,14 @@ export async function GET(request) {
   const to = searchParams.get('to')?.slice(0, 10);
   const pageType = searchParams.get('pageType')?.trim() || 'ALL';
   const inv = parseInvRpcFromSearchParams(searchParams);
+  const invFilters = Boolean(
+    inv.p_years?.length ||
+      inv.p_makes?.length ||
+      inv.p_models?.length ||
+      inv.p_types?.length ||
+      inv.p_locations?.length ||
+      (inv.p_condition && inv.p_condition !== 'BOTH')
+  );
 
   if (!clientId || !from || !to) {
     return NextResponse.json({ error: 'Missing clientId, from, or to' }, { status: 400 });
@@ -36,23 +44,22 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const extraParams = {
-    p_page_type: pageType,
-    ...inv,
-  };
-
-  // Prefer one shot for the full range (simple join). On timeout, weekly chunks.
-  const days = dayCountInclusive(from, to);
-  const chunkDays = Math.max(days, 1);
+  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
+    invFilters,
+    pageType,
+  });
 
   try {
     const raw = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown_lab', {
       clientId,
       from,
       to,
-      extraParams,
+      extraParams: {
+        p_page_type: pageType,
+        ...inv,
+      },
       chunkDays,
-      concurrency: 1,
+      concurrency,
     });
 
     const rows = mergeChannelBreakdownRows(raw);
@@ -61,23 +68,19 @@ export async function GET(request) {
     return NextResponse.json({
       rows,
       meta: {
-        source: 'rpc-lab',
+        source: 'chunked-rpc-lab',
         chunkDays,
+        concurrency,
         pageType,
-        locationAware: true,
         locations: inv.p_locations || null,
         rowCount: rows.length,
         totalViews,
-        hint:
-          rows.length === 0 && inv.p_locations?.length
-            ? 'Empty with location — redeploy get_ga4_channel_breakdown_lab.sql (Unassigned fallback).'
-            : null,
       },
     });
   } catch (err) {
     const message = err?.message || 'Failed to load lab channel breakdown';
     const hint = /timeout|canceling statement/i.test(message)
-      ? ' Statement timeout — try a shorter date range, or redeploy get_ga4_channel_breakdown_lab.sql.'
+      ? ' Statement timeout — redeploy get_ga4_channel_breakdown_lab.sql and retry.'
       : /function .*get_ga4_channel_breakdown_lab/i.test(message)
         ? ' Deploy supabase/rpc/get_ga4_channel_breakdown_lab.sql in Supabase.'
         : '';

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import OverviewFilters from '@/components/dashboard/overview/OverviewFilters';
 import KpiRow from '@/components/dashboard/overview/KpiRow';
 import ChannelDonut from '@/components/dashboard/overview/ChannelDonut';
+import LocationBreakdown from '@/components/dashboard/LocationBreakdown';
 import MakeBreakdown from '@/components/dashboard/MakeBreakdown';
 import TypeBreakdown from '@/components/dashboard/TypeBreakdown';
 import ModelBreakdown from '@/components/dashboard/ModelBreakdown';
@@ -20,9 +21,9 @@ import {
 import { VdpLabProvider } from '@/components/dashboard/overview/VdpLabContext';
 
 /**
- * VDP Lab — location filter is in the same room as make/year/type/condition.
- * Channel uses get_ga4_channel_breakdown_lab with p_locations (soft match).
- * Location chart slot kept empty. Live /dashboard untouched.
+ * VDP Lab — same VDP layout as live Overview.
+ * Channel + Location use lab RPCs (location filter in the same room as make/year/type).
+ * Live /dashboard untouched.
  */
 function VdpLabBody() {
   const { isAllDealer } = useClient();
@@ -53,8 +54,8 @@ function VdpLabBody() {
     <>
       <div className="vdp-lab-banner">
         <div>
-          <strong>VDP Lab</strong> — Location filter is wired like Make/Year/Type into
-          Channel (lab RPC). Location chart empty. Live Overview unchanged.
+          <strong>VDP Lab</strong> — Channel + Location Breakdown (lab RPCs). Location
+          filter wired like live Overview. Live Overview unchanged.
         </div>
         <Link href="/dashboard" className="vdp-lab-banner-link">
           Live Overview →
@@ -73,9 +74,23 @@ function VdpLabBody() {
             to={to}
             pageType="VDP"
           />
-          {/* Location Breakdown chart intentionally empty on Lab */}
-          {!vdpCompareLayout && <div aria-hidden="true" />}
+          {!vdpCompareLayout && (
+            <LocationBreakdown
+              clientId={clientKey}
+              from={from}
+              to={to}
+            />
+          )}
         </div>
+        {vdpCompareLayout && (
+          <div className="dashboard-full-row">
+            <LocationBreakdown
+              clientId={clientKey}
+              from={from}
+              to={to}
+            />
+          </div>
+        )}
 
         {vdpCompareLayout ? (
           <>

@@ -126,7 +126,7 @@ function useChannelBreakdownRows({
       vdpFilters,
       tab,
       labMode,
-      adaptiveChunks: !labMode,
+      adaptiveChunks: true,
       preferServer: invFiltered || labMode,
       onCancelCheck: () => cancelled,
       onProgress: (partial, meta) => {
