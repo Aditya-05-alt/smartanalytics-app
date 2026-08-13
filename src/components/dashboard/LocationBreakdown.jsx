@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import VdpInventoryDonut from '@/components/dashboard/VdpInventoryDonut';
 import { useIsVdpLab } from '@/components/dashboard/overview/VdpLabContext';
 import { fetchLocationBreakdown } from '@/lib/api/dashboardApi';
+import { collapseLocationBreakdownRows } from '@/lib/vdp/locationFilterOptions';
 
 const LOCATION_COLORS = [
   '#34d399',
@@ -30,7 +31,7 @@ function colorForRank(rank) {
 
 function normalizeRows(data) {
   const list = Array.isArray(data) ? data : data ? [data] : [];
-  return list.map((row) => ({
+  const raw = list.map((row) => ({
     location_bucket: String(
       row.location_bucket ?? row.location ?? row.inv_location ?? 'Unknown'
     ),
@@ -38,6 +39,8 @@ function normalizeRows(data) {
     pct: Number(row.pct ?? row.percentage ?? 0) || 0,
     rank: Number(row.rank ?? 999) || 999,
   }));
+  // Same collapse as Location filter: Bradenton ≡ Bradenton, FL ≡ Floride
+  return collapseLocationBreakdownRows(raw);
 }
 
 function toDonutRow(row) {

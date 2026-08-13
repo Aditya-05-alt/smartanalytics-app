@@ -122,7 +122,9 @@ export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck 
     if (viaApi) {
       return {
         ...viaApi,
-        locations: sanitizeVdpLocationOptions(viaApi.locations),
+        locations: sanitizeVdpLocationOptions(viaApi.locations, {
+          configured: viaApi.configured_locations,
+        }),
       };
     }
   } catch {
@@ -151,7 +153,9 @@ export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck 
     years: ['All', ...asList('years')],
     makes: ['All', ...asList('makes')],
     models: ['All', ...asList('models')],
-    locations: sanitizeVdpLocationOptions(['All', ...asList('locations')]),
+    locations: sanitizeVdpLocationOptions(['All', ...asList('locations')], {
+      configured: asList('configured_locations'),
+    }),
     types: ['All', ...asList('types')],
   };
 }

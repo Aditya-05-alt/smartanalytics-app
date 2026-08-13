@@ -110,8 +110,9 @@ export function vdpFiltersToRpcParams(vdpFilters, tab) {
   if (f.make && f.make !== 'All') params.p_makes = [f.make];
   if (f.model && f.model !== 'All') params.p_models = [f.model];
   if (f.type && f.type !== 'All') params.p_types = [f.type];
-  if (f.location.length > 0) {
+  if (f.location && f.location !== 'All') {
     // Include comma / accent spellings so inventory rows still match.
+    // SQL also soft-matches via vdp_location_identity (City, ST ≡ City ST).
     params.p_locations = expandLocationsForRpc(f.location);
   }
 

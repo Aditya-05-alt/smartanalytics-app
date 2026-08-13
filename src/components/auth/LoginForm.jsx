@@ -223,12 +223,14 @@ export default function LoginForm({ demoMode = false, demoEmail = '', demoPasswo
         Google
       </Button>
 
+      {/* Sign up — commented out (belongs to another project; keep login-only here)
       <p className="mt-6 text-center text-[13px]" style={{ color: 'var(--t2)' }}>
         Don&apos;t have an account?{' '}
         <Link href="/signup" className="link font-semibold">
           Create one
         </Link>
       </p>
+      */}
     </div>
   );
 }

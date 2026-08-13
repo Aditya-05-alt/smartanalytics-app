@@ -1,10 +1,13 @@
 -- All-dealer portfolio channel matrix (VDP / All tabs + date range).
--- Auto-selects grain for speed + previous-year coverage:
---   yearly  → mv_ga4_channel_yearly   (full calendar year / YTD)
---   monthly → mv_ga4_channel_monthly  (month-aligned or 60+ day ranges)
---   daily   → mv_ga4_channel_daily    (short / mid-month ranges)
+-- Uses MATERIALIZED VIEWS only (fast). No live smart_ga4_page_data scan.
+--
+-- Grain:
+--   yearly  → mv_ga4_channel_yearly   (full calendar year Jan 1 → Dec 31 only)
+--   monthly → mv_ga4_channel_monthly  (Last Month / month-aligned + long ranges)
+--   daily   → mv_ga4_channel_daily    (Current Month MTD / short mid-month ranges)
+--
 -- Optional p_client_ids for chunked fetches.
--- Deploy in Supabase SQL editor AFTER mv_ga4_channel_monthly_yearly.sql
+-- Deploy in Supabase SQL editor AFTER/AFTER MVs exist.
 --
 -- Prerequisite MVs:
 --   mv_ga4_channel_daily
@@ -43,6 +46,7 @@ DECLARE
   v_year_end  date;
   v_month_from date;
   v_month_to   date;
+  v_month_last date;
 BEGIN
   IF p_from IS NULL OR p_to IS NULL OR p_from > p_to THEN
     RAISE EXCEPTION 'Invalid date range: % .. %', p_from, p_to;
@@ -53,25 +57,29 @@ BEGIN
   v_year_end  := make_date(v_year_from, 12, 31);
   v_month_from := date_trunc('month', p_from)::date;
   v_month_to   := date_trunc('month', p_to)::date;
+  -- Last calendar day of p_to's month (for "Last Month" / full-month detection)
+  v_month_last := (v_month_to + INTERVAL '1 month' - INTERVAL '1 day')::date;
 
-  -- Full calendar year, or YTD for the current year → yearly MV (fast + has history).
+  -- Full calendar year only → yearly MV
+  -- (Do not use yearly for YTD — that over-counted vs dealer Overview.)
   IF v_year_from = v_year_to
      AND EXTRACT(MONTH FROM p_from)::int = 1
      AND EXTRACT(DAY FROM p_from)::int = 1
-     AND (
-       p_to = v_year_end
-       OR (v_year_from = EXTRACT(YEAR FROM CURRENT_DATE)::int AND p_to <= CURRENT_DATE)
-     )
+     AND p_to = v_year_end
   THEN
     v_grain := 'yearly';
-  -- Month-aligned range (1st → last day of month) → monthly MV.
+
+  -- Last Month / any full month (1st → last day) → monthly MV (fast)
   ELSIF EXTRACT(DAY FROM p_from)::int = 1
-     AND p_to = (v_month_to + INTERVAL '1 month' - INTERVAL '1 day')::date
+     AND p_to = v_month_last
   THEN
     v_grain := 'monthly';
-  -- Long ranges (60+ days): use monthly months covering the span.
+
+  -- Long multi-month spans → monthly MV
   ELSIF (p_to - p_from) >= 60 THEN
     v_grain := 'monthly';
+
+  -- Current Month MTD / short custom ranges → daily MV
   ELSE
     v_grain := 'daily';
   END IF;
@@ -143,12 +151,12 @@ BEGIN
     FROM base b
     WHERE
       v_page_type = 'ALL'
-      OR (v_page_type = 'VDP' AND b.ga4_page_type LIKE 'VDP%')
+      OR (v_page_type = 'VDP' AND b.ga4_page_type ILIKE 'VDP%')
       OR (v_page_type = 'SRP' AND b.ga4_page_type = 'SRP')
       OR (v_page_type IN ('HOME', 'HOMEPAGE') AND b.ga4_page_type ILIKE 'home%')
       OR (
         v_page_type = 'OTHER'
-        AND b.ga4_page_type NOT LIKE 'VDP%'
+        AND b.ga4_page_type NOT ILIKE 'VDP%'
         AND b.ga4_page_type <> 'SRP'
         AND b.ga4_page_type NOT ILIKE 'home%'
       )
@@ -213,7 +221,7 @@ REVOKE ALL ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, t
 GRANT EXECUTE ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, text[])
   TO anon, authenticated, service_role;
 
--- After page sync or VDP filtration:
+-- Keep MVs fresh after GA4 sync / filtration:
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_monthly;
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_yearly;

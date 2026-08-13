@@ -401,7 +401,9 @@ export default function AllDealerChannelTable() {
                   <thead>
                     <tr>
                       <th className="adc-th-dealer">Dealers</th>
-                      <th className="adc-th-total">Total Views</th>
+                      <th className="adc-th-total">
+                        {tab === 'vdp' ? 'Total VDP Views' : 'Total All Pages Views'}
+                      </th>
                       {displayColumns.map((name) => (
                         <th key={name} className="adc-th-channel">
                           <ChannelHeader name={name} />

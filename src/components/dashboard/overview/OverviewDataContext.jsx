@@ -179,8 +179,17 @@ function resolveRange(value) {
 function pageTypeToTab(raw) {
   const t = String(raw || '').toLowerCase().replace(/[\s_\-]+/g, '');
   if (t === 'srp' || t === 'searchresults' || t === 'searchresultspage') return 'srp';
-  if (t === 'home' || t === 'homepage') return 'home';
-  if (t === 'vdp' || t === 'vehicledetails' || t === 'vehicledetailspage') return 'vdp';
+  if (t === 'home' || t === 'homepage' || t.startsWith('home')) return 'home';
+  // Match All Dealers matrix / channel RPC: ga4_page_type ILIKE 'VDP%'
+  // (e.g. "VDP", "VDP - Used", "VDP-New") — exact "vdp" only left VDP views undercounted.
+  if (
+    t === 'vdp'
+    || t.startsWith('vdp')
+    || t === 'vehicledetails'
+    || t === 'vehicledetailspage'
+  ) {
+    return 'vdp';
+  }
   return 'other';
 }
 

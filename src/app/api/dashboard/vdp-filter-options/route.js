@@ -13,6 +13,7 @@ function normalizeFilterOptionsRow(row) {
     models: ['All', ...asList('models')],
     // Raw locations — client sanitizes/dedupes so variant map is available for RPC.
     locations: ['All', ...asList('locations')],
+    configured_locations: asList('configured_locations'),
     types: ['All', ...asList('types')],
   };
 }

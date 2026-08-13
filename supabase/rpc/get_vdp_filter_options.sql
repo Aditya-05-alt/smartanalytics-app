@@ -1,12 +1,17 @@
 -- Distinct VDP filter dropdown values for a dealer + date range.
--- Locations match Location Breakdown:
---   1) If smart_dealer_locations has rows → those only
---   2) Else → inv_location that end with a real US state code (City, ST / City ST)
--- Deploy in Supabase SQL editor (required for server RPC path).
+-- Locations:
+--   Merge admin smart_dealer_locations + inventory inv_location
+--   so filter options match Location Breakdown (no missing sites).
+--   Prefer City,ST from inventory; else usable non-junk names.
+-- Soft identity matching is in vdp_location_filter_match.
+-- Deploy after vdp_location_filter_match.sql.
 
 DROP FUNCTION IF EXISTS public.get_vdp_filter_options(text, date, date);
 DROP FUNCTION IF EXISTS public.get_vdp_filter_options(
   text, date, date, text[], text[], text[], text[], integer[], text
+);
+DROP FUNCTION IF EXISTS public.get_vdp_filter_options(
+  text, date, date
 );
 
 CREATE OR REPLACE FUNCTION public.get_vdp_filter_options(
@@ -15,11 +20,12 @@ CREATE OR REPLACE FUNCTION public.get_vdp_filter_options(
   p_to date
 )
 RETURNS TABLE (
-  years     text[],
-  makes     text[],
-  models    text[],
-  locations text[],
-  types     text[]
+  years                 text[],
+  makes                 text[],
+  models                text[],
+  locations             text[],
+  types                 text[],
+  configured_locations  text[]
 )
 LANGUAGE sql
 STABLE
@@ -62,7 +68,7 @@ AS $$
       AND length(b.inv_location) BETWEEN 4 AND 60
       AND b.inv_location !~ '[\^\*]'
       AND b.inv_location !~ '[\u4e00-\u9fff]'
-      AND b.inv_location !~* '(dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b)'
+      AND b.inv_location !~* '(dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b)'
       AND (
         (
           b.inv_location ~* ',\s*[A-Za-z]{2}$'
@@ -73,16 +79,47 @@ AS $$
           AND b.inv_location !~* ',\s*[A-Za-z]{2}$'
           AND UPPER(substring(b.inv_location from '\s([A-Za-z]{2})$')) IN (SELECT st FROM us_states)
         )
+        -- Bare US city names (Bradenton, Nokomis) — frontend collapses with City,ST
+        OR (
+          b.inv_location ~* '^[A-Za-z][A-Za-z .''-]{1,40}$'
+          AND b.inv_location !~* '\s[A-Za-z]{2}$'
+          AND b.inv_location !~* ',\s*'
+          AND b.inv_location !~* '\brv\b'
+        )
+        -- City + full state (Bradenton, Florida / Floride)
+        OR (
+          b.inv_location ~* ',\s*(florida|floride|texas|arkansas|missouri|georgia|alabama|california)$'
+        )
       )
   ),
+  -- When no City,ST places exist, still surface real inventory locations (not marketing junk).
+  fallback_inv_locs AS (
+    SELECT DISTINCT b.inv_location AS location_name
+    FROM base b
+    WHERE b.inv_location IS NOT NULL
+      AND LOWER(b.inv_location) <> 'unknown'
+      AND length(b.inv_location) BETWEEN 2 AND 80
+      AND b.inv_location !~ '[\^\*]'
+      AND b.inv_location !~ '[\u4e00-\u9fff]'
+      AND b.inv_location !~* '(dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|http|www\.|\.com|\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b)'
+  ),
+  -- Merge admin + inventory so filter matches Location Breakdown.
+  -- (Old logic hid inventory names whenever smart_dealer_locations had any row —
+  -- Moix: Airstream of Arkansas on donut but missing from filter.)
+  -- Frontend sanitizeVdpLocationOptions collapses Bradenton / Bradenton, FL / Floride.
   all_locs AS (
     SELECT c.location_name FROM configured_locs c
-    WHERE EXISTS (SELECT 1 FROM configured_locs)
+    WHERE c.location_name !~* '(\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b)'
 
-    UNION ALL
+    UNION
 
     SELECT i.location_name FROM clean_inv_locs i
-    WHERE NOT EXISTS (SELECT 1 FROM configured_locs)
+
+    UNION
+
+    -- Brand / store names without City,ST (Moix RV Brinkley, Airstream of Arkansas, …)
+    SELECT f.location_name FROM fallback_inv_locs f
+    WHERE NOT EXISTS (SELECT 1 FROM clean_inv_locs)
   )
   SELECT
     COALESCE((
@@ -108,7 +145,11 @@ AS $$
       SELECT array_agg(DISTINCT b.inv_type ORDER BY b.inv_type)
       FROM base b
       WHERE b.inv_type IS NOT NULL
-    ), ARRAY[]::text[]) AS types;
+    ), ARRAY[]::text[]) AS types,
+    COALESCE((
+      SELECT array_agg(DISTINCT c.location_name ORDER BY c.location_name)
+      FROM configured_locs c
+    ), ARRAY[]::text[]) AS configured_locations;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_vdp_filter_options(text, date, date)

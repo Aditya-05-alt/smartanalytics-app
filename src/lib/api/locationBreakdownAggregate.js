@@ -3,6 +3,8 @@
  * smart_final_data has rows (PostgREST param mismatch). Mirrors RPC logic.
  */
 
+import { collapseLocationBreakdownRows } from '@/lib/vdp/locationFilterOptions';
+
 export function aggregateLocationBuckets(rawRows) {
   const buckets = new Map();
 
@@ -16,17 +18,24 @@ export function aggregateLocationBuckets(rawRows) {
     buckets.set(label, (buckets.get(label) || 0) + views);
   }
 
-  const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const total = sorted.reduce((sum, [, v]) => sum + v, 0);
+  // Collapse city variants BEFORE top-5 so Bradenton / Bradenton, FL aren't split
+  const collapsed = collapseLocationBreakdownRows(
+    [...buckets.entries()].map(([location_bucket, views]) => ({
+      location_bucket,
+      views,
+    }))
+  );
+
+  const total = collapsed.reduce((sum, r) => sum + r.views, 0);
   if (total <= 0) return [];
 
-  const top5 = sorted.slice(0, 5);
-  const otherViews = sorted.slice(5).reduce((sum, [, v]) => sum + v, 0);
+  const top5 = collapsed.slice(0, 5);
+  const otherViews = collapsed.slice(5).reduce((sum, r) => sum + r.views, 0);
 
-  const out = top5.map(([location_bucket, views], index) => ({
-    location_bucket,
-    views,
-    pct: Math.round((views / total) * 10000) / 100,
+  const out = top5.map((r, index) => ({
+    location_bucket: r.location_bucket,
+    views: r.views,
+    pct: Math.round((r.views / total) * 10000) / 100,
     rank: index + 1,
   }));
 
