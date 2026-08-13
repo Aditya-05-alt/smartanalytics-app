@@ -379,7 +379,7 @@ export default function BreakdownDonut({
                         className={`donut-lg-name${s.isGroupMember ? ' donut-lg-name--member' : ''}`}
                         title={s.fullName || s.name}
                       >
-                        {s.name}
+                        {s.fullName || s.name}
                       </span>
                       <span className="donut-lg-value">
                         {(Number(s.value) || 0).toLocaleString()}

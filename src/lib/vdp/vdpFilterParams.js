@@ -1,4 +1,4 @@
-import { expandLocationsForRpc } from '@/lib/vdp/locationFilterOptions';
+import { expandLocationsForRpc, isDealerBrandLocation } from '@/lib/vdp/locationFilterOptions';
 
 /** Default VDP tab inventory filters (All = no restriction). */
 export const DEFAULT_VDP_FILTERS = {
@@ -20,11 +20,14 @@ export function selectedLocations(value) {
         value
           .map((v) => String(v ?? '').trim())
           .filter((v) => v && v !== 'All')
+          // Drop marketing junk if still stuck in UI state
+          .filter((v) => !isDealerBrandLocation(v))
       ),
     ];
   }
   const one = String(value).trim();
-  return one && one !== 'All' ? [one] : [];
+  if (!one || one === 'All' || isDealerBrandLocation(one)) return [];
+  return [one];
 }
 
 export function normalizeVdpFilters(input) {

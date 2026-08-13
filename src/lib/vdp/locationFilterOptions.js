@@ -8,8 +8,10 @@ const US_STATE_CODES = new Set([
 
 /** Full / alternate state names → 2-letter code (incl. common misspellings). */
 const STATE_NAME_TO_CODE = {
-  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
-  colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', floride: 'FL',
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR',
+  california: 'CA', californie: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE',
+  florida: 'FL', floride: 'FL',
   georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN',
   iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME',
   maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
@@ -23,11 +25,66 @@ const STATE_NAME_TO_CODE = {
 };
 
 const JUNK_LOCATION_RE =
-  /dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|https?:|www\.|\.com/i;
+  /dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|https?:|www\.|\.com|search for|your next|\bavtodom|new\s*&\s*used|\bin california\b|\bin florida\b|\bin texas\b/i;
 
-/** Dealer brand / marketing titles mistaken for store cities (Gerzeny’s RV World, etc.). */
+/**
+ * Marketing titles mistaken for store locations (Gerzeny / Sky River junk).
+ * Do NOT match real multi-site store names like "Moix RV Supercenter" / "Moix RV Brinkley".
+ */
 const DEALER_BRAND_LOCATION_RE =
-  /\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b|\bworld of\b|\bsupercenter\b/i;
+  /\bautocaravanas?\b|\bmundo de\b|\bworld of\b|\brv\s*world\b|gerzenyjev|\bsvet\b|\bavtodomov?\b/i;
+
+/** Marketing / CTA sentence — not a store city. */
+const MARKETING_LOCATION_RE =
+  /^(search|find|browse|explore|shop|visit|discover|new\s*&\s*used)\b|\bat\s+gerzeny|\bgerzeny['’]?s\s+rv\b/i;
+
+const RV_BRAND_TAIL_RE = /^(rv|dealership|deals|inventory|sales|world)$/i;
+
+/**
+ * True for brand/marketing labels — not real store sites (Moix RV Brinkley, …)
+ * and not City, ST places (Paso Robles, CA).
+ */
+export function isDealerBrandLocation(value) {
+  const s = String(value || '').trim();
+  if (!s) return false;
+  if (JUNK_LOCATION_RE.test(s)) return true;
+  if (DEALER_BRAND_LOCATION_RE.test(s)) return true;
+  if (MARKETING_LOCATION_RE.test(s)) return true;
+  if (/search for|your next/i.test(s)) return true;
+  // Real place with state → never brand junk
+  if (parseCityState(s)?.state) return false;
+  // Any Gerzeny* / Sky River* label without City, ST
+  if (/gerzeny|sky\s*river/i.test(s)) return true;
+
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (!/\brv\b/i.test(s)) return false;
+
+  const last = tokens[tokens.length - 1];
+  // "Sky River RV", "Sky River RV Dealership/Deals/Inventory"
+  if (RV_BRAND_TAIL_RE.test(last)) return true;
+  // Short brand-only: "Gerzeny's RV" (≤2 tokens)
+  if (tokens.length <= 2) return true;
+  return false;
+}
+
+/** Moix-style store site: "Brand RV Place" (place after RV), or "Airstream of Arkansas". */
+export function isLegitimateStoreSite(value) {
+  const s = String(value || '').trim();
+  if (!s || JUNK_LOCATION_RE.test(s) || MARKETING_LOCATION_RE.test(s)) return false;
+  if (DEALER_BRAND_LOCATION_RE.test(s)) return false;
+  if (/gerzeny|sky\s*river/i.test(s)) return false;
+  if (parseCityState(s)?.state) return false;
+
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (/\brv\b/i.test(s)) {
+    const last = tokens[tokens.length - 1];
+    if (RV_BRAND_TAIL_RE.test(last)) return false;
+    const rvIdx = tokens.findIndex((t) => /^rv$/i.test(t));
+    return rvIdx >= 0 && rvIdx < tokens.length - 1 && tokens.length >= 3;
+  }
+  // "Airstream of Arkansas"
+  return /\bof\b/i.test(s) && tokens.length >= 3;
+}
 
 /** Strip accents so "Santa María" and "Santa Maria" share one identity. */
 export function stripLocationDiacritics(value) {
@@ -132,13 +189,13 @@ export function isCleanVdpLocationName(value) {
   if (/[\^\*]/.test(s)) return false;
   if (/[\u4e00-\u9fff]/.test(s)) return false;
   if (JUNK_LOCATION_RE.test(s)) return false;
-  if (DEALER_BRAND_LOCATION_RE.test(s)) return false;
+  if (isDealerBrandLocation(s)) return false;
 
   const parsed = parseCityState(s);
   return Boolean(parsed?.city && parsed?.state);
 }
 
-/** Place-like names (city or city+state). Excludes dealer brand titles. */
+/** Place-like names + real multi-site store names (Moix RV Brinkley, …). */
 export function isUsableVdpLocationName(value) {
   const s = String(value || '').trim();
   if (!s || s === 'All') return s === 'All';
@@ -147,16 +204,18 @@ export function isUsableVdpLocationName(value) {
   if (/[\^\*]/.test(s)) return false;
   if (/[\u4e00-\u9fff]/.test(s)) return false;
   if (JUNK_LOCATION_RE.test(s)) return false;
-  if (DEALER_BRAND_LOCATION_RE.test(s)) return false;
-  // "Gerzeny's RV" parses as a bare "city" — treat as brand, not a place
-  if (/\brv\b/i.test(s) && !parseCityState(s)?.state) return false;
+  if (isDealerBrandLocation(s)) return false;
 
   const parsed = parseCityState(s);
   if (parsed?.city && parsed?.state) return true;
-  if (parsed?.city && !/\brv\b/i.test(parsed.city)) return true;
+  // City-only without RV brand noise (Nokomis)
+  if (parsed?.city && !/\brv\b/i.test(parsed.city) && !isDealerBrandLocation(parsed.city)) {
+    return true;
+  }
+  // Moix-style store sites / Airstream of Arkansas
+  if (isLegitimateStoreSite(s)) return true;
 
-  // Moix-style store names without state still allowed if not brand junk
-  return !/\brv\b/i.test(s);
+  return !/\brv\b/i.test(s) && !/sky\s*river|gerzeny/i.test(s);
 }
 
 /** Prefer "City, ST" when we know the state; else city-only. */
@@ -190,12 +249,12 @@ function pickPreferredLabel(variants) {
 /** Common full-name aliases for a few states that appear mangled in inventory. */
 const STATE_CODE_ALIASES = {
   FL: ['Florida', 'Floride'],
+  CA: ['California', 'Californie'],
   TX: ['Texas'],
   AR: ['Arkansas'],
   MO: ['Missouri'],
   GA: ['Georgia'],
   AL: ['Alabama'],
-  CA: ['California'],
 };
 
 function syntheticVariants(label) {
@@ -244,9 +303,15 @@ export function sanitizeVdpLocationOptions(locations, opts = {}) {
   const push = (raw, { force = false } = {}) => {
     const s = String(raw || '').trim();
     if (!s || s === 'All') return;
+    // Always drop marketing / brand junk (even if configured)
+    if (isDealerBrandLocation(s) || JUNK_LOCATION_RE.test(s)) return;
     if (!force && !isCleanVdpLocationName(s) && !isUsableVdpLocationName(s)) return;
-    if (!force && DEALER_BRAND_LOCATION_RE.test(s)) return;
-    const key = locationGroupKey(s);
+    // Store titles must not go through city canonicalize ("… of Arkansas" etc.)
+    const key =
+      isLegitimateStoreSite(s) ||
+      (isUsableVdpLocationName(s) && !parseCityState(s)?.state && /\brv\b|\bof\b/i.test(s))
+        ? `raw:${locationIdentityKey(s)}`
+        : locationGroupKey(s);
     if (!key || key === 'raw:') return;
     const bucket = groups.get(key);
     if (bucket) {
@@ -257,27 +322,39 @@ export function sanitizeVdpLocationOptions(locations, opts = {}) {
   };
 
   for (const raw of list) push(raw);
-  // Configured store names: keep even if unusual, unless brand junk
+  // Configured store names: keep real sites / City,ST only
   for (const raw of configured) {
     const s = String(raw || '').trim();
     if (!s) continue;
-    if (DEALER_BRAND_LOCATION_RE.test(s) && parseCityState(s)?.state == null) {
-      // skip "Gerzeny’s RV World"-style configured noise when it's not a city
-      continue;
-    }
-    push(s, { force: isUsableVdpLocationName(s) || Boolean(parseCityState(s)?.city) });
+    if (isDealerBrandLocation(s) || JUNK_LOCATION_RE.test(s)) continue;
+    push(s, {
+      force:
+        isCleanVdpLocationName(s) ||
+        isLegitimateStoreSite(s) ||
+        Boolean(parseCityState(s)?.state) ||
+        (Boolean(parseCityState(s)?.city) && !/\brv\b/i.test(s)),
+    });
   }
 
-  // If we have real city groups, drop leftover raw dealer-name groups
-  const hasCityGroups = [...groups.keys()].some((k) => k.startsWith('city:'));
-  if (hasCityGroups) {
+  // When real City,ST places exist, drop leftover brand / RV marketing groups
+  // (keep Moix-style store sites and bare cities like Nokomis).
+  const hasStateCity = [...groups.values()].some((variants) =>
+    variants.some((v) => Boolean(parseCityState(v)?.state))
+  );
+  if (hasStateCity) {
     for (const key of [...groups.keys()]) {
-      if (!key.startsWith('city:')) {
-        const variants = groups.get(key) || [];
-        const looksBrand = variants.some(
-          (v) => DEALER_BRAND_LOCATION_RE.test(v) || /\brv\b/i.test(v)
-        );
-        if (looksBrand) groups.delete(key);
+      const variants = groups.get(key) || [];
+      if (variants.some((v) => Boolean(parseCityState(v)?.state))) continue;
+      if (variants.some((v) => isLegitimateStoreSite(v))) continue;
+      if (
+        variants.some(
+          (v) =>
+            isDealerBrandLocation(v) ||
+            JUNK_LOCATION_RE.test(v) ||
+            /\brv\b|sky\s*river|gerzeny/i.test(v)
+        )
+      ) {
+        groups.delete(key);
       }
     }
   }
@@ -287,30 +364,35 @@ export function sanitizeVdpLocationOptions(locations, opts = {}) {
 
   const labels = [];
   for (const [, variants] of groups) {
-    labels.push({ label: pickPreferredLabel(variants), variants });
+    const storeTitle = variants.find(
+      (v) => /\brv\b|\bof\b/i.test(v) && !parseCityState(v)?.state
+    );
+    labels.push({
+      label: storeTitle || pickPreferredLabel(variants),
+      variants,
+    });
   }
   labels.sort((a, b) => a.label.localeCompare(b.label));
 
   for (const { label, variants } of labels) {
-    out.push(label);
+    const display = label;
+    out.push(display);
     const expanded = new Set([
       ...variants,
-      ...syntheticVariants(label),
+      display,
+      ...syntheticVariants(display),
       ...variants.flatMap((v) => syntheticVariants(v)),
     ]);
-    // City-only + City,ST for matching inventory
-    const parsed = parseCityState(label);
-    if (parsed?.city) {
+    const parsed = parseCityState(display);
+    if (parsed?.city && parsed?.state) {
       expanded.add(parsed.city);
-      if (parsed.state) {
-        expanded.add(`${parsed.city}, ${parsed.state}`);
-        expanded.add(`${parsed.city} ${parsed.state}`);
-      }
+      expanded.add(`${parsed.city}, ${parsed.state}`);
+      expanded.add(`${parsed.city} ${parsed.state}`);
     }
     const listVariants = [...expanded];
-    nextVariants.set(locationIdentityKey(label), listVariants);
-    nextVariants.set(locationGroupKey(label), listVariants);
-    nextVariants.set(label, listVariants);
+    nextVariants.set(locationIdentityKey(display), listVariants);
+    nextVariants.set(locationGroupKey(display), listVariants);
+    nextVariants.set(display, listVariants);
   }
 
   activeLocationVariants = nextVariants;
@@ -325,6 +407,8 @@ export function expandLocationsForRpc(selected) {
   for (const raw of list) {
     const loc = String(raw || '').trim();
     if (!loc || loc === 'All') continue;
+    // Never send marketing junk — selecting these blanks inventory
+    if (isDealerBrandLocation(loc) || JUNK_LOCATION_RE.test(loc)) continue;
 
     const byLabel = activeLocationVariants.get(loc);
     const byKey = activeLocationVariants.get(locationIdentityKey(loc));
@@ -366,20 +450,22 @@ export function collapseLocationBreakdownRows(rows) {
       continue;
     }
 
-    if (DEALER_BRAND_LOCATION_RE.test(raw) || (JUNK_LOCATION_RE.test(raw) && !parseCityState(raw)?.city)) {
+    // Only fold true marketing junk — never Moix RV Supercenter / Brinkley / etc.
+    if (isDealerBrandLocation(raw) || (JUNK_LOCATION_RE.test(raw) && !parseCityState(raw)?.city && !/\brv\b/i.test(raw))) {
       brandJunkViews += views;
       continue;
     }
 
-    const key = locationGroupKey(raw);
+    const isStoreTitle = /\brv\b|\bof\b/i.test(raw) && !parseCityState(raw)?.state;
+    const key = isStoreTitle ? `raw:${locationIdentityKey(raw)}` : locationGroupKey(raw);
     const prev = groups.get(key);
     if (prev) {
       prev.views += views;
       if (!prev.variants.includes(raw)) prev.variants.push(raw);
-      prev.label = pickPreferredLabel(prev.variants);
+      prev.label = isStoreTitle ? prev.variants[0] : pickPreferredLabel(prev.variants);
     } else {
       groups.set(key, {
-        label: canonicalizeLocationLabel(raw),
+        label: isStoreTitle ? raw : canonicalizeLocationLabel(raw),
         views,
         variants: [raw],
         special: false,
@@ -387,17 +473,11 @@ export function collapseLocationBreakdownRows(rows) {
     }
   }
 
-  const hasCity = [...groups.keys()].some((k) => k.startsWith('city:'));
   if (brandJunkViews > 0) {
-    if (hasCity) {
-      const otherKey = 'special:other';
-      const prev = groups.get(otherKey);
-      if (prev) prev.views += brandJunkViews;
-      else groups.set(otherKey, { label: 'Other', views: brandJunkViews, special: true });
-    } else {
-      // No cities — keep brand totals under a single Other so the chart isn't empty
-      groups.set('special:other', { label: 'Other', views: brandJunkViews, special: true });
-    }
+    const otherKey = 'special:other';
+    const prev = groups.get(otherKey);
+    if (prev) prev.views += brandJunkViews;
+    else groups.set(otherKey, { label: 'Other', views: brandJunkViews, special: true });
   }
 
   const sorted = [...groups.values()].sort((a, b) => {

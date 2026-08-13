@@ -68,7 +68,7 @@ AS $$
       AND length(b.inv_location) BETWEEN 4 AND 60
       AND b.inv_location !~ '[\^\*]'
       AND b.inv_location !~ '[\u4e00-\u9fff]'
-      AND b.inv_location !~* '(dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b)'
+      AND b.inv_location !~* '(dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b|gerzenyjev|\bavtodom|\bsvet\b|search for|your next|new\s*&\s*used|sky\s*river)'
       AND (
         (
           b.inv_location ~* ',\s*[A-Za-z]{2}$'
@@ -85,10 +85,11 @@ AS $$
           AND b.inv_location !~* '\s[A-Za-z]{2}$'
           AND b.inv_location !~* ',\s*'
           AND b.inv_location !~* '\brv\b'
+          AND b.inv_location !~* 'gerzeny|sky\s*river'
         )
-        -- City + full state (Bradenton, Florida / Floride)
+        -- City + full state (Bradenton, Florida / Floride / Californie)
         OR (
-          b.inv_location ~* ',\s*(florida|floride|texas|arkansas|missouri|georgia|alabama|california)$'
+          b.inv_location ~* ',\s*(florida|floride|texas|arkansas|missouri|georgia|alabama|california|californie)$'
         )
       )
   ),
@@ -101,7 +102,7 @@ AS $$
       AND length(b.inv_location) BETWEEN 2 AND 80
       AND b.inv_location !~ '[\^\*]'
       AND b.inv_location !~ '[\u4e00-\u9fff]'
-      AND b.inv_location !~* '(dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|http|www\.|\.com|\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b)'
+      AND b.inv_location !~* '(dealership|inventory|explore|trusted|models|selection|latest|multi[- ]?state|for sale|motorhomes?|campers?|trailers?|\bdeals\b|\bsales\b|http|www\.|\.com|\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b|gerzenyjev|\bavtodom|\bsvet\b|search for|your next|gerzeny|new\s*&\s*used|sky\s*river)'
   ),
   -- Merge admin + inventory so filter matches Location Breakdown.
   -- (Old logic hid inventory names whenever smart_dealer_locations had any row —
@@ -109,7 +110,11 @@ AS $$
   -- Frontend sanitizeVdpLocationOptions collapses Bradenton / Bradenton, FL / Floride.
   all_locs AS (
     SELECT c.location_name FROM configured_locs c
-    WHERE c.location_name !~* '(\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b)'
+    WHERE c.location_name !~* '(\brv\s*world\b|\bautocaravanas?\b|\bmundo de\b|gerzenyjev|\bavtodom|\bsvet\b|search for|your next|dealership|\bdeals\b|inventory|new\s*&\s*used|sky\s*river)'
+      AND NOT (
+        c.location_name ~* 'gerzeny'
+        AND c.location_name !~* ',\s*[A-Za-z]{2}$'
+      )
 
     UNION
 

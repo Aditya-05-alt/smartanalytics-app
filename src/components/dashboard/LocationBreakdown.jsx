@@ -18,11 +18,6 @@ const LOCATION_COLORS = [
   '#9ca3af',
 ];
 
-function truncateLabel(label, max = 22) {
-  if (!label || label.length <= max) return label;
-  return `${label.slice(0, max - 1)}…`;
-}
-
 function colorForRank(rank) {
   const r = Number(rank) || 999;
   if (r === 999) return LOCATION_COLORS[LOCATION_COLORS.length - 1];
@@ -44,9 +39,9 @@ function normalizeRows(data) {
 }
 
 function toDonutRow(row) {
-  const fullName = row.location_bucket;
+  const fullName = String(row.location_bucket || 'Unknown').trim() || 'Unknown';
   return {
-    name: truncateLabel(fullName),
+    name: fullName,
     fullName,
     color: colorForRank(row.rank),
     value: row.views,

@@ -4613,9 +4613,11 @@ body {
   color: var(--t2);
   font-weight: 500;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.35;
+  word-break: break-word;
 }
 .donut-lg-value {
   font-family: inherit;
