@@ -15,6 +15,8 @@ export function useBreakdownFetch({
   normalize,
   errorMessage = 'Failed to load breakdown.',
   ignoreVdpFilters = false,
+  /** When false, clear rows on every reload so stale unfiltered lists cannot linger. */
+  keepPreviousOnReload = true,
 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -31,6 +33,9 @@ export function useBreakdownFetch({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    if (!keepPreviousOnReload) {
+      setRows([]);
+    }
 
     fetchFn({
       clientId,
@@ -43,13 +48,17 @@ export function useBreakdownFetch({
     })
       .then((data) => {
         if (cancelled) return;
-        if (data === undefined) return;
+        // null = cancelled mid-flight from fetchFn; skip without wiping on keepPrevious
+        if (data === undefined || data === null) return;
         setRows(normalize(data));
+        setError(null);
       })
       .catch((e) => {
         if (cancelled) return;
         setError(e?.message || errorMessage);
-        setRows([]);
+        if (!keepPreviousOnReload) {
+          setRows([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -70,6 +79,7 @@ export function useBreakdownFetch({
     normalize,
     errorMessage,
     ignoreVdpFilters,
+    keepPreviousOnReload,
   ]);
 
   return { rows, loading, error };

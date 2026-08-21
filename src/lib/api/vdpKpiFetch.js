@@ -12,6 +12,7 @@ export function buildVdpKpiRpcParams(clientId, from, to, invParams = {}) {
     p_locations: invParams.p_locations ?? null,
     p_years: invParams.p_years ?? null,
     p_condition: invParams.p_condition ?? 'BOTH',
+    p_channels: invParams.p_channels ?? null,
   };
 }
 

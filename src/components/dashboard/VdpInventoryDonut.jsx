@@ -20,8 +20,12 @@ function InventoryDonutDisplay({
   emptyMessage,
   toDonutRow,
   baselineDonutData,
+  keepPreviousOnReload = true,
 }) {
-  const allData = useMemo(() => rows.map(toDonutRow), [rows, toDonutRow]);
+  const allData = useMemo(
+    () => rows.map((row, index) => toDonutRow(row, index)),
+    [rows, toDonutRow]
+  );
   const chartData = useMemo(() => {
     if (chartTopN == null) return allData;
     return allData.slice(0, chartTopN);
@@ -48,6 +52,8 @@ function InventoryDonutDisplay({
     [chartData]
   );
 
+  const showSkeleton = loading && (keepPreviousOnReload ? rows.length === 0 : true);
+
   return (
     <BreakdownDonut
       title={periodLabel}
@@ -59,7 +65,7 @@ function InventoryDonutDisplay({
       totalLabel="Total"
       totalDelta={totalDelta}
       headerExtra={headerExtra}
-      loading={loading && rows.length === 0}
+      loading={showSkeleton}
       error={error}
       emptyMessage={!loading && !error && rows.length === 0 ? emptyMessage : null}
       skeletonRows={8}
@@ -85,6 +91,7 @@ function InventoryDonutPane({
   baselineDonutData,
   ignoreVdpFilters = false,
   centerLabel = 'VDP VIEWS',
+  keepPreviousOnReload = true,
 }) {
   const { rows, loading, error } = useBreakdownFetch({
     enabled,
@@ -98,6 +105,7 @@ function InventoryDonutPane({
     normalize,
     errorMessage,
     ignoreVdpFilters,
+    keepPreviousOnReload,
   });
 
   return (
@@ -111,6 +119,7 @@ function InventoryDonutPane({
       emptyMessage={emptyMessage}
       baselineDonutData={baselineDonutData}
       centerLabel={centerLabel}
+      keepPreviousOnReload={keepPreviousOnReload}
     />
   );
 }
@@ -125,6 +134,7 @@ export default function VdpInventoryDonut({
   centerLabel = 'VDP VIEWS',
   limit = null,
   ignoreVdpFilters = false,
+  keepPreviousOnReload = true,
   clientId: clientIdProp,
   from: fromProp,
   to: toProp,
@@ -162,6 +172,7 @@ export default function VdpInventoryDonut({
     normalize,
     errorMessage,
     ignoreVdpFilters,
+    keepPreviousOnReload,
   });
 
   const singleFetch = useBreakdownFetch({
@@ -176,10 +187,11 @@ export default function VdpInventoryDonut({
     normalize,
     errorMessage,
     ignoreVdpFilters,
+    keepPreviousOnReload,
   });
 
   const compareAllData = useMemo(
-    () => (compareFetch.rows || []).map(toDonutRow),
+    () => (compareFetch.rows || []).map((row, index) => toDonutRow(row, index)),
     [compareFetch.rows, toDonutRow]
   );
 
@@ -207,6 +219,7 @@ export default function VdpInventoryDonut({
           chartTopN={topN}
           toDonutRow={toDonutRow}
           emptyMessage={emptyMessage}
+          keepPreviousOnReload={keepPreviousOnReload}
         />
         <InventoryDonutPane
           periodLabel={currentPeriodLabel}
@@ -225,6 +238,7 @@ export default function VdpInventoryDonut({
           baselineDonutData={compareAllData}
           ignoreVdpFilters={ignoreVdpFilters}
           centerLabel={centerLabel}
+          keepPreviousOnReload={keepPreviousOnReload}
         />
       </CompareBreakdownSection>
     );
@@ -241,6 +255,7 @@ export default function VdpInventoryDonut({
       toDonutRow={toDonutRow}
       emptyMessage={emptyMessage}
       headerExtra={topNControl}
+      keepPreviousOnReload={keepPreviousOnReload}
     />
   );
 }

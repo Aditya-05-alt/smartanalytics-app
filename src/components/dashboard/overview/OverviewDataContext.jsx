@@ -17,6 +17,7 @@ import {
   normalizeVdpFilters,
   vdpFilterCacheSuffix,
   vdpFiltersActive,
+  VDP_CHANNEL_FILTER_OPTIONS,
 } from '@/lib/vdp/vdpFilterParams';
 import {
   getVdpDailyCache,
@@ -56,6 +57,7 @@ const EMPTY_VDP_FILTER_OPTIONS = {
   models: ['All'],
   locations: ['All'],
   types: ['All'],
+  channels: ['All'],
 };
 
 function pruneInvalidFilterSelections(filters, options) {
@@ -84,6 +86,15 @@ function pruneInvalidFilterSelections(filters, options) {
       );
     })
     .filter(Boolean);
+
+  // Channel is multi-select (bundle labels + solos).
+  const chList = options.channels || ['All'];
+  const chSelected = Array.isArray(next.channel)
+    ? next.channel
+    : next.channel && next.channel !== 'All'
+      ? [next.channel]
+      : [];
+  next.channel = chSelected.filter((c) => chList.includes(c));
   return next;
 }
 
@@ -583,9 +594,13 @@ export function OverviewProvider({ children }) {
     })
       .then((options) => {
         if (cancelled || !options) return;
-        setVdpFilterOptions(options);
+        const withChannels = {
+          ...options,
+          channels: VDP_CHANNEL_FILTER_OPTIONS,
+        };
+        setVdpFilterOptions(withChannels);
         setVdpFilters((current) =>
-          pruneInvalidFilterSelections(normalizeVdpFilters(current), options)
+          pruneInvalidFilterSelections(normalizeVdpFilters(current), withChannels)
         );
       })
       .catch(() => {
@@ -614,7 +629,8 @@ export function OverviewProvider({ children }) {
     }
 
     let cancelled = false;
-    if (!vdpFilteredDailyRef.current) setVdpFiltersLoading(true);
+    // Keep prior KPI visible while the next filter result loads (avoid blank flash).
+    setVdpFiltersLoading(true);
 
     fetchVdpDailyFiltered({
       clientId: clientKey,
@@ -631,6 +647,9 @@ export function OverviewProvider({ children }) {
     })
       .then((result) => {
         if (!cancelled && result) setVdpFilteredDaily(result);
+      })
+      .catch(() => {
+        // Keep last good KPI on failure; do not wipe the chart to blank.
       })
       .finally(() => {
         if (!cancelled) setVdpFiltersLoading(false);

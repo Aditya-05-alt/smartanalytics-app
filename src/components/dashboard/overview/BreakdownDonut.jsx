@@ -347,9 +347,9 @@ export default function BreakdownDonut({
                       : 'donut-lg-list-rows'
                   }
                 >
-                  {visibleListSeries.map((s) => (
+                  {visibleListSeries.map((s, idx) => (
                     <div
-                      key={`${s.groupKey || 'solo'}-${s.name}`}
+                      key={s.id || `${s.fullName || s.name}|${s.value}|${idx}`}
                       className={[
                         'donut-lg-row',
                         showGroupColumn ? 'donut-lg-row--with-toggle-col' : '',

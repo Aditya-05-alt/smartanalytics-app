@@ -3951,6 +3951,161 @@ body {
   text-decoration: underline;
 }
 
+.vdp-bq-compare-panel {
+  width: 100%;
+}
+.vdp-bq-compare-body {
+  padding-top: 0.75rem;
+}
+.vdp-bq-compare-note {
+  margin: 0 0 0.75rem;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--t3);
+}
+.vdp-bq-compare-note code {
+  font-size: 10px;
+  color: var(--t2);
+}
+.vdp-bq-compare-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+.vdp-bq-compare-table {
+  width: 100%;
+  min-width: 720px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.vdp-bq-col-dealer { width: 24%; }
+.vdp-bq-col-property { width: 12%; }
+.vdp-bq-col-status { width: 14%; }
+.vdp-bq-col-num { width: 14%; }
+.vdp-bq-col-pct { width: 8%; }
+
+.vdp-bq-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+.vdp-bq-filter-btn {
+  border: 1px solid var(--bd);
+  background: var(--s3);
+  color: var(--t3);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.vdp-bq-filter-btn:hover { color: var(--t); }
+.vdp-bq-filter-btn.active {
+  background: var(--acc2, color-mix(in srgb, var(--acc) 18%, var(--s2)));
+  border-color: color-mix(in srgb, var(--acc) 40%, var(--bd));
+  color: var(--acc);
+}
+.vdp-bq-status-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  background: var(--s3);
+  color: var(--t3);
+}
+.vdp-bq-status-missing {
+  background: color-mix(in srgb, var(--red, #f87171) 18%, var(--s2));
+  color: var(--red, #f87171);
+}
+.vdp-bq-status-matched {
+  background: color-mix(in srgb, var(--green, #34d399) 18%, var(--s2));
+  color: var(--green, #34d399);
+}
+.vdp-bq-status-ga4 {
+  background: color-mix(in srgb, #60a5fa 18%, var(--s2));
+  color: #60a5fa;
+}
+.vdp-bq-status-bigq {
+  background: color-mix(in srgb, #fbbf24 18%, var(--s2));
+  color: #d97706;
+}
+.vdp-bq-row-missing td {
+  background: color-mix(in srgb, var(--red, #f87171) 6%, transparent);
+}
+
+.vdp-bq-compare-table thead th {
+  background: var(--s3);
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--t3);
+  text-align: left;
+  border-bottom: 1px solid var(--bd);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.vdp-bq-compare-table thead th.num {
+  text-align: right;
+}
+.vdp-bq-compare-table tbody td,
+.vdp-bq-compare-table tfoot td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--bd);
+  vertical-align: middle;
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vdp-bq-compare-table tbody tr:hover td {
+  background: var(--s3);
+}
+.vdp-bq-compare-table tfoot td {
+  background: var(--s3);
+  border-bottom: none;
+  border-top: 1px solid var(--bd);
+  font-weight: 600;
+  color: var(--t);
+}
+.vdp-bq-compare-table td.num,
+.vdp-bq-compare-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.vdp-bq-td-dealer {
+  text-align: left;
+}
+.vdp-bq-dealer-name {
+  display: block;
+  font-weight: 600;
+  color: var(--t);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vdp-bq-dealer-id {
+  display: block;
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.vdp-bq-td-property {
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--t2);
+  white-space: nowrap;
+}
+.vdp-bq-delta-pos { color: var(--green, #34d399); }
+.vdp-bq-delta-neg { color: var(--red, #f87171); }
+
 /* ── PANEL ── */
 .panel {
   background: var(--s2);

@@ -82,10 +82,11 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
 
   let hootInventoryCount = 0;
   if (customerName) {
+    // Case-insensitive: e.g. "Moix Rv" config ↔ "Moix RV" Hoot inventory
     const { count, error } = await supabase
       .from('smart_hoot_inventory_live')
       .select('*', { count: 'exact', head: true })
-      .eq('customer_name', customerName);
+      .ilike('customer_name', customerName);
 
     if (error) {
       throw new Error(error.message);
@@ -108,7 +109,7 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
     const { count: scrapByName, error: scrapByNameError } = await supabase
       .from('smart_scrap_inventory')
       .select('*', { count: 'exact', head: true })
-      .eq('customer_name', customerName);
+      .ilike('customer_name', customerName);
 
     if (scrapByNameError) {
       throw new Error(scrapByNameError.message);

@@ -1,10 +1,10 @@
--- Frontend-safe make breakdown RPC.
--- IMPORTANT: Use SECURITY DEFINER so anon/authenticated can execute even when
--- smart_final_data is protected by RLS.
+-- Make breakdown. Channel filter: sum GA4 page views joined to final inventory.
 
 DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date);
 DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date, int);
 DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date, int, integer[]);
+DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date, int, text[], text[], text[], text[], integer[], text);
+DROP FUNCTION IF EXISTS public.get_make_breakdown(text, date, date, int, text[], text[], text[], text[], integer[], text, text[]);
 
 CREATE OR REPLACE FUNCTION public.get_make_breakdown(
   p_client_id text,
@@ -16,7 +16,8 @@ CREATE OR REPLACE FUNCTION public.get_make_breakdown(
   p_models text[] DEFAULT NULL,
   p_locations text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
-  p_condition text DEFAULT 'BOTH'
+  p_condition text DEFAULT 'BOTH',
+  p_channels text[] DEFAULT NULL
 )
 RETURNS TABLE (
   make_bucket text,
@@ -28,13 +29,43 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
+SET statement_timeout = '55s'
 AS $$
   WITH base AS (
     SELECT
+      COALESCE(NULLIF(TRIM(f.inv_make), ''), 'Unknown') AS make_bucket,
+      COALESCE(p.views, 0)::bigint AS views
+    FROM public.smart_ga4_page_data p
+    INNER JOIN public.smart_final_data f
+      ON f.client_id::text = p.client_id::text
+     AND f.report_date = p.report_date
+     AND f.page_path = p.page_path
+    WHERE COALESCE(array_length(p_channels, 1), 0) > 0
+      AND p.client_id::text = trim(p_client_id)
+      AND p.report_date BETWEEN p_from AND p_to
+      AND p.vdp_conditions IS TRUE
+      AND public.vdp_channel_matches(p.channel, p_channels)
+      AND (COALESCE(array_length(p_types, 1), 0) = 0 OR f.inv_type = ANY(p_types))
+      AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR f.inv_make = ANY(p_makes))
+      AND (COALESCE(array_length(p_models, 1), 0) = 0 OR f.inv_model = ANY(p_models))
+      AND (
+        COALESCE(array_length(p_locations, 1), 0) = 0
+        OR public.vdp_location_filter_match(trim(p_client_id), f.inv_location, p_locations)
+      )
+      AND (
+        COALESCE(array_length(p_years, 1), 0) = 0
+        OR (f.inv_year ~ '^\d{4}$' AND f.inv_year::int = ANY(p_years))
+      )
+      AND public.vdp_condition_matches(f.inv_condition, p_condition)
+
+    UNION ALL
+
+    SELECT
       COALESCE(NULLIF(TRIM(inv_make), ''), 'Unknown') AS make_bucket,
       COALESCE(views, 0)::bigint AS views
-    FROM smart_final_data
-    WHERE client_id::text = trim(p_client_id)
+    FROM public.smart_final_data
+    WHERE COALESCE(array_length(p_channels, 1), 0) = 0
+      AND client_id::text = trim(p_client_id)
       AND report_date BETWEEN p_from AND p_to
       AND (COALESCE(array_length(p_types, 1), 0) = 0 OR inv_type = ANY(p_types))
       AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR inv_make = ANY(p_makes))
@@ -47,10 +78,7 @@ AS $$
         COALESCE(array_length(p_years, 1), 0) = 0
         OR (inv_year ~ '^\d{4}$' AND inv_year::int = ANY(p_years))
       )
-      AND (
-        UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH'
-        OR UPPER(inv_condition) = UPPER(p_condition)
-      )
+      AND public.vdp_condition_matches(inv_condition, p_condition)
   ),
   agg AS (
     SELECT make_bucket, SUM(views)::bigint AS views
@@ -98,8 +126,8 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION public.get_make_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
 ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_make_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
 ) TO anon, authenticated, service_role;

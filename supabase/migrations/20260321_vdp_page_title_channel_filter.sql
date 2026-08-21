@@ -82,7 +82,13 @@ AS $$
         COALESCE(array_length(p_years, 1), 0) = 0
         OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years))
       )
-      AND public.vdp_condition_matches(s.inv_condition, p_condition)
+      AND (
+        UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH'
+        OR UPPER(s.inv_condition) = UPPER(p_condition)
+      )
+      AND public.vdp_final_matches_channels(
+        trim(p_client_id), s.report_date, s.page_path, p_channels
+      )
   ),
   -- One inventory/label row per path (best populated inventory wins)
   path_meta AS (

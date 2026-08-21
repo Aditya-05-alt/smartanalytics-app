@@ -30,12 +30,35 @@ function truncateLabel(label, max = 22) {
 
 function normalizeRows(data) {
   const list = Array.isArray(data) ? data : data ? [data] : [];
-  return list.map((row) => ({
-    model_bucket: String(row.model_bucket ?? row.inv_model ?? 'Unknown'),
-    make_bucket: String(row.make_bucket ?? row.inv_make ?? '').trim(),
-    views: Number(row.views ?? 0) || 0,
-    pct: Number(row.pct ?? row.percentage ?? 0) || 0,
-    rank: Number(row.rank ?? 999) || 999,
+  // Dedupe by model+make in case RPC/whitespace returns twin rows.
+  const byKey = new Map();
+  for (const row of list) {
+    const model = String(row.model_bucket ?? row.inv_model ?? 'Unknown').trim() || 'Unknown';
+    const make = String(row.make_bucket ?? row.inv_make ?? '').trim();
+    const key = `${model.toLowerCase()}||${make.toLowerCase()}`;
+    const views = Number(row.views ?? 0) || 0;
+    const prev = byKey.get(key);
+    if (prev) {
+      prev.views += views;
+    } else {
+      byKey.set(key, {
+        model_bucket: model,
+        make_bucket: make,
+        views,
+        pct: Number(row.pct ?? row.percentage ?? 0) || 0,
+        rank: Number(row.rank ?? 999) || 999,
+      });
+    }
+  }
+
+  const merged = [...byKey.values()].sort(
+    (a, b) => b.views - a.views || a.model_bucket.localeCompare(b.model_bucket)
+  );
+  const total = merged.reduce((s, r) => s + r.views, 0) || 0;
+  return merged.map((row, index) => ({
+    ...row,
+    pct: total > 0 ? Math.round((10000 * row.views) / total) / 100 : 0,
+    rank: row.model_bucket === 'Other' ? 999 : index + 1,
   }));
 }
 
@@ -44,9 +67,11 @@ function rowTooltip(row) {
   return `${row.model_bucket}${make}`;
 }
 
-function toDonutRow(row) {
+function toDonutRow(row, index = 0) {
   const fullName = rowTooltip(row);
   return {
+    // Stable unique id — truncated `name` alone collides across models.
+    id: `model:${row.model_bucket}|${row.make_bucket}|${row.rank}|${index}`,
     name: truncateLabel(row.model_bucket),
     fullName,
     color: colorForRank(row.rank),
@@ -64,6 +89,7 @@ export default function ModelBreakdown(props) {
       errorMessage="Failed to load model breakdown."
       toDonutRow={toDonutRow}
       emptyMessage="No model data for this period."
+      keepPreviousOnReload={false}
       {...props}
     />
   );

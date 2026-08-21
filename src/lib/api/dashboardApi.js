@@ -218,6 +218,30 @@ export async function fetchVdpDailyFiltered({
   }
 
   const inv = vdpRpcExtraParams(vdpFilters, tab);
+  const preferServerApi = Boolean(inv.p_channels?.length);
+
+  // Channel filter is heavier — use service-role API first (55s RPC timeout).
+  if (preferServerApi) {
+    try {
+      const viaApi = await fetchVdpDailyFilteredViaApi({
+        clientId,
+        from,
+        to,
+        vdpFilters,
+        tab,
+        onCancelCheck,
+      });
+      if (viaApi) {
+        onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
+        if (!skipCache) {
+          setVdpDailyCache(clientId, from, to, cacheSuffix, viaApi);
+        }
+        return viaApi;
+      }
+    } catch {
+      // fall through to direct RPC
+    }
+  }
 
   const supabase = createClient();
   if (supabase) {
@@ -368,16 +392,18 @@ export async function fetchModelBreakdown({
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('get_model_breakdown', {
+  const params = {
     p_client_id: String(clientId).trim(),
     p_from: toDateOnly(from),
     p_to: toDateOnly(to),
     p_limit: limit,
     ...vdpRpcExtraParams(vdpFilters, tab),
-  });
+  };
+
+  const { data, error } = await supabase.rpc('get_model_breakdown', params);
 
   if (error) throw new Error(error.message || 'Failed to fetch model breakdown.');
-  return data || [];
+  return Array.isArray(data) ? data : data ? [data] : [];
 }
 
 /** Year breakdown from smart_final_data (VDP tab only). */

@@ -57,15 +57,17 @@ BEGIN
         AND p.report_date BETWEEN p_from AND p_to
         AND (
           v_page_type = 'ALL'
-          OR (v_page_type = 'VDP'   AND p.ga4_page_type ILIKE 'VDP%')
+          -- VDP tab: use vdp_conditions (same as Step 3 / location charts).
+          -- page_type alone can stay stale (e.g. /inventory/ listing labeled VDP).
+          OR (v_page_type = 'VDP'   AND p.vdp_conditions IS TRUE)
           OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
           OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
-          OR (v_page_type = 'OTHER' AND p.ga4_page_type NOT ILIKE 'VDP%'
+          OR (v_page_type = 'OTHER' AND p.vdp_conditions IS NOT TRUE
                                     AND p.ga4_page_type <> 'SRP'
                                     AND p.ga4_page_type NOT ILIKE 'home%')
         )
         AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
-             OR p.channel = ANY(p_channels))
+             OR public.vdp_channel_matches(p.channel, p_channels))
     ),
     mapped AS (
       SELECT
@@ -120,21 +122,22 @@ BEGIN
       p.client_id,
       p.report_date,
       TRIM(p.page_path) AS page_path,
-      p.ga4_page_type
+      p.ga4_page_type,
+      p.vdp_conditions
     FROM smart_ga4_page_data p
     WHERE p.client_id::text = trim(p_client_id)
       AND p.report_date BETWEEN p_from AND p_to
       AND (
         v_page_type = 'ALL'
-        OR (v_page_type = 'VDP'   AND p.ga4_page_type ILIKE 'VDP%')
+        OR (v_page_type = 'VDP'   AND p.vdp_conditions IS TRUE)
         OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
         OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
-        OR (v_page_type = 'OTHER' AND p.ga4_page_type NOT ILIKE 'VDP%'
+        OR (v_page_type = 'OTHER' AND p.vdp_conditions IS NOT TRUE
                                   AND p.ga4_page_type <> 'SRP'
                                   AND p.ga4_page_type NOT ILIKE 'home%')
       )
       AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
-           OR p.channel = ANY(p_channels))
+           OR public.vdp_channel_matches(p.channel, p_channels))
   ),
   filtered_paths AS (
     SELECT DISTINCT
@@ -159,10 +162,7 @@ BEGIN
         COALESCE(array_length(p_years, 1), 0) = 0
         OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years))
       )
-      AND (
-        v_condition = 'BOTH'
-        OR UPPER(s.inv_condition) = v_condition
-      )
+      AND public.vdp_condition_matches(s.inv_condition, p_condition)
       AND (
         COALESCE(array_length(p_classes, 1), 0) = 0
         OR (
@@ -180,7 +180,7 @@ BEGIN
   combined AS (
     SELECT p.channel, p.views
     FROM pages p
-    WHERE p.ga4_page_type NOT ILIKE 'VDP%'
+    WHERE p.vdp_conditions IS NOT TRUE
 
     UNION ALL
 
@@ -190,7 +190,7 @@ BEGIN
       ON f.client_id = p.client_id::text
      AND f.report_date = p.report_date
      AND f.page_path = p.page_path
-    WHERE p.ga4_page_type ILIKE 'VDP%'
+    WHERE p.vdp_conditions IS TRUE
   ),
   mapped AS (
     SELECT

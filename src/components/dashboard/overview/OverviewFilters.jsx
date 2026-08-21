@@ -7,7 +7,7 @@ import AllExportButton from './AllExportButton';
 import AllDealerExportButton from './AllDealerExportButton';
 import { useClient } from '../ClientContext';
 import { useOverview } from './OverviewDataContext';
-import { vdpFiltersActive } from '@/lib/vdp/vdpFilterParams';
+import { vdpFiltersActive, VDP_CHANNEL_FILTER_OPTIONS } from '@/lib/vdp/vdpFilterParams';
 
 const CONDITION_OPTIONS = ['All', 'Used + New', 'Used', 'New'];
 
@@ -16,6 +16,12 @@ function toOpts(values, allLabel) {
     value: v,
     label: v === 'All' ? allLabel : v,
   }));
+}
+
+function normalizeConditionSelection(value) {
+  // Used + New is the same as All (BOTH) — store as All so UI/cache stay consistent.
+  if (value === 'Used + New' || value == null || value === '') return 'All';
+  return value;
 }
 
 function ComparePeriodSwitch({ enabled, onChange }) {
@@ -115,8 +121,10 @@ export default function OverviewFilters() {
           <FilterDropdown
             clearable
             options={conditionOpts}
-            value={vdpFilters.condition}
-            onChange={(v) => setVdpFilter('condition', v)}
+            value={
+              vdpFilters.condition === 'Used + New' ? 'All' : vdpFilters.condition
+            }
+            onChange={(v) => setVdpFilter('condition', normalizeConditionSelection(v))}
           />
           <FilterDropdown
             clearable
@@ -141,6 +149,13 @@ export default function OverviewFilters() {
             options={toOpts(typeValues, `All ${config.typeH || 'Types'}`)}
             value={vdpFilters.type}
             onChange={(v) => setVdpFilter('type', v)}
+          />
+          <FilterDropdown
+            multi
+            clearable
+            options={toOpts(VDP_CHANNEL_FILTER_OPTIONS, 'All Channels')}
+            value={Array.isArray(vdpFilters.channel) ? vdpFilters.channel : []}
+            onChange={(v) => setVdpFilter('channel', v)}
           />
           {config.showLoc !== false && (
             <FilterDropdown

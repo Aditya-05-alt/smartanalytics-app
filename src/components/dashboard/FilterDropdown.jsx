@@ -8,6 +8,7 @@ function isPinnedOption(option, defaultAll) {
   return (
     option.value === defaultAll ||
     option.label?.startsWith?.('All') ||
+    option.value === 'Used + New' ||
     option.label === 'Used + New'
   );
 }
@@ -56,10 +57,14 @@ export default function FilterDropdown({
     if (!multi) return current?.label ?? '';
     if (selectedList.length === 0) {
       const allOpt = options.find((o) => o.value === defaultAll);
-      return allOpt?.label || 'All Locations';
+      return allOpt?.label || 'All';
     }
     if (selectedList.length === 1) return selectedList[0];
-    return `${selectedList.length} Locations`;
+    const allOpt = options.find((o) => o.value === defaultAll);
+    const allLabel = allOpt?.label || '';
+    if (/location/i.test(allLabel)) return `${selectedList.length} Locations`;
+    if (/channel/i.test(allLabel)) return `${selectedList.length} Channels`;
+    return `${selectedList.length} selected`;
   }, [multi, current, selectedList, options, defaultAll]);
 
   const { pinned, rest } = useMemo(() => {

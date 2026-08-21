@@ -21,6 +21,8 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
+-- PostgREST authenticator defaults lock_timeout=8s; Step 3 needs more wait headroom.
+SET lock_timeout = '120s'
 AS $$
 BEGIN
   DELETE FROM public.smart_final_data AS sfd
