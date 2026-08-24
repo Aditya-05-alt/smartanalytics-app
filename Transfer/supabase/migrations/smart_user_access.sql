@@ -28,11 +28,10 @@ CREATE TABLE IF NOT EXISTS public.smart_reports (
 
 INSERT INTO public.smart_reports (report_key, label, href, sort_order) VALUES
   ('overview',    'Overview',           '/dashboard',             1),
-  ('campaigns',   'Campaigns',          '/dashboard/campaigns',   2),
-  ('inventory',   'Inventory report',   '/dashboard/inventory',   3),
-  ('health',      'Portfolio Health',   '/dashboard/health',      4),
-  ('attribution', 'Attribution',        '/dashboard/attribution', 5),
-  ('local',       'Local Intel',        '/dashboard/local',       6)
+  ('inventory',   'Inventory report',   '/dashboard/inventory',   2),
+  ('health',      'Portfolio Health',   '/dashboard/health',      3),
+  ('attribution', 'Attribution',        '/dashboard/attribution', 4),
+  ('local',       'Local Intel',        '/dashboard/local',       5)
 ON CONFLICT (report_key) DO UPDATE SET
   label = EXCLUDED.label,
   href = EXCLUDED.href,

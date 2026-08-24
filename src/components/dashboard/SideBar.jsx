@@ -42,6 +42,12 @@ const ICONS = {
       <circle cx="16.5" cy="17" r="1.5" />
     </svg>
   ),
+  campaigns: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 11l18-5v12L3 13v-2z" />
+      <path d="M11 13v8" />
+    </svg>
+  ),
   vdplab: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M9 3h6" />
@@ -65,6 +71,7 @@ const ICONS = {
 
 const ITEMS = [
   { id: 'overview', href: '/dashboard', title: 'Overview' },
+  { id: 'campaigns', href: '/dashboard/campaigns', title: 'Campaigns' },
   { id: 'vdplab', href: '/dashboard/vdp-lab', title: 'VDP Lab' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
   { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },

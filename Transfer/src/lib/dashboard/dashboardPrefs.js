@@ -3,7 +3,6 @@ import { ALL_DEALER_CLIENT, ALL_DEALER_ID } from '@/lib/dashboard/allDealers';
 const DEALER_ID_KEY = 'sa_selected_dealer_id';
 const OVERVIEW_DEALER_ID_KEY = 'sa_overview_dealer_id';
 const INVENTORY_DEALER_ID_KEY = 'sa_inventory_dealer_id';
-const CAMPAIGNS_DEALER_ID_KEY = 'sa_campaigns_dealer_id';
 const LAST_REAL_DEALER_ID_KEY = 'sa_last_real_dealer_id';
 const OVERVIEW_TAB_KEY = 'sa_overview_tab';
 const OVERVIEW_DATE_RANGE_KEY = 'sa_overview_date_range';
@@ -39,27 +38,19 @@ export const OVERVIEW_TAB_IDS = ['vdp', 'srp', 'home', 'all', 'other'];
 export const DEALER_SCOPE = {
   OVERVIEW: 'overview',
   INVENTORY: 'inventory',
-  CAMPAIGNS: 'campaigns',
 };
 
 const INVENTORY_REPORT_PATH = '/dashboard/inventory';
-const CAMPAIGNS_REPORT_PATH = '/dashboard/campaigns';
 
 export function dealerScopeFromPathname(pathname) {
   if (pathname?.startsWith(INVENTORY_REPORT_PATH)) return DEALER_SCOPE.INVENTORY;
-  if (
-    pathname?.startsWith(CAMPAIGNS_REPORT_PATH) ||
-    pathname?.startsWith('/dashboard/campaigns_advance')
-  ) {
-    return DEALER_SCOPE.CAMPAIGNS;
-  }
   return DEALER_SCOPE.OVERVIEW;
 }
 
 function dealerStorageKey(scope) {
-  if (scope === DEALER_SCOPE.INVENTORY) return INVENTORY_DEALER_ID_KEY;
-  if (scope === DEALER_SCOPE.CAMPAIGNS) return CAMPAIGNS_DEALER_ID_KEY;
-  return OVERVIEW_DEALER_ID_KEY;
+  return scope === DEALER_SCOPE.INVENTORY
+    ? INVENTORY_DEALER_ID_KEY
+    : OVERVIEW_DEALER_ID_KEY;
 }
 
 function canUseStorage() {
@@ -265,18 +256,6 @@ export function resolveDealerForScope(dealers, scope, storedId) {
       if (match) return match;
     }
     return dealers.find((d) => d?.id) ?? ALL_DEALER_CLIENT;
-  }
-
-  if (scope === DEALER_SCOPE.CAMPAIGNS) {
-    if (storedId && storedId !== ALL_DEALER_ID) {
-      const match = findDealerById(dealers, storedId);
-      if (match) return match;
-    }
-    return (
-      dealers.find((d) => d?.ga4CustomerId) ??
-      dealers.find((d) => d?.id) ??
-      ALL_DEALER_CLIENT
-    );
   }
 
   if (!storedId || storedId === ALL_DEALER_ID) return ALL_DEALER_CLIENT;
