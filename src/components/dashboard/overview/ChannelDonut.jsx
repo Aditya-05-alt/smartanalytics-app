@@ -9,7 +9,6 @@ import {
 import {
   channelFilterCacheSuffix,
   channelFilterLabCacheSuffix,
-  channelFiltersActive,
 } from '@/lib/vdp/vdpFilterParams';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { channelRowsToDonutData } from '@/lib/ga4/channelDisplay';
@@ -114,10 +113,6 @@ function useChannelBreakdownRows({
     setError(null);
     if (trackBreakdownLoad && initialLoad) beginBreakdownLoad?.();
 
-    const invFiltered = labMode
-      ? true
-      : channelFiltersActive(vdpFilters, tab);
-
     fetchChannelBreakdownBundle({
       clientId,
       from,
@@ -127,7 +122,7 @@ function useChannelBreakdownRows({
       tab,
       labMode,
       adaptiveChunks: true,
-      preferServer: invFiltered || labMode,
+      preferServer: true,
       onCancelCheck: () => cancelled,
       onProgress: (partial, meta) => {
         if (cancelled) return;

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
 import { sanitizeVdpLocationOptions } from '@/lib/vdp/locationFilterOptions';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
@@ -48,25 +49,13 @@ async function rpcLocationBreakdown(supabase, params, labMode = false) {
  * Use smart_ga4_page_data only for views and per-page aggregations.
  */
 export async function fetchOverviewRows({ clientId, from, to, onCancelCheck }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
-  return rpcByDateChunks(supabase, 'get_ga4_overview', {
-    clientId,
-    from,
-    to,
-    onCancelCheck,
-  });
+  const bundle = await fetchOverviewBundle({ clientId, from, to, onCancelCheck });
+  return bundle?.rows || [];
 }
 
 export async function fetchUserTotals({ clientId, from, to, onCancelCheck }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
-  return rpcByDateChunks(supabase, 'get_ga4_user_totals', {
-    clientId,
-    from,
-    to,
-    onCancelCheck,
-  });
+  const bundle = await fetchOverviewBundle({ clientId, from, to, onCancelCheck });
+  return bundle?.userTotalsRows || [];
 }
 
 export async function fetchChannelBreakdown({
@@ -86,6 +75,7 @@ export async function fetchChannelBreakdown({
     vdpFilters,
     tab,
     onCancelCheck,
+    preferServer: true,
   });
 }
 
@@ -218,29 +208,26 @@ export async function fetchVdpDailyFiltered({
   }
 
   const inv = vdpRpcExtraParams(vdpFilters, tab);
-  const preferServerApi = Boolean(inv.p_channels?.length);
 
-  // Channel filter is heavier — use service-role API first (55s RPC timeout).
-  if (preferServerApi) {
-    try {
-      const viaApi = await fetchVdpDailyFilteredViaApi({
-        clientId,
-        from,
-        to,
-        vdpFilters,
-        tab,
-        onCancelCheck,
-      });
-      if (viaApi) {
-        onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
-        if (!skipCache) {
-          setVdpDailyCache(clientId, from, to, cacheSuffix, viaApi);
-        }
-        return viaApi;
+  // Service-role API first (RLS-safe after smart_ga4_page_data is locked down).
+  try {
+    const viaApi = await fetchVdpDailyFilteredViaApi({
+      clientId,
+      from,
+      to,
+      vdpFilters,
+      tab,
+      onCancelCheck,
+    });
+    if (viaApi) {
+      onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
+      if (!skipCache) {
+        setVdpDailyCache(clientId, from, to, cacheSuffix, viaApi);
       }
-    } catch {
-      // fall through to direct RPC
+      return viaApi;
     }
+  } catch {
+    // fall through to direct RPC
   }
 
   const supabase = createClient();

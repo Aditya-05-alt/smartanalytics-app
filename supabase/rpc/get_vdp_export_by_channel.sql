@@ -4,6 +4,9 @@
 DROP FUNCTION IF EXISTS public.get_vdp_export_by_channel(
   text, date, date, text[], text[], text[], text[], integer[], text
 );
+DROP FUNCTION IF EXISTS public.get_vdp_export_by_channel(
+  text, date, date, text[], text[], text[], text[], integer[], text, text[]
+);
 
 CREATE OR REPLACE FUNCTION public.get_vdp_export_by_channel(
   p_client_id text,
@@ -14,7 +17,8 @@ CREATE OR REPLACE FUNCTION public.get_vdp_export_by_channel(
   p_models text[] DEFAULT NULL,
   p_locations text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
-  p_condition text DEFAULT 'BOTH'
+  p_condition text DEFAULT 'BOTH',
+  p_channels text[] DEFAULT NULL
 )
 RETURNS TABLE (
   report_date date,
@@ -51,15 +55,15 @@ AS $$
       AND (COALESCE(array_length(p_types, 1), 0) = 0 OR s.inv_type = ANY(p_types))
       AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR s.inv_make = ANY(p_makes))
       AND (COALESCE(array_length(p_models, 1), 0) = 0 OR s.inv_model = ANY(p_models))
-      AND (COALESCE(array_length(p_locations, 1), 0) = 0 OR s.inv_location = ANY(p_locations))
+      AND (
+        COALESCE(array_length(p_locations, 1), 0) = 0
+        OR public.vdp_location_filter_match(trim(p_client_id), s.inv_location, p_locations)
+      )
       AND (
         COALESCE(array_length(p_years, 1), 0) = 0
         OR (s.inv_year ~ '^\d{4}$' AND s.inv_year::int = ANY(p_years))
       )
-      AND (
-        UPPER(COALESCE(p_condition, 'BOTH')) = 'BOTH'
-        OR UPPER(s.inv_condition) = UPPER(p_condition)
-      )
+      AND public.vdp_condition_matches(s.inv_condition, p_condition)
   ),
   combined AS (
     SELECT
@@ -74,6 +78,7 @@ AS $$
      AND p.page_path = f.page_path
      AND p.ga4_page_type ILIKE 'VDP%'
     WHERE f.url IS NOT NULL AND f.url <> ''
+      AND public.vdp_channel_matches(p.channel, p_channels)
   ),
   normalized AS (
     SELECT
@@ -114,5 +119,5 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_vdp_export_by_channel(
-  text, date, date, text[], text[], text[], text[], integer[], text
+  text, date, date, text[], text[], text[], text[], integer[], text, text[]
 ) TO anon, authenticated, service_role;

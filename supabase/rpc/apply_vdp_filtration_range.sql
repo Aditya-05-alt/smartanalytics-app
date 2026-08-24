@@ -10,6 +10,8 @@ CREATE OR REPLACE FUNCTION public.apply_vdp_filtration_range(
 )
 RETURNS TABLE(out_account_name text, out_cms text, out_updated_rows bigint)
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   IF p_from IS NULL OR p_to IS NULL THEN
@@ -81,5 +83,6 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.apply_vdp_filtration_range(text, date, date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.apply_vdp_filtration_range(text, date, date)
-  TO anon, authenticated, service_role;
+  TO service_role;

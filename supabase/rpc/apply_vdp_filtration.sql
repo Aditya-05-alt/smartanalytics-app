@@ -10,6 +10,8 @@ CREATE OR REPLACE FUNCTION public.apply_vdp_filtration(
 )
 RETURNS TABLE(out_account_name text, out_cms text, out_updated_rows bigint)
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   -- STEP 1: Self-heal CMS
@@ -79,5 +81,6 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.apply_vdp_filtration(text, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.apply_vdp_filtration(text, integer)
-  TO anon, authenticated, service_role;
+  TO service_role;

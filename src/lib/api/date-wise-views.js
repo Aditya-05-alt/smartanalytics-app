@@ -97,7 +97,7 @@ export async function fetchDateWiseViewsChunked({
   return merged;
 }
 
-/** Prefer server route (service role, 5-day chunks); fallback to client chunks. */
+/** Prefer server route (service role); fallback uses SECURITY DEFINER RPC. */
 export async function fetchDateWiseViews({
   from,
   to,
@@ -110,30 +110,21 @@ export async function fetchDateWiseViews({
   const qs = new URLSearchParams({ from, to });
   if (clientId) qs.set('clientId', clientId);
 
-  try {
-    const res = await fetch(`/api/reports/date-wise-views?${qs}`, {
-      credentials: 'same-origin',
-    });
-    const json = await res.json().catch(() => ({}));
+  const res = await fetch(`/api/reports/date-wise-views?${qs}`, {
+    credentials: 'same-origin',
+  });
+  const json = await res.json().catch(() => ({}));
 
-    if (res.ok && Array.isArray(json.rows)) {
-      return json.rows.map(normalizeRow);
-    }
-
-    if (res.status !== 503 && res.status !== 500) {
-      throw new Error(json.error || `Request failed (${res.status})`);
-    }
-  } catch (err) {
-    if (!isTimeoutError(err) && !/fetch/i.test(err?.message || '')) {
-      throw err;
-    }
+  if (res.ok && Array.isArray(json.rows)) {
+    return json.rows.map(normalizeRow);
   }
 
-  return fetchDateWiseViewsChunked({
-    from,
-    to,
-    clientId,
-    onCancelCheck,
-    onProgress,
-  });
+  if (res.status === 503) {
+    throw new Error(
+      json.error ||
+        'SUPABASE_SERVICE_ROLE_KEY is not configured on the server. Add it to .env.local and restart npm run dev.'
+    );
+  }
+
+  throw new Error(json.error || `Date-wise views request failed (${res.status})`);
 }

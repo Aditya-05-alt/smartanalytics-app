@@ -152,7 +152,7 @@ export async function fetchChannelBreakdownBundle({
   onCancelCheck,
   onProgress,
   skipCache = false,
-  preferServer = false,
+  preferServer = true,
   adaptiveChunks = false,
   chunkDays,
   concurrency,

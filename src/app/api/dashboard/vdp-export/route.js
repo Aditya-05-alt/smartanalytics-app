@@ -4,6 +4,22 @@ import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
 export const maxDuration = 120;
 
+/** Always pass the full RPC arg set so PostgREST picks the correct overload. */
+function buildVdpExportRpcParams(clientId, from, to, inv) {
+  return {
+    p_client_id: clientId,
+    p_from: from,
+    p_to: to,
+    p_types: inv.p_types ?? null,
+    p_makes: inv.p_makes ?? null,
+    p_models: inv.p_models ?? null,
+    p_locations: inv.p_locations ?? null,
+    p_years: inv.p_years ?? null,
+    p_condition: inv.p_condition ?? 'BOTH',
+    p_channels: inv.p_channels ?? null,
+  };
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get('clientId')?.trim();
@@ -27,13 +43,7 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const inv = parseInvRpcFromSearchParams(searchParams);
-  const params = {
-    p_client_id: clientId,
-    p_from: from,
-    p_to: to,
-    ...inv,
-  };
+  const params = buildVdpExportRpcParams(clientId, from, to, parseInvRpcFromSearchParams(searchParams));
 
   try {
     const [channelRes, locationRes, makeRes, modelRes, conditionRes] =

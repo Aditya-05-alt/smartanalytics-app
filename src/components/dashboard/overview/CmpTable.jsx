@@ -107,6 +107,7 @@ export default function CmpTable() {
       vdpFilters,
       tab: 'all',
       labMode,
+      preferServer: true,
       onCancelCheck: () => cancelled,
       adaptiveChunks: true,
     };

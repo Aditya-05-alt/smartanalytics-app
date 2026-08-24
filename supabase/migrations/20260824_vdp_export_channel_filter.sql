@@ -1,0 +1,9 @@
+-- VDP export: add p_channels to all get_vdp_export_* RPCs.
+-- Run each file below in Supabase SQL Editor (in any order):
+--   supabase/rpc/get_vdp_export_by_channel.sql
+--   supabase/rpc/get_vdp_export_by_location.sql
+--   supabase/rpc/get_vdp_export_by_make.sql
+--   supabase/rpc/get_vdp_export_by_model.sql
+--   supabase/rpc/get_vdp_export_by_condition.sql
+--
+-- Requires: vdp_channel_matches, vdp_condition_matches, vdp_location_filter_match
