@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { fetchVdpKpiFiltered } from '@/lib/api/vdpKpiFetch';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
+import { parsePropertyId } from '@/lib/api/analyticsScope';
 
 export const maxDuration = 120;
 
@@ -11,6 +12,7 @@ export async function GET(request) {
   const from = searchParams.get('from')?.slice(0, 10);
   const to = searchParams.get('to')?.slice(0, 10);
   const inv = parseInvRpcFromSearchParams(searchParams);
+  const ga4PropertyId = parsePropertyId(searchParams);
 
   if (!clientId || !from || !to) {
     return NextResponse.json({ error: 'Missing clientId, from, or to' }, { status: 400 });
@@ -35,6 +37,7 @@ export async function GET(request) {
       from,
       to,
       invParams: inv,
+      ga4PropertyId,
     });
 
     return NextResponse.json({

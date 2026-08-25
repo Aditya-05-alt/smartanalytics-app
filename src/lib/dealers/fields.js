@@ -19,7 +19,7 @@ export const DEALER_CATEGORY_OPTIONS = [
 const DEALER_CATEGORY_SET = new Set(DEALER_CATEGORY_OPTIONS);
 
 export const HOOT_SELECT =
-  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, inv_type_raw_key, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp, created_at';
+  'id, customer_name, hoot_id, hoot_url, ga4_customer_id, ga4_property_id, website_platform, dealer_category, inv_type_raw_key, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp, created_at';
 
 export function normalizeDealerCategory(value) {
   const trimmed = String(value || '').trim();
@@ -144,9 +144,11 @@ export function normalizeDealerRow(hootRow, ga4Row) {
     showAllDealersAll: hootRow.show_all_dealers_all !== false,
     showAllDealersSrp: hootRow.show_all_dealers_srp !== false,
     ga4ConfigId: ga4Row?.id ?? null,
-    ga4PropertyId: ga4Row?.ga4_property_id
-      ? normalizeGa4PropertyId(ga4Row.ga4_property_id)
-      : null,
+    ga4PropertyId: hootRow?.ga4_property_id
+      ? normalizeGa4PropertyId(hootRow.ga4_property_id)
+      : ga4Row?.ga4_property_id
+        ? normalizeGa4PropertyId(ga4Row.ga4_property_id)
+        : null,
     accountName: ga4Row?.account_name ?? null,
     ga4IsActive: ga4Row?.is_active !== false,
     syncGroup:
@@ -170,9 +172,11 @@ export function vdpLogicsAdminUrl(dealerName, meta = null) {
     const dealerId = String(meta.dealerId || meta.ga4CustomerId || '').trim();
     const cms = String(meta.cms || meta.websitePlatform || '').trim();
     const hootLink = String(meta.hootLink || meta.hootUrl || '').trim();
+    const ga4PropertyId = String(meta.ga4PropertyId || meta.ga4_property_id || '').trim();
     if (dealerId) qs.set('dealerId', dealerId);
     if (cms) qs.set('cms', cms);
     if (hootLink) qs.set('hootLink', hootLink);
+    if (ga4PropertyId) qs.set('ga4PropertyId', ga4PropertyId);
   } else {
     const dealerId = String(meta || '').trim();
     if (dealerId) qs.set('dealerId', dealerId);

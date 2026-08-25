@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
 import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
+import { mergeAnalyticsExtra } from '@/lib/api/analyticsScope';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
 export const maxDuration = 120;
@@ -51,10 +52,10 @@ export async function GET(request) {
       clientId,
       from,
       to,
-      extraParams: {
+      extraParams: mergeAnalyticsExtra(searchParams, {
         p_page_type: pageType,
         ...inv,
-      },
+      }),
       chunkDays,
       concurrency,
     });

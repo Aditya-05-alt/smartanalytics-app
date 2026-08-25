@@ -53,12 +53,16 @@ function writeStoredCategoryFilter(value) {
 }
 
 function normalizeRow(row) {
+  const ga4PropertyId = row.ga4_property_id
+    ? String(row.ga4_property_id).replace(/^properties\//i, '').trim()
+    : null;
   return {
     id: row.id,
     name: row.customer_name || 'Unnamed dealer',
     hootId: row.hoot_id || null,
     hootUrl: row.hoot_url || null,
     ga4CustomerId: row.ga4_customer_id || null,
+    ga4PropertyId: ga4PropertyId || null,
     websitePlatform: row.website_platform || null,
     dealerCategory: normalizeDealerCategory(row.dealer_category),
     isActive: row.is_active !== false,
@@ -130,7 +134,7 @@ export function ClientProvider({ children }) {
       let dealerQuery = supabase
         .from('smart_hoot_config')
         .select(
-          'id, customer_name, hoot_id, hoot_url, ga4_customer_id, website_platform, dealer_category, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp'
+          'id, customer_name, hoot_id, hoot_url, ga4_customer_id, ga4_property_id, website_platform, dealer_category, is_active, show_all_dealers_vdp, show_all_dealers_all, show_all_dealers_srp'
         )
         .eq('is_active', true)
         .order('customer_name', { ascending: true });

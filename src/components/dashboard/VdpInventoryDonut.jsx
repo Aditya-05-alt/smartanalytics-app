@@ -82,6 +82,7 @@ function InventoryDonutPane({
   topN,
   vdpFilters,
   tab,
+  ga4PropertyId,
   enabled,
   fetchFn,
   normalize,
@@ -101,6 +102,7 @@ function InventoryDonutPane({
     topN,
     vdpFilters,
     tab,
+    ga4PropertyId,
     fetchFn,
     normalize,
     errorMessage,
@@ -143,6 +145,7 @@ export default function VdpInventoryDonut({
     tab,
     vdpFilters,
     clientKey,
+    ga4PropertyId,
     from: ctxFrom,
     to: ctxTo,
     compareEnabled,
@@ -168,6 +171,7 @@ export default function VdpInventoryDonut({
     topN,
     vdpFilters,
     tab,
+    ga4PropertyId,
     fetchFn,
     normalize,
     errorMessage,
@@ -183,6 +187,7 @@ export default function VdpInventoryDonut({
     topN,
     vdpFilters,
     tab,
+    ga4PropertyId,
     fetchFn,
     normalize,
     errorMessage,
@@ -229,6 +234,7 @@ export default function VdpInventoryDonut({
           topN={topN}
           vdpFilters={vdpFilters}
           tab={tab}
+          ga4PropertyId={ga4PropertyId}
           enabled={enabled}
           fetchFn={fetchFn}
           normalize={normalize}

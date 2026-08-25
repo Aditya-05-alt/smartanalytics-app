@@ -10,6 +10,9 @@ DROP FUNCTION IF EXISTS public.get_location_breakdown(
 DROP FUNCTION IF EXISTS public.get_location_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
 );
+DROP FUNCTION IF EXISTS public.get_location_breakdown(
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
+);
 
 CREATE OR REPLACE FUNCTION public.get_location_breakdown(
   p_client_id text,
@@ -22,7 +25,8 @@ CREATE OR REPLACE FUNCTION public.get_location_breakdown(
   p_locations text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
   p_condition text DEFAULT 'BOTH',
-  p_channels text[] DEFAULT NULL
+  p_channels text[] DEFAULT NULL,
+  p_ga4_property_id text DEFAULT NULL
 )
 RETURNS TABLE (
   location_bucket text,
@@ -45,8 +49,10 @@ AS $$
       ON f.client_id::text = p.client_id::text
      AND f.report_date = p.report_date
      AND f.page_path = p.page_path
+     AND public.ga4_property_scope_matches(f.ga4_property_id, p.ga4_property_id)
     WHERE COALESCE(array_length(p_channels, 1), 0) > 0
       AND p.client_id::text = trim(p_client_id)
+      AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
       AND p.report_date BETWEEN p_from AND p_to
       AND p.vdp_conditions IS TRUE
       AND public.vdp_channel_matches(p.channel, p_channels)
@@ -71,6 +77,7 @@ AS $$
     FROM public.smart_final_data
     WHERE COALESCE(array_length(p_channels, 1), 0) = 0
       AND client_id::text = trim(p_client_id)
+      AND public.ga4_property_scope_matches(ga4_property_id, p_ga4_property_id)
       AND report_date BETWEEN p_from AND p_to
       AND (COALESCE(array_length(p_types, 1), 0) = 0 OR inv_type = ANY(p_types))
       AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR inv_make = ANY(p_makes))
@@ -131,8 +138,8 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION public.get_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) TO anon, authenticated, service_role;

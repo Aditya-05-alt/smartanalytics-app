@@ -1,7 +1,66 @@
 import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
 import { fetchFinalDataDailyChunked } from '@/lib/api/vdpFinalDataFetch';
+import { normalizeGa4PropertyId } from '@/lib/dealers/fields';
 
-export function buildVdpKpiRpcParams(clientId, from, to, invParams = {}) {
+function invFiltersActive(invParams = {}) {
+  return Boolean(
+    invParams.p_types?.length ||
+      invParams.p_makes?.length ||
+      invParams.p_models?.length ||
+      invParams.p_locations?.length ||
+      invParams.p_years?.length ||
+      invParams.p_channels?.length ||
+      (invParams.p_condition && invParams.p_condition !== 'BOTH')
+  );
+}
+
+/** Property-scoped VDP KPI from page_data only (shared client_id dealers). */
+async function fetchVdpKpiFromScopedPageData(
+  supabase,
+  { clientId, from, to, ga4PropertyId, invParams = {}, onCancelCheck }
+) {
+  const pid = normalizeGa4PropertyId(ga4PropertyId);
+  if (!supabase || !clientId || !from || !to || !pid) return null;
+  if (invFiltersActive(invParams)) return null;
+  if (onCancelCheck?.()) return null;
+
+  const pageSize = 1000;
+  let offset = 0;
+  const daily = {};
+  let total = 0;
+
+  for (;;) {
+    if (onCancelCheck?.()) return null;
+    const { data, error } = await supabase
+      .from('smart_ga4_page_data')
+      .select('report_date, views')
+      .eq('client_id', String(clientId).trim())
+      .eq('ga4_property_id', pid)
+      .eq('vdp_conditions', true)
+      .gte('report_date', String(from).slice(0, 10))
+      .lte('report_date', String(to).slice(0, 10))
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw error;
+    if (!data?.length) break;
+
+    for (const row of data) {
+      const day = normalizeReportDate(row.report_date);
+      const views = Number(row.views) || 0;
+      if (!day || views === 0) continue;
+      daily[day] = (daily[day] || 0) + views;
+      total += views;
+    }
+
+    if (data.length < pageSize) break;
+    offset += pageSize;
+    if (offset > 500000) break;
+  }
+
+  return { daily, total };
+}
+
+export function buildVdpKpiRpcParams(clientId, from, to, invParams = {}, ga4PropertyId = null) {
   return {
     p_client_id: String(clientId).trim(),
     p_from: String(from).slice(0, 10),
@@ -13,6 +72,7 @@ export function buildVdpKpiRpcParams(clientId, from, to, invParams = {}) {
     p_years: invParams.p_years ?? null,
     p_condition: invParams.p_condition ?? 'BOTH',
     p_channels: invParams.p_channels ?? null,
+    ...(ga4PropertyId ? { p_ga4_property_id: String(ga4PropertyId).trim() } : {}),
   };
 }
 
@@ -65,6 +125,7 @@ export async function fetchVdpKpiFiltered(
     from,
     to,
     invParams = {},
+    ga4PropertyId,
     onCancelCheck,
     onProgress,
   } = {}
@@ -74,9 +135,25 @@ export async function fetchVdpKpiFiltered(
   }
   if (onCancelCheck?.()) return null;
 
-  const params = buildVdpKpiRpcParams(clientId, from, to, invParams);
+  const params = buildVdpKpiRpcParams(clientId, from, to, invParams, ga4PropertyId);
   let total = 0;
   let daily = {};
+
+  if (ga4PropertyId) {
+    const scoped = await fetchVdpKpiFromScopedPageData(supabase, {
+      clientId,
+      from,
+      to,
+      ga4PropertyId,
+      invParams,
+      onCancelCheck,
+    });
+    if (onCancelCheck?.()) return null;
+    if (scoped) {
+      emitProgress(onProgress, scoped, { completed: 1, total: 1, fromScopedPageData: true });
+      return scoped;
+    }
+  }
 
   try {
     const totalPromise = supabase.rpc('get_vdp_views_total', params).then(({ data, error }) => {

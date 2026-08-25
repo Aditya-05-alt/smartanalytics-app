@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
+import { mergeAnalyticsExtra } from '@/lib/api/analyticsScope';
 
 /**
  * Server-side location breakdown (uses service role when configured).
@@ -32,12 +33,12 @@ export async function GET(request) {
 
   const inv = parseInvRpcFromSearchParams(searchParams);
 
-  const params = {
+  const params = mergeAnalyticsExtra(searchParams, {
     p_client_id: String(clientId).trim(),
     p_from: String(from).slice(0, 10),
     p_to: String(to).slice(0, 10),
     ...inv,
-  };
+  });
 
   let { data, error } = await supabase.rpc('get_dealer_location_breakdown', params);
   if (
@@ -48,6 +49,9 @@ export async function GET(request) {
   }
 
   if (error) {
+    if (params.p_ga4_property_id) {
+      return NextResponse.json({ data: [] });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

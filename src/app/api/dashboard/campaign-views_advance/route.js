@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { analyticsExtraParams, parsePropertyId } from '@/lib/api/analyticsScope';
 
 export const maxDuration = 60;
 
@@ -12,7 +13,7 @@ function normalizeCells(rows) {
 }
 
 /** Fallback when cells RPC / jsonb cells are missing — aggregate page rows in Node. */
-async function fetchCellsFallback(supabase, clientId, from, to, pageType) {
+async function fetchCellsFallback(supabase, clientId, from, to, pageType, propertyId) {
   const pageSize = 1000;
   let fromIdx = 0;
   const agg = new Map();
@@ -27,6 +28,10 @@ async function fetchCellsFallback(supabase, clientId, from, to, pageType) {
       .not('session_campaign', 'is', null)
       .or('session_campaign.like.WA|%,session_campaign.like.WA |%')
       .range(fromIdx, fromIdx + pageSize - 1);
+
+    if (propertyId) {
+      q = q.eq('ga4_property_id', propertyId);
+    }
 
     if (String(pageType).toUpperCase() === 'VDP') {
       q = q.ilike('ga4_page_type', 'VDP%');
@@ -67,6 +72,8 @@ export async function GET(request) {
   const from = searchParams.get('from')?.slice(0, 10);
   const to = searchParams.get('to')?.slice(0, 10);
   const pageType = searchParams.get('pageType')?.trim() || 'ALL';
+  const propertyId = parsePropertyId(searchParams);
+  const propertyExtra = analyticsExtraParams(propertyId);
 
   if (!clientId || !from || !to) {
     return NextResponse.json(
@@ -106,12 +113,14 @@ export async function GET(request) {
         p_from: from,
         p_to: to,
         p_page_type: pageType,
+        ...propertyExtra,
       }),
       supabase.rpc('get_wa_campaign_cells_advance', {
         p_client_id: clientId,
         p_from: from,
         p_to: to,
         p_page_type: pageType,
+        ...propertyExtra,
       }),
     ]);
 
@@ -145,7 +154,7 @@ export async function GET(request) {
       cellsSource = 'get_wa_campaign_views_advance.cells';
     } else {
       try {
-        cells = await fetchCellsFallback(supabase, clientId, from, to, pageType);
+        cells = await fetchCellsFallback(supabase, clientId, from, to, pageType, propertyId);
         cellsSource = 'table-fallback';
       } catch (fallbackErr) {
         console.warn(
@@ -173,6 +182,7 @@ export async function GET(request) {
         cellsSource,
         pageType,
         clientId,
+        propertyId: propertyId || null,
         dealerScoped: true,
         prefix: 'WA| / WA |',
       },

@@ -5,6 +5,7 @@ import {
   RPC_CHUNK_DAYS,
   rpcByDateChunks,
 } from '@/lib/api/chunkedRpc';
+import { mergeAnalyticsExtra, parsePropertyId } from '@/lib/api/analyticsScope';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -35,6 +36,7 @@ export async function GET(request) {
     to,
     chunkDays: RPC_CHUNK_DAYS,
     concurrency: RPC_CHUNK_CONCURRENCY,
+    extraParams: mergeAnalyticsExtra(searchParams),
   };
 
   try {
@@ -50,7 +52,7 @@ export async function GET(request) {
     return NextResponse.json({
       rows: rows || [],
       userTotalsRows: userTotalsRows || [],
-      meta: { source: 'chunked-rpc', chunkDays: RPC_CHUNK_DAYS },
+      meta: { source: 'chunked-rpc', chunkDays: RPC_CHUNK_DAYS, propertyId: parsePropertyId(searchParams) },
     });
   } catch (err) {
     const message = err?.message || 'Failed to load overview data';

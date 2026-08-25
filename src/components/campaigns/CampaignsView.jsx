@@ -124,6 +124,7 @@ export default function CampaignsView() {
   const matrixFreezeWidth = MATRIX_DATE_COL_W + MATRIX_TOTAL_COL_W;
 
   const ga4Id = String(client?.ga4CustomerId || '').trim();
+  const ga4PropertyId = client?.ga4PropertyId || null;
   const dealerName = client?.name || 'Dealer';
   const canLoad =
     Boolean(ga4Id) && !isAllDealerClient(client) && !isAllDealer;
@@ -196,6 +197,7 @@ export default function CampaignsView() {
     try {
       const data = await fetchCampaignViews({
         clientId: requestedClientId,
+        ga4PropertyId,
         from: curFrom,
         to: curTo,
         pageType,
@@ -215,7 +217,7 @@ export default function CampaignsView() {
     } finally {
       if (!isStale()) setLoading(false);
     }
-  }, [canLoad, ga4Id, client?.ga4CustomerId, curFrom, curTo, pageType]);
+  }, [canLoad, ga4Id, ga4PropertyId, client?.ga4CustomerId, curFrom, curTo, pageType]);
 
   const loadPrior = useCallback(async () => {
     if (!canLoad || !priorRange?.from || !priorRange?.to) {
@@ -234,6 +236,7 @@ export default function CampaignsView() {
     try {
       const data = await fetchCampaignViews({
         clientId: requestedClientId,
+        ga4PropertyId,
         from: priorRange.from,
         to: priorRange.to,
         pageType,
@@ -249,7 +252,7 @@ export default function CampaignsView() {
     } finally {
       if (!isStale()) setPriorLoading(false);
     }
-  }, [canLoad, ga4Id, client?.ga4CustomerId, priorRange, pageType]);
+  }, [canLoad, ga4Id, ga4PropertyId, client?.ga4CustomerId, priorRange, pageType]);
 
   useEffect(() => {
     if (dealersLoading) return undefined;

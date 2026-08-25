@@ -310,6 +310,7 @@ export default function DealersPanel() {
             result.vdpLogic?.vdpLogicsUrl ||
             vdpLogicsAdminUrl(dealerName, {
               dealerId: form.ga4CustomerId,
+              ga4PropertyId: form.ga4PropertyId,
               cms: form.websitePlatform,
               hootLink: form.hootUrl,
             }),

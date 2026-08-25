@@ -39,6 +39,7 @@ export default function CmpTable() {
   const {
     tab,
     clientKey,
+    ga4PropertyId,
     from,
     to,
     compareEnabled,
@@ -103,6 +104,7 @@ export default function CmpTable() {
 
     const fetchOpts = {
       clientId: clientKey,
+      ga4PropertyId,
       pageTypeFilter: 'ALL',
       vdpFilters,
       tab: 'all',
@@ -155,6 +157,7 @@ export default function CmpTable() {
     tab,
     yoyEnabled,
     clientKey,
+    ga4PropertyId,
     from,
     to,
     compareFrom,

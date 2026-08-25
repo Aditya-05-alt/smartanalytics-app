@@ -71,6 +71,7 @@ export async function PATCH(request, { params }) {
         dealer_category: payload.dealerCategory,
         inv_type_raw_key: payload.invTypeRawKey,
         ga4_customer_id: payload.ga4CustomerId,
+        ga4_property_id: payload.ga4PropertyId,
         is_active: payload.isActive,
       })
       .eq('id', id)

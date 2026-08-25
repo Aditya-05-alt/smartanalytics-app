@@ -24,6 +24,7 @@ BEGIN
   WHERE g.report_date BETWEEN p_from AND p_to
     AND (g.cms IS NULL OR g.cms = '')
     AND g.client_id = h.ga4_customer_id::text
+    AND public.ga4_property_scope_matches(g.ga4_property_id, h.ga4_property_id)
     AND (p_client_id IS NULL OR g.client_id = p_client_id);
 
   RETURN QUERY
@@ -63,6 +64,7 @@ BEGIN
     FROM smart_vdp_logic sl
     WHERE g.report_date BETWEEN p_from AND p_to
       AND g.client_id = sl.dealer_id
+      AND public.ga4_property_scope_matches(g.ga4_property_id, sl.ga4_property_id)
       AND sl.vdp_logic IS NOT NULL
       AND sl.vdp_logic <> ''
       AND EXISTS (

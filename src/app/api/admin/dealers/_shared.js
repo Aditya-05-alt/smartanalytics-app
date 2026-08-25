@@ -27,13 +27,17 @@ export function mapDealerError(error) {
 }
 
 export async function fetchGa4ConfigByClientId(supabase, clientId) {
+  return fetchGa4ConfigByClientAndProperty(supabase, clientId, null);
+}
+
+export async function fetchGa4ConfigByClientAndProperty(supabase, clientId, propertyId) {
   if (!clientId) return null;
-  const { data, error } = await supabase
-    .from(GA4_TABLE)
-    .select(GA4_SELECT)
-    .eq('client_id', clientId)
-    .limit(1)
-    .maybeSingle();
+  let query = supabase.from(GA4_TABLE).select(GA4_SELECT).eq('client_id', clientId);
+  const normalizedProperty = propertyId ? normalizeGa4PropertyId(propertyId) : '';
+  if (normalizedProperty) {
+    query = query.eq('ga4_property_id', normalizedProperty);
+  }
+  const { data, error } = await query.limit(1).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -49,10 +53,13 @@ export async function fetchHootById(supabase, id) {
 }
 
 export async function mergeDealer(supabase, hootRow) {
-  const ga4Row = await fetchGa4ConfigByClientId(
-    supabase,
-    hootRow?.ga4_customer_id ? String(hootRow.ga4_customer_id).trim() : null
-  );
+  const clientId = hootRow?.ga4_customer_id
+    ? String(hootRow.ga4_customer_id).trim()
+    : null;
+  const propertyId = hootRow?.ga4_property_id
+    ? normalizeGa4PropertyId(hootRow.ga4_property_id)
+    : null;
+  const ga4Row = await fetchGa4ConfigByClientAndProperty(supabase, clientId, propertyId);
   return normalizeDealerRow(hootRow, ga4Row);
 }
 
@@ -107,7 +114,11 @@ export async function upsertGa4Config(supabase, payload, options = {}) {
     is_active: payload.ga4IsActive,
   };
 
-  const existing = await fetchGa4ConfigByClientId(supabase, payload.ga4CustomerId);
+  const existing = await fetchGa4ConfigByClientAndProperty(
+    supabase,
+    payload.ga4CustomerId,
+    payload.ga4PropertyId
+  );
   if (existing?.id) {
     // Fill missing sync_group on existing rows (created before auto-assign).
     if (existing.sync_group == null && options.syncGroup != null) {

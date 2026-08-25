@@ -10,6 +10,7 @@ import {
   channelFilterCacheSuffix,
   channelFilterLabCacheSuffix,
 } from '@/lib/vdp/vdpFilterParams';
+import { scopeCacheId } from '@/lib/analytics/analyticsScope';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { channelRowsToDonutData } from '@/lib/ga4/channelDisplay';
 import {
@@ -62,15 +63,18 @@ function useChannelBreakdownRows({
   vdpFilters,
   tab,
   filterCacheSuffix,
+  ga4PropertyId,
   labMode = false,
   beginBreakdownLoad,
   endBreakdownLoad,
   reportBreakdownChunk,
   trackBreakdownLoad = true,
 }) {
+  const cacheClientId = scopeCacheId(clientId, ga4PropertyId) || clientId;
+
   const [rows, setRows] = useState(() =>
     clientId && from && to
-      ? getChannelBreakdownCache(clientId, from, to, pageTypeFilter, filterCacheSuffix) || []
+      ? getChannelBreakdownCache(cacheClientId, from, to, pageTypeFilter, filterCacheSuffix) || []
       : []
   );
   const [loading, setLoading] = useState(
@@ -79,7 +83,7 @@ function useChannelBreakdownRows({
         clientId
           && from
           && to
-          && !hasChannelBreakdownCache(clientId, from, to, pageTypeFilter, filterCacheSuffix)
+          && !hasChannelBreakdownCache(cacheClientId, from, to, pageTypeFilter, filterCacheSuffix)
       )
   );
   const [error, setError] = useState(null);
@@ -94,7 +98,7 @@ function useChannelBreakdownRows({
     }
 
     const cached = getChannelBreakdownCache(
-      clientId,
+      cacheClientId,
       from,
       to,
       pageTypeFilter,
@@ -115,6 +119,7 @@ function useChannelBreakdownRows({
 
     fetchChannelBreakdownBundle({
       clientId,
+      ga4PropertyId,
       from,
       to,
       pageTypeFilter,
@@ -158,6 +163,7 @@ function useChannelBreakdownRows({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    ga4PropertyId,
     labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
@@ -239,6 +245,7 @@ function ChannelDonutPane({
   tab,
   vdpFilters,
   filterCacheSuffix,
+  ga4PropertyId,
   labMode = false,
   periodLabel,
   centerLabel,
@@ -258,6 +265,7 @@ function ChannelDonutPane({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    ga4PropertyId,
     labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
@@ -290,6 +298,7 @@ function ChannelDonutCompare({
   tab,
   vdpFilters,
   filterCacheSuffix,
+  ga4PropertyId,
   labMode = false,
   currentPeriodLabel,
   comparePeriodLabel,
@@ -309,6 +318,7 @@ function ChannelDonutCompare({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    ga4PropertyId,
     labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
@@ -324,6 +334,7 @@ function ChannelDonutCompare({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    ga4PropertyId,
     labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
@@ -382,6 +393,7 @@ function ChannelDonutSingle({
   tab,
   vdpFilters,
   filterCacheSuffix,
+  ga4PropertyId,
   labMode = false,
   centerLabel,
   overviewLoading,
@@ -398,6 +410,7 @@ function ChannelDonutSingle({
     vdpFilters,
     tab,
     filterCacheSuffix,
+    ga4PropertyId,
     labMode,
     beginBreakdownLoad,
     endBreakdownLoad,
@@ -464,6 +477,7 @@ export default function ChannelDonut({
     tab,
     vdpFilters,
     clientKey,
+    ga4PropertyId,
     from: ctxFrom,
     to: ctxTo,
     loading: overviewLoading,
@@ -504,6 +518,7 @@ export default function ChannelDonut({
         tab={tabId}
         vdpFilters={vdpFilters}
         filterCacheSuffix={filterCacheSuffix}
+        ga4PropertyId={ga4PropertyId}
         labMode={labMode}
         currentPeriodLabel={currentPeriodLabel}
         comparePeriodLabel={comparePeriodLabel}
@@ -525,6 +540,7 @@ export default function ChannelDonut({
       tab={tabId}
       vdpFilters={vdpFilters}
       filterCacheSuffix={filterCacheSuffix}
+      ga4PropertyId={ga4PropertyId}
       labMode={labMode}
       centerLabel={centerLabel}
       overviewLoading={overviewLoading}

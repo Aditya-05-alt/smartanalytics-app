@@ -2,11 +2,14 @@
  * Fetch WA| session_campaign + date-wise views for one dealer (advance).
  * Uses /api/dashboard/campaign-views_advance → get_wa_campaign_views_advance.
  */
+import { appendAnalyticsScope } from '@/lib/analytics/analyticsScope';
+
 export async function fetchCampaignViews({
   clientId,
   from,
   to,
   pageType = 'ALL',
+  ga4PropertyId,
   onCancelCheck,
 }) {
   if (!clientId || !from || !to) {
@@ -17,12 +20,15 @@ export async function fetchCampaignViews({
   }
   if (onCancelCheck?.()) return null;
 
-  const qs = new URLSearchParams({
-    clientId: String(clientId).trim(),
-    from: String(from).slice(0, 10),
-    to: String(to).slice(0, 10),
-    pageType: String(pageType || 'ALL'),
-  });
+  const qs = appendAnalyticsScope(
+    new URLSearchParams({
+      clientId: String(clientId).trim(),
+      from: String(from).slice(0, 10),
+      to: String(to).slice(0, 10),
+      pageType: String(pageType || 'ALL'),
+    }),
+    { ga4PropertyId }
+  );
 
   const res = await fetch(`/api/dashboard/campaign-views_advance?${qs}`, {
     credentials: 'same-origin',

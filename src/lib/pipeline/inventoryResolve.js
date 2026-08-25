@@ -7,11 +7,19 @@ function hasText(value) {
   return Boolean(String(value ?? '').trim());
 }
 
-async function loadVdpLogicRow(supabase, clientId, customerName) {
-  const { data: byId, error: byIdError } = await supabase
+async function loadVdpLogicRow(supabase, clientId, customerName, ga4PropertyId) {
+  const propertyId = ga4PropertyId ? String(ga4PropertyId).trim() : '';
+
+  let byIdQuery = supabase
     .from('smart_vdp_logic')
     .select('hoot_link, scrap_link')
-    .eq('dealer_id', clientId)
+    .eq('dealer_id', clientId);
+
+  if (propertyId) {
+    byIdQuery = byIdQuery.eq('ga4_property_id', propertyId);
+  }
+
+  const { data: byId, error: byIdError } = await byIdQuery
     .order('id', { ascending: false })
     .limit(1);
 
@@ -26,10 +34,16 @@ async function loadVdpLogicRow(supabase, clientId, customerName) {
     return null;
   }
 
-  const { data: byName, error: byNameError } = await supabase
+  let byNameQuery = supabase
     .from('smart_vdp_logic')
     .select('hoot_link, scrap_link')
-    .eq('dealer_name', customerName)
+    .eq('dealer_name', customerName);
+
+  if (propertyId) {
+    byNameQuery = byNameQuery.eq('ga4_property_id', propertyId);
+  }
+
+  const { data: byName, error: byNameError } = await byNameQuery
     .order('id', { ascending: false })
     .limit(1);
 
@@ -64,7 +78,7 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
 
   const { data: configRows, error: configError } = await supabase
     .from('smart_hoot_config')
-    .select('customer_name, hoot_url')
+    .select('customer_name, hoot_url, ga4_property_id')
     .eq('ga4_customer_id', trimmedId)
     .eq('is_active', true)
     .limit(1);
@@ -75,7 +89,13 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
 
   const customerName = configRows?.[0]?.customer_name?.trim() || null;
   const hootUrl = configRows?.[0]?.hoot_url?.trim() || null;
-  const vdpLogic = await loadVdpLogicRow(supabase, trimmedId, customerName);
+  const ga4PropertyId = configRows?.[0]?.ga4_property_id?.trim() || null;
+  const vdpLogic = await loadVdpLogicRow(
+    supabase,
+    trimmedId,
+    customerName,
+    ga4PropertyId
+  );
 
   const hasHootLink = hasText(vdpLogic?.hoot_link);
   const hasHootUrl = hasText(hootUrl);

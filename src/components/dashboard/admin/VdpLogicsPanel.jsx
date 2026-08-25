@@ -17,6 +17,7 @@ import AdminConfirmDialog from '@/components/dashboard/admin/AdminConfirmDialog'
 const COLUMNS = [
   { key: 'dealerName', label: 'Dealer', sticky: true, width: 300 },
   { key: 'dealerId', label: 'Dealer ID', width: 120 },
+  { key: 'ga4PropertyId', label: 'GA4 property', width: 120 },
   { key: 'websiteUrl', label: 'Website', width: 140 },
   { key: 'cms', label: 'CMS', width: 100 },
   { key: 'dataSource', label: 'Data source', width: 110 },
@@ -44,6 +45,7 @@ function filterVdpRows(rows, { search = '', cms = '', dataSource = '' } = {}) {
     const hay = [
       row.dealerName,
       row.dealerId,
+      row.ga4PropertyId,
       row.websiteUrl,
       row.cms,
       row.dataSource,
@@ -132,6 +134,7 @@ export default function VdpLogicsPanel() {
       row: {
         dealerName: searchParams.get('dealerName')?.trim() || '',
         dealerId: searchParams.get('dealerId')?.trim() || '',
+        ga4PropertyId: searchParams.get('ga4PropertyId')?.trim() || '',
         cms: searchParams.get('cms')?.trim() || '',
         hootLink: searchParams.get('hootLink')?.trim() || '',
         dataSource: 'GA4',

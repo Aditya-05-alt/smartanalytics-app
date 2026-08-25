@@ -111,7 +111,7 @@ export default function VdpPageTitleChannelTable({
   to,
   limit = 10,
 }) {
-  const { tab, vdpFilters, beginBreakdownLoad, endBreakdownLoad } = useOverview();
+  const { tab, vdpFilters, ga4PropertyId, beginBreakdownLoad, endBreakdownLoad } = useOverview();
   const [topN, setTopN] = useState(limit ?? 10);
   const [sortKey, setSortKey] = useState('total_views');
   const [sortDir, setSortDir] = useState('desc');
@@ -125,6 +125,7 @@ export default function VdpPageTitleChannelTable({
     topN,
     vdpFilters,
     tab,
+    ga4PropertyId,
     fetchFn: fetchVdpPageTitleByChannel,
     normalize: normalizeRows,
     errorMessage: 'Failed to load VDP page titles.',

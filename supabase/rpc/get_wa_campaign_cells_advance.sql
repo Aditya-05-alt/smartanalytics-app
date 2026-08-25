@@ -7,7 +7,8 @@ CREATE OR REPLACE FUNCTION public.get_wa_campaign_cells_advance(
   p_client_id text,
   p_from      date,
   p_to        date,
-  p_page_type text DEFAULT 'ALL'
+  p_page_type text DEFAULT 'ALL',
+  p_ga4_property_id text DEFAULT NULL
 )
 RETURNS TABLE (
   report_date date,
@@ -33,6 +34,7 @@ AS $$
   CROSS JOIN params x
   WHERE p.client_id = x.client_id
     AND p.report_date BETWEEN p_from AND p_to
+    AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
     AND p.session_campaign IS NOT NULL
     AND TRIM(p.session_campaign) <> ''
     AND (
@@ -48,5 +50,5 @@ AS $$
   ORDER BY p.report_date, views DESC, campaign;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_wa_campaign_cells_advance(text, date, date, text)
+GRANT EXECUTE ON FUNCTION public.get_wa_campaign_cells_advance(text, date, date, text, text)
   TO anon, authenticated, service_role;

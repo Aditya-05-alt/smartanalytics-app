@@ -7,6 +7,12 @@ import { aggregateLocationBuckets } from '@/lib/api/locationBreakdownAggregate';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { fetchVdpKpiFiltered } from '@/lib/api/vdpKpiFetch';
 import {
+  appendAnalyticsScope,
+  isPropertyScoped,
+  scopeCacheId,
+  withPropertyRpcParams,
+} from '@/lib/analytics/analyticsScope';
+import {
   getVdpDailyCache,
   setVdpDailyCache,
 } from '@/lib/data/vdpDailyCache';
@@ -79,15 +85,18 @@ export async function fetchChannelBreakdown({
   });
 }
 
-async function fetchVdpFilterOptionsViaApi({ clientId, from, to, onCancelCheck }) {
+async function fetchVdpFilterOptionsViaApi({ clientId, from, to, ga4PropertyId, onCancelCheck }) {
   if (typeof window === 'undefined') return null;
   if (onCancelCheck?.()) return null;
 
-  const qs = new URLSearchParams({
-    clientId: String(clientId).trim(),
-    from: toDateOnly(from),
-    to: toDateOnly(to),
-  });
+  const qs = appendAnalyticsScope(
+    new URLSearchParams({
+      clientId: String(clientId).trim(),
+      from: toDateOnly(from),
+      to: toDateOnly(to),
+    }),
+    { ga4PropertyId }
+  );
   const res = await fetch(`/api/dashboard/vdp-filter-options?${qs}`, {
     credentials: 'same-origin',
   });
@@ -103,12 +112,18 @@ async function fetchVdpFilterOptionsViaApi({ clientId, from, to, onCancelCheck }
 }
 
 /** Distinct VDP filter dropdown values for dealer + date range. */
-export async function fetchVdpFilterOptions({ clientId, from, to, onCancelCheck }) {
+export async function fetchVdpFilterOptions({ clientId, from, to, ga4PropertyId, onCancelCheck }) {
   if (!clientId || !from || !to) return null;
   if (onCancelCheck?.()) return null;
 
   try {
-    const viaApi = await fetchVdpFilterOptionsViaApi({ clientId, from, to, onCancelCheck });
+    const viaApi = await fetchVdpFilterOptionsViaApi({
+      clientId,
+      from,
+      to,
+      ga4PropertyId,
+      onCancelCheck,
+    });
     if (viaApi) {
       return {
         ...viaApi,
@@ -156,16 +171,20 @@ async function fetchVdpDailyFilteredViaApi({
   to,
   vdpFilters,
   tab,
+  ga4PropertyId,
   onCancelCheck,
 }) {
   if (typeof window === 'undefined') return null;
   if (onCancelCheck?.()) return null;
 
-  const qs = new URLSearchParams({
-    clientId: String(clientId).trim(),
-    from: toDateOnly(from),
-    to: toDateOnly(to),
-  });
+  const qs = appendAnalyticsScope(
+    new URLSearchParams({
+      clientId: String(clientId).trim(),
+      from: toDateOnly(from),
+      to: toDateOnly(to),
+    }),
+    { ga4PropertyId }
+  );
   appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
 
   const res = await fetch(`/api/dashboard/vdp-daily?${qs}`, { credentials: 'same-origin' });
@@ -190,6 +209,7 @@ export async function fetchVdpDailyFiltered({
   to,
   vdpFilters,
   tab = 'vdp',
+  ga4PropertyId,
   onCancelCheck,
   onProgress,
   skipCache = false,
@@ -197,10 +217,11 @@ export async function fetchVdpDailyFiltered({
   if (!clientId || !from || !to) return null;
   if (onCancelCheck?.()) return null;
 
+  const cacheKey = scopeCacheId(clientId, ga4PropertyId);
   const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, tab);
 
   if (!skipCache) {
-    const cached = getVdpDailyCache(clientId, from, to, cacheSuffix);
+    const cached = getVdpDailyCache(cacheKey, from, to, cacheSuffix);
     if (cached) {
       onProgress?.(cached, { completed: 1, total: 1, fromCache: true });
       return cached;
@@ -217,12 +238,13 @@ export async function fetchVdpDailyFiltered({
       to,
       vdpFilters,
       tab,
+      ga4PropertyId,
       onCancelCheck,
     });
     if (viaApi) {
       onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
       if (!skipCache) {
-        setVdpDailyCache(clientId, from, to, cacheSuffix, viaApi);
+        setVdpDailyCache(cacheKey, from, to, cacheSuffix, viaApi);
       }
       return viaApi;
     }
@@ -238,6 +260,7 @@ export async function fetchVdpDailyFiltered({
         from,
         to,
         invParams: inv,
+        ga4PropertyId,
         onCancelCheck,
         onProgress,
       });
@@ -245,7 +268,7 @@ export async function fetchVdpDailyFiltered({
       if (onCancelCheck?.()) return null;
       if (result) {
         if (!skipCache) {
-          setVdpDailyCache(clientId, from, to, cacheSuffix, result);
+          setVdpDailyCache(cacheKey, from, to, cacheSuffix, result);
         }
         return result;
       }
@@ -261,12 +284,13 @@ export async function fetchVdpDailyFiltered({
       to,
       vdpFilters,
       tab,
+      ga4PropertyId,
       onCancelCheck,
     });
     if (viaApi) {
       onProgress?.(viaApi, { completed: 1, total: 1, fromServer: true });
       if (!skipCache) {
-        setVdpDailyCache(clientId, from, to, cacheSuffix, viaApi);
+        setVdpDailyCache(cacheKey, from, to, cacheSuffix, viaApi);
       }
       return viaApi;
     }
@@ -289,23 +313,30 @@ export async function fetchMakeBreakdown({
   limit = null,
   vdpFilters,
   tab = 'vdp',
+  ga4PropertyId,
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const params = {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_limit: limit,
-    ...vdpRpcExtraParams(vdpFilters, tab),
-  };
+  const params = withPropertyRpcParams(
+    {
+      p_client_id: String(clientId).trim(),
+      p_from: toDateOnly(from),
+      p_to: toDateOnly(to),
+      p_limit: limit,
+      ...vdpRpcExtraParams(vdpFilters, tab),
+    },
+    ga4PropertyId
+  );
 
   const { data, error } = await supabase.rpc('get_make_breakdown', params);
 
-  if (error) throw new Error(error.message || 'Failed to fetch make breakdown.');
+  if (error) {
+    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
+    throw new Error(error.message || 'Failed to fetch make breakdown.');
+  }
   return data || [];
 }
 
@@ -317,23 +348,28 @@ export async function fetchVdpPageTitleByChannel({
   limit = 10,
   vdpFilters,
   tab = 'vdp',
+  ga4PropertyId,
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const params = {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_limit: limit,
-    ...vdpRpcExtraParams(vdpFilters, tab),
-  };
+  const params = withPropertyRpcParams(
+    {
+      p_client_id: String(clientId).trim(),
+      p_from: toDateOnly(from),
+      p_to: toDateOnly(to),
+      p_limit: limit,
+      ...vdpRpcExtraParams(vdpFilters, tab),
+    },
+    ga4PropertyId
+  );
 
   const { data, error } = await supabase.rpc('get_vdp_page_title_by_channel', params);
 
   if (error) {
+    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
     throw new Error(error.message || 'Failed to fetch VDP page title channels.');
   }
   return data || [];
@@ -347,21 +383,31 @@ export async function fetchTypeBreakdown({
   limit = null,
   vdpFilters,
   tab = 'vdp',
+  ga4PropertyId,
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('get_type_breakdown', {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_limit: limit,
-    ...vdpRpcExtraParams(vdpFilters, tab),
-  });
+  const { data, error } = await supabase.rpc(
+    'get_type_breakdown',
+    withPropertyRpcParams(
+      {
+        p_client_id: String(clientId).trim(),
+        p_from: toDateOnly(from),
+        p_to: toDateOnly(to),
+        p_limit: limit,
+        ...vdpRpcExtraParams(vdpFilters, tab),
+      },
+      ga4PropertyId
+    )
+  );
 
-  if (error) throw new Error(error.message || 'Failed to fetch type breakdown.');
+  if (error) {
+    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
+    throw new Error(error.message || 'Failed to fetch type breakdown.');
+  }
   return data || [];
 }
 
@@ -373,23 +419,30 @@ export async function fetchModelBreakdown({
   limit = null,
   vdpFilters,
   tab = 'vdp',
+  ga4PropertyId,
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const params = {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_limit: limit,
-    ...vdpRpcExtraParams(vdpFilters, tab),
-  };
+  const params = withPropertyRpcParams(
+    {
+      p_client_id: String(clientId).trim(),
+      p_from: toDateOnly(from),
+      p_to: toDateOnly(to),
+      p_limit: limit,
+      ...vdpRpcExtraParams(vdpFilters, tab),
+    },
+    ga4PropertyId
+  );
 
   const { data, error } = await supabase.rpc('get_model_breakdown', params);
 
-  if (error) throw new Error(error.message || 'Failed to fetch model breakdown.');
+  if (error) {
+    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
+    throw new Error(error.message || 'Failed to fetch model breakdown.');
+  }
   return Array.isArray(data) ? data : data ? [data] : [];
 }
 
@@ -401,21 +454,31 @@ export async function fetchYearBreakdown({
   limit = null,
   vdpFilters,
   tab = 'vdp',
+  ga4PropertyId,
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('get_year_breakdown', {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_limit: limit,
-    ...vdpRpcExtraParams(vdpFilters, tab),
-  });
+  const { data, error } = await supabase.rpc(
+    'get_year_breakdown',
+    withPropertyRpcParams(
+      {
+        p_client_id: String(clientId).trim(),
+        p_from: toDateOnly(from),
+        p_to: toDateOnly(to),
+        p_limit: limit,
+        ...vdpRpcExtraParams(vdpFilters, tab),
+      },
+      ga4PropertyId
+    )
+  );
 
-  if (error) throw new Error(error.message || 'Failed to fetch year breakdown.');
+  if (error) {
+    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
+    throw new Error(error.message || 'Failed to fetch year breakdown.');
+  }
   return data || [];
 }
 
@@ -427,21 +490,31 @@ export async function fetchConditionBreakdown({
   limit = null,
   vdpFilters,
   tab = 'vdp',
+  ga4PropertyId,
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('get_condition_breakdown', {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_limit: limit,
-    ...vdpRpcExtraParams(vdpFilters, tab),
-  });
+  const { data, error } = await supabase.rpc(
+    'get_condition_breakdown',
+    withPropertyRpcParams(
+      {
+        p_client_id: String(clientId).trim(),
+        p_from: toDateOnly(from),
+        p_to: toDateOnly(to),
+        p_limit: limit,
+        ...vdpRpcExtraParams(vdpFilters, tab),
+      },
+      ga4PropertyId
+    )
+  );
 
-  if (error) throw new Error(error.message || 'Failed to fetch condition breakdown.');
+  if (error) {
+    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
+    throw new Error(error.message || 'Failed to fetch condition breakdown.');
+  }
   return data || [];
 }
 
@@ -483,7 +556,8 @@ function normalizeLocationRows(data) {
   }));
 }
 
-async function fetchLocationFromTable(supabase, params, onCancelCheck) {
+async function fetchLocationFromTable(supabase, params, onCancelCheck, ga4PropertyId) {
+  if (isPropertyScoped(ga4PropertyId)) return [];
   let offset = 0;
   const buffer = [];
 
@@ -510,15 +584,18 @@ async function fetchLocationFromTable(supabase, params, onCancelCheck) {
 }
 
 /** Server route using service role when anon RPC returns [] (RLS). */
-async function fetchLocationBreakdownViaApi(params, onCancelCheck, labMode = false) {
+async function fetchLocationBreakdownViaApi(params, onCancelCheck, labMode = false, ga4PropertyId) {
   if (onCancelCheck?.()) return undefined;
   if (typeof window === 'undefined') return null;
 
-  const qs = new URLSearchParams({
-    clientId: params.p_client_id,
-    from: params.p_from,
-    to: params.p_to,
-  });
+  const qs = appendAnalyticsScope(
+    new URLSearchParams({
+      clientId: params.p_client_id,
+      from: params.p_from,
+      to: params.p_to,
+    }),
+    { ga4PropertyId }
+  );
   if (params.p_limit != null) qs.set('limit', String(params.p_limit));
   appendInvParamsToSearchParams(qs, params);
 
@@ -550,25 +627,31 @@ export async function fetchLocationBreakdown({
   vdpFilters,
   tab = 'vdp',
   labMode = false,
+  ga4PropertyId,
   onCancelCheck,
 }) {
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return undefined;
 
-  const params = {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-    p_limit: limit,
-    ...vdpRpcExtraParams(vdpFilters, tab),
-  };
+  const params = withPropertyRpcParams(
+    {
+      p_client_id: String(clientId).trim(),
+      p_from: toDateOnly(from),
+      p_to: toDateOnly(to),
+      p_limit: limit,
+      ...vdpRpcExtraParams(vdpFilters, tab),
+    },
+    ga4PropertyId
+  );
 
   const { data, error } = await rpcLocationBreakdown(supabase, params, labMode);
 
   if (error) {
-    // Lab RPCs may not be deployed yet — fall through to API / live table read.
     if (!(labMode && isMissingRpcError(error))) {
+      if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) {
+        return [];
+      }
       throw new Error(error.message || 'Failed to fetch location breakdown.');
     }
   } else {
@@ -579,11 +662,21 @@ export async function fetchLocationBreakdown({
 
   if (onCancelCheck?.()) return undefined;
 
-  const apiRows = await fetchLocationBreakdownViaApi(params, onCancelCheck, labMode);
+  const apiRows = await fetchLocationBreakdownViaApi(
+    params,
+    onCancelCheck,
+    labMode,
+    ga4PropertyId
+  );
   if (onCancelCheck?.()) return undefined;
   if (apiRows?.length) return apiRows;
 
-  const tableRows = await fetchLocationFromTable(supabase, params, onCancelCheck);
+  const tableRows = await fetchLocationFromTable(
+    supabase,
+    params,
+    onCancelCheck,
+    ga4PropertyId
+  );
   if (onCancelCheck?.()) return undefined;
   if (tableRows?.length) return tableRows;
 

@@ -67,6 +67,7 @@ export async function POST(request) {
       dealer_category: payload.dealerCategory,
       inv_type_raw_key: payload.invTypeRawKey,
       ga4_customer_id: payload.ga4CustomerId,
+      ga4_property_id: payload.ga4PropertyId,
       is_active: payload.isActive,
     };
 
@@ -90,6 +91,7 @@ export async function POST(request) {
           dealerName: payload.customerName,
           vdpLogicsUrl: vdpLogicsAdminUrl(payload.customerName, {
             dealerId: payload.ga4CustomerId,
+            ga4PropertyId: payload.ga4PropertyId,
             cms: payload.websitePlatform,
             hootLink: payload.hootUrl,
           }),

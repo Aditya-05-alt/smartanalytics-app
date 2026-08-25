@@ -16,7 +16,8 @@ CREATE OR REPLACE FUNCTION public.get_wa_campaign_views_advance(
   p_client_id text,
   p_from      date,
   p_to        date,
-  p_page_type text DEFAULT 'ALL'
+  p_page_type text DEFAULT 'ALL',
+  p_ga4_property_id text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -49,6 +50,7 @@ BEGIN
     FROM public.smart_ga4_page_data p
     WHERE p.client_id = v_client_id
       AND p.report_date BETWEEN p_from AND p_to
+      AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
       AND p.session_campaign IS NOT NULL
       AND TRIM(p.session_campaign) <> ''
       -- WA|… or WA |… only
@@ -185,8 +187,8 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_wa_campaign_views_advance(text, date, date, text)
+GRANT EXECUTE ON FUNCTION public.get_wa_campaign_views_advance(text, date, date, text, text)
   TO anon, authenticated, service_role;
 
-COMMENT ON FUNCTION public.get_wa_campaign_views_advance(text, date, date, text) IS
+COMMENT ON FUNCTION public.get_wa_campaign_views_advance(text, date, date, text, text) IS
   'Advance: dealer-scoped WA| / WA | session_campaign views, date totals, and date×campaign cells as jsonb.';

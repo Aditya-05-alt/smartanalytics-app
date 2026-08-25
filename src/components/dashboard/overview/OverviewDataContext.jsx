@@ -28,6 +28,10 @@ import {
 } from '@/lib/data/overviewCache';
 import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
 import { enumerateDatesInclusive, toCalendarISO } from '@/lib/ga4/dateRange';
+import {
+  analyticsCacheKey,
+  clientGa4PropertyId,
+} from '@/lib/analytics/analyticsScope';
 import { useIsVdpLab } from '@/components/dashboard/overview/VdpLabContext';
 import {
   previousMonthAlignedRange,
@@ -379,6 +383,8 @@ export function OverviewProvider({ children }) {
   // ── single fetch keyed by (client, from, to) ─────────────────
   // Join: `smart_ga4_page_data.client_id` === `smart_hoot_config.ga4_customer_id`.
   const clientKey = client?.ga4CustomerId || null;
+  const ga4PropertyId = clientGa4PropertyId(client);
+  const scopeCacheKey = useMemo(() => analyticsCacheKey(client), [client]);
 
   const setVdpFilter = useCallback((key, value) => {
     setVdpFilters((prev) => ({ ...prev, [key]: value }));
@@ -434,7 +440,7 @@ export function OverviewProvider({ children }) {
     setCompareVdpFilteredDaily(null);
     setLyVdpFilteredDaily(null);
     vdpFilteredDailyRef.current = null;
-  }, [clientKey, from, to]);
+  }, [scopeCacheKey]);
 
   useEffect(() => {
     if (!clientKey || !from || !to) {
@@ -443,7 +449,7 @@ export function OverviewProvider({ children }) {
     }
 
     let cancelled = false;
-    const cached = getOverviewCache(clientKey, from, to);
+    const cached = getOverviewCache(scopeCacheKey, from, to);
     if (cached) {
       setRows(cached.rows || []);
       setUserTotalsRows(cached.userTotalsRows || []);
@@ -460,6 +466,7 @@ export function OverviewProvider({ children }) {
       try {
         const bundle = await fetchOverviewBundle({
           clientId: clientKey,
+          ga4PropertyId,
           from,
           to,
           onCancelCheck: () => cancelled,
@@ -468,7 +475,7 @@ export function OverviewProvider({ children }) {
 
         setRows(bundle.rows || []);
         setUserTotalsRows(bundle.userTotalsRows || []);
-        setOverviewCache(clientKey, from, to, {
+        setOverviewCache(scopeCacheKey, from, to, {
           rows: bundle.rows || [],
           userTotalsRows: bundle.userTotalsRows || [],
         });
@@ -487,7 +494,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [clientKey, from, to]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, from, to]);
 
   // ── previous-month overview (MoM baseline + compare chart) ──
   useEffect(() => {
@@ -498,7 +505,7 @@ export function OverviewProvider({ children }) {
     }
 
     let cancelled = false;
-    const cached = getOverviewCache(clientKey, compareFrom, compareTo);
+    const cached = getOverviewCache(scopeCacheKey, compareFrom, compareTo);
     if (cached) {
       setCompareRows(cached.rows || []);
       setCompareLoading(false);
@@ -511,13 +518,14 @@ export function OverviewProvider({ children }) {
       try {
         const bundle = await fetchOverviewBundle({
           clientId: clientKey,
+          ga4PropertyId,
           from: compareFrom,
           to: compareTo,
           onCancelCheck: () => cancelled,
         });
         if (cancelled || !bundle) return;
         setCompareRows(bundle.rows || []);
-        setOverviewCache(clientKey, compareFrom, compareTo, {
+        setOverviewCache(scopeCacheKey, compareFrom, compareTo, {
           rows: bundle.rows || [],
           userTotalsRows: bundle.userTotalsRows || [],
         });
@@ -531,7 +539,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [clientKey, compareFrom, compareTo]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, compareFrom, compareTo]);
 
   // ── same period last year (YoY baseline for KPI) ──
   useEffect(() => {
@@ -541,7 +549,7 @@ export function OverviewProvider({ children }) {
     }
 
     let cancelled = false;
-    const cached = getOverviewCache(clientKey, lyFrom, lyTo);
+    const cached = getOverviewCache(scopeCacheKey, lyFrom, lyTo);
     if (cached) {
       setLyRows(cached.rows || []);
     } else {
@@ -558,13 +566,14 @@ export function OverviewProvider({ children }) {
       try {
         const bundle = await fetchOverviewBundle({
           clientId: clientKey,
+          ga4PropertyId,
           from: lyFrom,
           to: lyTo,
           onCancelCheck: () => cancelled,
         });
         if (cancelled || !bundle) return;
         setLyRows(bundle.rows || []);
-        setOverviewCache(clientKey, lyFrom, lyTo, {
+        setOverviewCache(scopeCacheKey, lyFrom, lyTo, {
           rows: bundle.rows || [],
           userTotalsRows: bundle.userTotalsRows || [],
         });
@@ -576,7 +585,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [clientKey, lyFrom, lyTo]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, lyFrom, lyTo]);
 
   // ── VDP filter dropdown options (from inventory in range) ──
   useEffect(() => {
@@ -588,6 +597,7 @@ export function OverviewProvider({ children }) {
     let cancelled = false;
     fetchVdpFilterOptions({
       clientId: clientKey,
+      ga4PropertyId,
       from,
       to,
       onCancelCheck: () => cancelled,
@@ -610,7 +620,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [clientKey, from, to]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, from, to]);
 
   // ── VDP daily views for KPI + chart (current period — priority) ──
   useEffect(() => {
@@ -621,7 +631,7 @@ export function OverviewProvider({ children }) {
     }
 
     const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, 'vdp');
-    const cached = getVdpDailyCache(clientKey, from, to, cacheSuffix);
+    const cached = getVdpDailyCache(scopeCacheKey, from, to, cacheSuffix);
     if (cached) {
       setVdpFilteredDaily(cached);
       setVdpFiltersLoading(false);
@@ -634,6 +644,7 @@ export function OverviewProvider({ children }) {
 
     fetchVdpDailyFiltered({
       clientId: clientKey,
+      ga4PropertyId,
       from,
       to,
       vdpFilters,
@@ -658,7 +669,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [clientKey, from, to, vdpFilters]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, from, to, vdpFilters]);
 
   // ── VDP daily views for compare period (only when compare is on) ──
   useEffect(() => {
@@ -668,7 +679,7 @@ export function OverviewProvider({ children }) {
     }
 
     const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, 'vdp');
-    const cached = getVdpDailyCache(clientKey, compareFrom, compareTo, cacheSuffix);
+    const cached = getVdpDailyCache(scopeCacheKey, compareFrom, compareTo, cacheSuffix);
     if (cached) {
       setCompareVdpFilteredDaily(cached);
       return undefined;
@@ -678,6 +689,7 @@ export function OverviewProvider({ children }) {
 
     fetchVdpDailyFiltered({
       clientId: clientKey,
+      ga4PropertyId,
       from: compareFrom,
       to: compareTo,
       vdpFilters,
@@ -695,7 +707,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [compareEnabled, clientKey, compareFrom, compareTo, vdpFilters]);
+  }, [compareEnabled, scopeCacheKey, clientKey, ga4PropertyId, compareFrom, compareTo, vdpFilters]);
 
   // ── VDP daily views for YoY baseline (background) ──
   useEffect(() => {
@@ -705,7 +717,7 @@ export function OverviewProvider({ children }) {
     }
 
     const cacheSuffix = vdpFilterCacheSuffix(vdpFilters, 'vdp');
-    const cached = getVdpDailyCache(clientKey, lyFrom, lyTo, cacheSuffix);
+    const cached = getVdpDailyCache(scopeCacheKey, lyFrom, lyTo, cacheSuffix);
     if (cached) {
       setLyVdpFilteredDaily(cached);
       return undefined;
@@ -715,6 +727,7 @@ export function OverviewProvider({ children }) {
 
     fetchVdpDailyFiltered({
       clientId: clientKey,
+      ga4PropertyId,
       from: lyFrom,
       to: lyTo,
       vdpFilters,
@@ -732,7 +745,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [clientKey, lyFrom, lyTo, vdpFilters]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, lyFrom, lyTo, vdpFilters]);
 
   // ── VDP channel breakdown ──
   // Live: location stripped in JS. Lab: full filters incl. location → lab RPC.
@@ -755,6 +768,7 @@ export function OverviewProvider({ children }) {
 
     const fetchOpts = {
       clientId: clientKey,
+      ga4PropertyId,
       pageTypeFilter: 'VDP',
       // Live + Lab: location applied via channel RPC (path join + location match).
       vdpFilters,
@@ -806,7 +820,9 @@ export function OverviewProvider({ children }) {
       cancelled = true;
     };
   }, [
+    scopeCacheKey,
     clientKey,
+    ga4PropertyId,
     from,
     to,
     compareFrom,
@@ -997,6 +1013,8 @@ export function OverviewProvider({ children }) {
       error,
       rowCount,
       clientKey,
+      ga4PropertyId,
+      scopeCacheKey,
       rows,
       compareEnabled,
       setCompareEnabled,
@@ -1045,6 +1063,8 @@ export function OverviewProvider({ children }) {
       error,
       rowCount,
       clientKey,
+      ga4PropertyId,
+      scopeCacheKey,
       rows,
       compareEnabled,
       setCompareEnabled,

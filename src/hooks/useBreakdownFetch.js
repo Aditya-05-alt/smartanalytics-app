@@ -11,6 +11,7 @@ export function useBreakdownFetch({
   topN,
   vdpFilters,
   tab,
+  ga4PropertyId,
   fetchFn,
   normalize,
   errorMessage = 'Failed to load breakdown.',
@@ -44,6 +45,7 @@ export function useBreakdownFetch({
       limit: topN,
       vdpFilters,
       tab,
+      ga4PropertyId,
       onCancelCheck: () => cancelled,
     })
       .then((data) => {
@@ -80,6 +82,7 @@ export function useBreakdownFetch({
     errorMessage,
     ignoreVdpFilters,
     keepPreviousOnReload,
+    ga4PropertyId,
   ]);
 
   return { rows, loading, error };

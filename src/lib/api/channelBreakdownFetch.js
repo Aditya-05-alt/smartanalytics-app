@@ -20,6 +20,7 @@ import {
   normalizeVdpFilters,
   vdpRpcExtraParams,
 } from '@/lib/vdp/vdpFilterParams';
+import { appendAnalyticsScope, scopeCacheId } from '@/lib/analytics/analyticsScope';
 
 const LIVE_RPC = 'get_ga4_channel_breakdown';
 const LAB_RPC = 'get_ga4_channel_breakdown_lab';
@@ -51,6 +52,7 @@ async function fetchChannelBreakdownViaApi({
   vdpFilters,
   tab,
   labMode = false,
+  ga4PropertyId,
   onCancelCheck,
 }) {
   if (typeof window === 'undefined') return null;
@@ -58,12 +60,15 @@ async function fetchChannelBreakdownViaApi({
 
   const { channelFilters, apiPath } = resolveChannelFilterMode(vdpFilters, labMode);
 
-  const qs = new URLSearchParams({
-    clientId,
-    from,
-    to,
-    pageType: pageTypeFilter,
-  });
+  const qs = appendAnalyticsScope(
+    new URLSearchParams({
+      clientId,
+      from,
+      to,
+      pageType: pageTypeFilter,
+    }),
+    { ga4PropertyId }
+  );
   appendVdpFiltersToSearchParams(qs, channelFilters, tab);
 
   const res = await fetch(`${apiPath}?${qs}`, {
@@ -149,6 +154,7 @@ export async function fetchChannelBreakdownBundle({
   vdpFilters,
   tab = 'all',
   labMode = false,
+  ga4PropertyId,
   onCancelCheck,
   onProgress,
   skipCache = false,
@@ -159,6 +165,7 @@ export async function fetchChannelBreakdownBundle({
 }) {
   if (!clientId || !from || !to) return [];
 
+  const cacheClientId = scopeCacheId(clientId, ga4PropertyId) || clientId;
   const { cacheSuffix } = resolveChannelFilterMode(vdpFilters, labMode);
   const cacheTab = labMode ? 'vdp' : tab;
 
@@ -170,7 +177,7 @@ export async function fetchChannelBreakdownBundle({
 
   if (!skipCache) {
     const cached = getChannelBreakdownCache(
-      clientId,
+      cacheClientId,
       from,
       to,
       pageTypeFilter,
@@ -192,6 +199,7 @@ export async function fetchChannelBreakdownBundle({
         vdpFilters,
         tab: cacheTab,
         labMode,
+        ga4PropertyId,
         onCancelCheck,
       });
       if (viaApi != null) {
@@ -200,7 +208,7 @@ export async function fetchChannelBreakdownBundle({
         // Don't cache empty results when location is set — avoids sticky 0 after RPC fix
         if (!skipCache && !(locActive && viaApi.length === 0)) {
           setChannelBreakdownCache(
-            clientId,
+            cacheClientId,
             from,
             to,
             pageTypeFilter,
@@ -234,7 +242,7 @@ export async function fetchChannelBreakdownBundle({
   if (onCancelCheck?.()) return null;
   const rows = result || [];
   setChannelBreakdownCache(
-    clientId,
+    cacheClientId,
     from,
     to,
     pageTypeFilter,

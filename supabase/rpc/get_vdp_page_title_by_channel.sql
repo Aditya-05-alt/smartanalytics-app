@@ -13,6 +13,9 @@ DROP FUNCTION IF EXISTS public.get_vdp_page_title_by_channel(
 DROP FUNCTION IF EXISTS public.get_vdp_page_title_by_channel(
   text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
 );
+DROP FUNCTION IF EXISTS public.get_vdp_page_title_by_channel(
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
+);
 
 CREATE OR REPLACE FUNCTION public.get_vdp_page_title_by_channel(
   p_client_id text,
@@ -25,7 +28,8 @@ CREATE OR REPLACE FUNCTION public.get_vdp_page_title_by_channel(
   p_locations text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
   p_condition text DEFAULT 'BOTH',
-  p_channels text[] DEFAULT NULL
+  p_channels text[] DEFAULT NULL,
+  p_ga4_property_id text DEFAULT NULL
 )
 RETURNS TABLE (
   page_title text,
@@ -70,6 +74,7 @@ AS $$
       ) AS dealer_name
     FROM public.smart_final_data s
     WHERE s.client_id::text = trim(p_client_id)
+      AND public.ga4_property_scope_matches(s.ga4_property_id, p_ga4_property_id)
       AND s.report_date BETWEEN p_from AND p_to
       AND s.vdp_conditions IS TRUE
       AND s.page_path IS NOT NULL
@@ -129,6 +134,7 @@ AS $$
       ON p.client_id = f.client_id
      AND p.report_date = f.report_date
      AND p.page_path = f.page_path
+     AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
      AND (p.vdp_conditions IS TRUE OR p.ga4_page_type ILIKE 'VDP%')
      AND (
        COALESCE(array_length(p_channels, 1), 0) = 0
@@ -315,14 +321,14 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.get_vdp_page_title_by_channel(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) IS
   'VDP page×channel matrix. Titles: clean ASCII English only (drops CJK/Cyrillic/Greek); else inventory/path. Paid Search = paid+cross+display.';
 
 REVOKE ALL ON FUNCTION public.get_vdp_page_title_by_channel(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_vdp_page_title_by_channel(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[]
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) TO anon, authenticated, service_role;

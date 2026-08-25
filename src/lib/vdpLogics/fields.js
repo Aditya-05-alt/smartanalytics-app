@@ -3,6 +3,7 @@ export const TABLE = 'smart_vdp_logic';
 export const CSV_HEADERS = [
   'dealer_name',
   'dealer_id',
+  'ga4_property_id',
   'website_url',
   'cms',
   'data_source',
@@ -18,6 +19,7 @@ export const CSV_HEADERS = [
 export const EXAMPLE_ROW = {
   dealer_name: 'Example Dealer',
   dealer_id: '123456789',
+  ga4_property_id: '123456789',
   website_url: 'https://www.example-dealer.com',
   cms: 'DealerOn',
   data_source: 'GA4',
@@ -32,6 +34,7 @@ export const EXAMPLE_ROW = {
 const FORM_FIELDS = [
   { key: 'dealerName', db: 'dealer_name', label: 'Dealer name', requiredFlag: true },
   { key: 'dealerId', db: 'dealer_id', label: 'Dealer ID' },
+  { key: 'ga4PropertyId', db: 'ga4_property_id', label: 'GA4 property ID' },
   { key: 'websiteUrl', db: 'website_url', label: 'Website URL' },
   { key: 'cms', db: 'cms', label: 'CMS' },
   { key: 'dataSource', db: 'data_source', label: 'Data source' },
@@ -105,6 +108,7 @@ export function normalizeRow(row) {
     id: row.id,
     dealerName: row.dealer_name ?? null,
     dealerId: row.dealer_id ?? null,
+    ga4PropertyId: row.ga4_property_id ?? null,
     websiteUrl: row.website_url ?? null,
     cms: row.cms ?? null,
     dataSource: row.data_source ?? null,

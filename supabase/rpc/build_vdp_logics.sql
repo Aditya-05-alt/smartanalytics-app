@@ -1,6 +1,8 @@
 -- Admin → Vdp - Logics tab. Single query (indexed filters) instead of paginated REST.
 -- Run in Supabase SQL editor after smart_vdp_logic table exists.
 
+DROP FUNCTION IF EXISTS public.build_vdp_logics(text, text, text, text);
+
 CREATE OR REPLACE FUNCTION public.build_vdp_logics(
   p_dealer_name   text DEFAULT NULL,
   p_cms           text DEFAULT NULL,
@@ -11,6 +13,7 @@ RETURNS TABLE (
   id                 integer,
   dealer_name        text,
   dealer_id          text,
+  ga4_property_id    text,
   website_url        text,
   cms                text,
   data_source        text,
@@ -32,6 +35,7 @@ AS $$
     v.id,
     v.dealer_name,
     v.dealer_id,
+    v.ga4_property_id,
     v.website_url,
     v.cms,
     v.data_source,
@@ -52,6 +56,7 @@ AS $$
       OR trim(p_search) = ''
       OR v.dealer_name ILIKE '%' || trim(p_search) || '%'
       OR v.dealer_id ILIKE '%' || trim(p_search) || '%'
+      OR v.ga4_property_id ILIKE '%' || trim(p_search) || '%'
       OR v.website_url ILIKE '%' || trim(p_search) || '%'
       OR v.cms ILIKE '%' || trim(p_search) || '%'
       OR v.data_source ILIKE '%' || trim(p_search) || '%'

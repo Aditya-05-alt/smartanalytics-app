@@ -70,8 +70,12 @@ BEGIN
     GROUP BY g.client_id, g.report_date, g.page_path
   ),
   config_unique AS (
-    SELECT DISTINCT ON (h.ga4_customer_id)
+    SELECT DISTINCT ON (
       h.ga4_customer_id,
+      COALESCE(NULLIF(btrim(h.ga4_property_id), ''), '__legacy__')
+    )
+      h.ga4_customer_id,
+      h.ga4_property_id,
       h.customer_name,
       h.hoot_id,
       h.hoot_url,
@@ -79,7 +83,11 @@ BEGIN
       NULLIF(TRIM(h.inv_type_raw_key), '') AS inv_type_raw_key
     FROM public.smart_hoot_config h
     WHERE h.ga4_customer_id IS NOT NULL
-    ORDER BY h.ga4_customer_id, h.id DESC
+    ORDER BY
+      h.ga4_customer_id,
+      COALESCE(NULLIF(btrim(h.ga4_property_id), ''), '__legacy__'),
+      h.is_active DESC NULLS LAST,
+      h.id DESC
   ),
   inv_norm AS (
     SELECT DISTINCT ON (LOWER(TRIM(i.customer_name)), LOWER(TRIM(i.url)))
@@ -121,6 +129,7 @@ BEGIN
     FROM ga4_unique u
     LEFT JOIN config_unique c
            ON trim(c.ga4_customer_id::text) = trim(u.client_id)
+          AND public.ga4_property_scope_matches(u.ga4_property_id, c.ga4_property_id)
     LEFT JOIN inv_norm iu
            ON iu.customer_name_key = LOWER(TRIM(c.customer_name))
           AND u.page_path IS NOT NULL

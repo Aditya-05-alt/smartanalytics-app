@@ -6,6 +6,9 @@
 DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text
 );
+DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text
+);
 
 CREATE OR REPLACE FUNCTION public.get_dealer_location_breakdown(
   p_client_id text,
@@ -17,7 +20,8 @@ CREATE OR REPLACE FUNCTION public.get_dealer_location_breakdown(
   p_models text[] DEFAULT NULL,
   p_locations text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
-  p_condition text DEFAULT 'BOTH'
+  p_condition text DEFAULT 'BOTH',
+  p_ga4_property_id text DEFAULT NULL
 )
 RETURNS TABLE (
   location_bucket text,
@@ -47,7 +51,8 @@ BEGIN
     RETURN QUERY
     SELECT * FROM public.get_location_breakdown(
       p_client_id, p_from, p_to, p_limit,
-      p_types, p_makes, p_models, p_locations, p_years, p_condition
+      p_types, p_makes, p_models, p_locations, p_years, p_condition,
+      NULL, p_ga4_property_id
     );
     RETURN;
   END IF;
@@ -64,7 +69,8 @@ BEGIN
       lb.views
     FROM public.get_location_breakdown(
       p_client_id, p_from, p_to, p_limit,
-      p_types, p_makes, p_models, p_locations, p_years, p_condition
+      p_types, p_makes, p_models, p_locations, p_years, p_condition,
+      NULL, p_ga4_property_id
     ) lb
   ),
   agg AS (
@@ -96,9 +102,9 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_dealer_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text
 ) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_dealer_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text
 ) TO anon, authenticated, service_role;

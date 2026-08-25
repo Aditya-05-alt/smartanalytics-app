@@ -20,7 +20,8 @@ CREATE OR REPLACE FUNCTION public.get_ga4_channel_breakdown(
   p_makes       text[]    DEFAULT NULL,
   p_models      text[]    DEFAULT NULL,
   p_years       integer[] DEFAULT NULL,
-  p_locations   text[]    DEFAULT NULL
+  p_locations   text[]    DEFAULT NULL,
+  p_ga4_property_id text DEFAULT NULL
 )
 RETURNS TABLE (
   channel_bucket text,
@@ -55,6 +56,7 @@ BEGIN
       FROM smart_ga4_page_data p
       WHERE p.client_id::text = trim(p_client_id)
         AND p.report_date BETWEEN p_from AND p_to
+        AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
         AND (
           v_page_type = 'ALL'
           -- VDP tab: use vdp_conditions (same as Step 3 / location charts).
@@ -127,6 +129,7 @@ BEGIN
     FROM smart_ga4_page_data p
     WHERE p.client_id::text = trim(p_client_id)
       AND p.report_date BETWEEN p_from AND p_to
+      AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
       AND (
         v_page_type = 'ALL'
         OR (v_page_type = 'VDP'   AND p.vdp_conditions IS TRUE)
@@ -236,15 +239,19 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_ga4_channel_breakdown(
+DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
   text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
+);
+
+COMMENT ON FUNCTION public.get_ga4_channel_breakdown(
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
 ) IS
   'Live channel breakdown — location-aware (same fast filtered join as Lab). Chunk on API.';
 
 REVOKE ALL ON FUNCTION public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
 ) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
 ) TO anon, authenticated, service_role;
