@@ -3,16 +3,42 @@
 export function Seg({ value, options, onChange }) {
   return (
     <div className="chart-mode" role="group">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          className={`cm-btn${value === opt.value ? ' active' : ''}`}
-          onClick={() => onChange(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            className={`cm-btn${active ? ' active' : ''}`}
+            aria-pressed={active}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** PoP / MoM toggle — click active mode again to turn compare off. */
+export function CompareSeg({ value, options, onChange }) {
+  return (
+    <div className="chart-mode" role="group" aria-label="Compare period">
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            className={`cm-btn${active ? ' active' : ''}`}
+            aria-pressed={active}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

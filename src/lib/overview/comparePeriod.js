@@ -30,6 +30,28 @@ export function previousMonthAlignedRange(from, to) {
   };
 }
 
+/**
+ * Full previous calendar month relative to the current range start month.
+ * e.g. 2026-08-01 → 2026-08-24 compares to 2026-07-01 → 2026-07-31 (MoM)
+ */
+export function previousFullMonthRange(from, _to) {
+  const start = parseISO(from);
+  if (!start) return { compareFrom: null, compareTo: null };
+  const y = start.getFullYear();
+  const m = start.getMonth();
+  const prevStart = new Date(y, m - 1, 1);
+  const prevEnd = new Date(y, m, 0);
+  return {
+    compareFrom: toCalendarISO(prevStart),
+    compareTo: toCalendarISO(prevEnd),
+  };
+}
+
+/** Alias used by overview compare — same aligned prior-month window as PoP. */
+export function previousPeriodRange(from, to) {
+  return previousMonthAlignedRange(from, to);
+}
+
 export function monthKeyFromISO(iso) {
   if (!iso) return null;
   return String(iso).slice(0, 7);

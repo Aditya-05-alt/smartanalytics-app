@@ -12,7 +12,7 @@ import {
   previousMonthAlignedRange,
 } from '@/lib/overview/comparePeriod';
 import CampaignChart from './CampaignChart';
-import { Card, Kpi, Seg, Toolbar, ToolbarGroup, ToolbarSpacer } from './CampaignUi';
+import { Card, Kpi, Seg, CompareSeg, Toolbar, ToolbarGroup, ToolbarSpacer } from './CampaignUi';
 import CampaignExportButton from './CampaignExportButton';
 import { useNavigationLoading } from '@/components/dashboard/NavigationLoading';
 
@@ -134,20 +134,24 @@ export default function CampaignsView() {
   const compareModeLabel =
     detailCompareMode === 'pop'
       ? 'PoP · same dates last month'
-      : 'MoM · full last month';
+      : 'MoM · month over month (full prior month)';
 
   const priorRange = useMemo(() => {
     if (!detailCompareActive || !curFrom || !curTo) return null;
-    const range =
-      detailCompareMode === 'pop'
-        ? previousMonthAlignedRange(curFrom, curTo)
-        : previousFullMonthRange(curFrom, curTo);
-    if (!range.compareFrom || !range.compareTo) return null;
-    return {
-      from: range.compareFrom,
-      to: range.compareTo,
-      label: formatRangeLabel(range.compareFrom, range.compareTo) || 'Prior',
-    };
+    try {
+      const range =
+        detailCompareMode === 'pop'
+          ? previousMonthAlignedRange(curFrom, curTo)
+          : previousFullMonthRange(curFrom, curTo);
+      if (!range?.compareFrom || !range?.compareTo) return null;
+      return {
+        from: range.compareFrom,
+        to: range.compareTo,
+        label: formatRangeLabel(range.compareFrom, range.compareTo) || 'Prior',
+      };
+    } catch {
+      return null;
+    }
   }, [detailCompareActive, detailCompareMode, curFrom, curTo]);
 
   const toggleDetailCompareMode = useCallback((next) => {
@@ -263,7 +267,7 @@ export default function CampaignsView() {
     }
     loadPrior();
     return undefined;
-  }, [dealersLoading, detailCompareActive, loadPrior]);
+  }, [dealersLoading, detailCompareActive, detailCompareMode, loadPrior]);
 
   const byCampaign = useMemo(() => {
     const current = aggregateByCampaign(campaigns);
@@ -745,7 +749,7 @@ export default function CampaignsView() {
           </div>
           <div className="vdp-wa-detail-head__compare">
             <ToolbarGroup>
-              <Seg
+              <CompareSeg
                 value={detailCompareMode}
                 options={CAMPAIGN_COMPARE_MODES}
                 onChange={toggleDetailCompareMode}
