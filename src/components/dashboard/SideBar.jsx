@@ -48,6 +48,13 @@ const ICONS = {
       <path d="M11 13v8" />
     </svg>
   ),
+  compare: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="7" height="16" rx="1" />
+      <rect x="14" y="4" width="7" height="16" rx="1" />
+      <path d="M10 12h4" />
+    </svg>
+  ),
   vdplab: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M9 3h6" />
@@ -72,6 +79,7 @@ const ICONS = {
 const ITEMS = [
   { id: 'overview', href: '/dashboard', title: 'Overview' },
   { id: 'campaigns', href: '/dashboard/campaigns', title: 'Campaigns' },
+  { id: 'compare', href: '/dashboard/compare', title: 'Compare' },
   { id: 'vdplab', href: '/dashboard/vdp-lab', title: 'VDP Lab' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
   { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },

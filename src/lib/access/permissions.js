@@ -1,6 +1,7 @@
 export const REPORT_OPTIONS = [
   { key: 'overview', label: 'Overview', href: '/dashboard' },
   { key: 'campaigns', label: 'Campaigns', href: '/dashboard/campaigns' },
+  { key: 'compare', label: 'Compare', href: '/dashboard/compare' },
   { key: 'inventory', label: 'Inventory report', href: '/dashboard/inventory' },
   { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
   { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },

@@ -13,7 +13,6 @@ import YearBreakdown from '@/components/dashboard/YearBreakdown';
 import ConditionBreakdown from '@/components/dashboard/ConditionBreakdown';
 import CmpTable from '@/components/dashboard/overview/CmpTable';
 import VdpPageTitleChannelTable from '@/components/dashboard/overview/VdpPageTitleChannelTable';
-import VdpGa4VsBigqCompareTable from '@/components/dashboard/overview/VdpGa4VsBigqCompareTable';
 import { useClient } from '@/components/dashboard/ClientContext';
 import {
   OverviewProvider,
@@ -22,8 +21,7 @@ import {
 import { VdpLabProvider } from '@/components/dashboard/overview/VdpLabContext';
 
 /**
- * VDP Lab — GA4 vs BigQ compare is all-dealer (no dealer pick).
- * Channel / location / inventory panels still need a single dealer.
+ * VDP Lab — experimental channel/location/inventory panels (single dealer).
  */
 function VdpLabBody() {
   const { isAllDealer } = useClient();
@@ -38,9 +36,12 @@ function VdpLabBody() {
     <>
       <div className="vdp-lab-banner">
         <div>
-          <strong>VDP Lab</strong> — All-dealer GA4 (
-          <code>vdp_conditions</code>) vs full BigQ VDP compare (to ≤ today−2).
-          Single-dealer panels below when a dealer is selected.
+          <strong>VDP Lab</strong> — Channel + Location lab RPCs and inventory
+          breakdowns. GA4 vs BigQuery compare is on{' '}
+          <Link href="/dashboard/compare" className="vdp-lab-banner-link">
+            Compare →
+          </Link>
+          . Pick a single dealer for panels below.
         </div>
         <Link href="/dashboard" className="vdp-lab-banner-link">
           Live Overview →
@@ -50,10 +51,6 @@ function VdpLabBody() {
       <OverviewFilters />
 
       <div className="content">
-        <div className="dashboard-full-row">
-          <VdpGa4VsBigqCompareTable from={from} to={to} />
-        </div>
-
         {isAllDealer ? (
           <p style={{ color: 'var(--t3)', fontSize: 13, marginTop: 8 }}>
             Pick a single dealer to load Channel / Location / inventory VDP panels.

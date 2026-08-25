@@ -3954,6 +3954,21 @@ body {
 .vdp-bq-compare-panel {
   width: 100%;
 }
+.vdp-bq-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.compare-page-filters .compare-page-cap-note {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--t3);
+}
+.compare-page-filters .compare-page-cap-note strong {
+  color: var(--t2);
+}
 .vdp-bq-compare-body {
   padding-top: 0.75rem;
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/dashboard/Panel';
-import { useOverview } from '@/components/dashboard/overview/OverviewDataContext';
 import { fetchVdpGa4VsBigqCompare } from '@/lib/api/vdpGa4VsBigqCompare';
+import Ga4BigqCompareExportButton from '@/components/dashboard/overview/Ga4BigqCompareExportButton';
 
 function fmtNum(n) {
   return Number(n || 0).toLocaleString();
@@ -38,10 +38,9 @@ function statusClass(status) {
 }
 
 /**
- * VDP Lab — all dealers including BigQ profiles missing from the VDP report.
+ * All-dealer GA4 vs BigQuery VDP compare (BigQ capped at today − 2).
  */
-export default function VdpGa4VsBigqCompareTable({ from, to }) {
-  const { beginBreakdownLoad, endBreakdownLoad } = useOverview();
+export default function VdpGa4VsBigqCompareTable({ from, to, showExport = false }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({});
   const [loading, setLoading] = useState(false);
@@ -50,7 +49,6 @@ export default function VdpGa4VsBigqCompareTable({ from, to }) {
 
   useEffect(() => {
     let cancelled = false;
-    beginBreakdownLoad?.();
     setLoading(true);
     setError(null);
 
@@ -68,13 +66,12 @@ export default function VdpGa4VsBigqCompareTable({ from, to }) {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
-        endBreakdownLoad?.();
       });
 
     return () => {
       cancelled = true;
     };
-  }, [from, to, statusFilter, beginBreakdownLoad, endBreakdownLoad]);
+  }, [from, to, statusFilter]);
 
   const subtitle = useMemo(() => {
     const parts = ['All dealers'];
@@ -86,13 +83,29 @@ export default function VdpGa4VsBigqCompareTable({ from, to }) {
     return parts.join(' · ');
   }, [meta.from, meta.to, meta.bigqCapTo, meta.missingFromReport]);
 
+  const fetchAllRowsForExport = useCallback(() => {
+    if (statusFilter === 'all') {
+      return Promise.resolve({ rows, meta });
+    }
+    return fetchVdpGa4VsBigqCompare({ from, to, status: 'all' });
+  }, [from, to, statusFilter, rows, meta]);
+
   return (
     <Panel className="vdp-bq-compare-panel">
       <PanelHeader
         title="VDP Views Compare — GA4 vs BigQuery (All Dealers)"
         subtitle={subtitle}
       >
-        <div className="vdp-bq-status-filters">
+        <div className="vdp-bq-header-actions">
+          {showExport && (
+            <Ga4BigqCompareExportButton
+              rows={rows}
+              meta={meta}
+              loading={loading}
+              fetchAllRows={fetchAllRowsForExport}
+            />
+          )}
+          <div className="vdp-bq-status-filters">
           {[
             { id: 'all', label: 'All' },
             { id: 'missing_from_report', label: 'Missing from report' },
@@ -109,6 +122,7 @@ export default function VdpGa4VsBigqCompareTable({ from, to }) {
               {opt.label}
             </button>
           ))}
+          </div>
         </div>
       </PanelHeader>
       <PanelBody className="vdp-bq-compare-body">
