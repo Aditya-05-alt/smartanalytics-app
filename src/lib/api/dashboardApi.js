@@ -3,7 +3,7 @@ import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
 import { sanitizeVdpLocationOptions } from '@/lib/vdp/locationFilterOptions';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
-import { aggregateLocationBuckets } from '@/lib/api/locationBreakdownAggregate';
+import { fetchInventoryBreakdownChunked } from '@/lib/api/inventoryBreakdownFetch';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { fetchVdpKpiFiltered } from '@/lib/api/vdpKpiFetch';
 import {
@@ -19,31 +19,12 @@ import {
 import {
   vdpRpcExtraParams,
   vdpFilterCacheSuffix,
-  appendInvParamsToSearchParams,
   appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
-
-const FINAL_DATA_TABLE = 'smart_final_data';
-const LOCATION_PAGE_SIZE = 5000;
 
 function isMissingRpcError(error) {
   const msg = String(error?.message ?? error ?? '');
   return /function.*does not exist|could not find the function|schema cache/i.test(msg);
-}
-
-async function rpcLocationBreakdown(supabase, params, labMode = false) {
-  if (labMode) {
-    let result = await supabase.rpc('get_dealer_location_breakdown_lab', params);
-    if (result.error && isMissingRpcError(result.error)) {
-      result = await supabase.rpc('get_location_breakdown_lab', params);
-    }
-    return result;
-  }
-  let result = await supabase.rpc('get_dealer_location_breakdown', params);
-  if (result.error && isMissingRpcError(result.error)) {
-    result = await supabase.rpc('get_location_breakdown', params);
-  }
-  return result;
 }
 
 /**
@@ -306,6 +287,7 @@ export async function fetchVdpDailyByYear(opts) {
   return fetchVdpDailyFiltered(opts);
 }
 
+/** Make breakdown from smart_final_data (VDP tab only). */
 export async function fetchMakeBreakdown({
   clientId,
   from,
@@ -315,29 +297,22 @@ export async function fetchMakeBreakdown({
   tab = 'vdp',
   ga4PropertyId,
   onCancelCheck,
+  onProgress,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
-
-  const params = withPropertyRpcParams(
-    {
-      p_client_id: String(clientId).trim(),
-      p_from: toDateOnly(from),
-      p_to: toDateOnly(to),
-      p_limit: limit,
-      ...vdpRpcExtraParams(vdpFilters, tab),
-    },
-    ga4PropertyId
-  );
-
-  const { data, error } = await supabase.rpc('get_make_breakdown', params);
-
-  if (error) {
-    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
-    throw new Error(error.message || 'Failed to fetch make breakdown.');
-  }
-  return data || [];
+  return fetchInventoryBreakdownChunked({
+    clientId,
+    from,
+    to,
+    limit,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck,
+    onProgress,
+    rpcName: 'get_make_breakdown',
+    bucketKey: 'make_bucket',
+  });
 }
 
 /** VDP page title × channel matrix (Top 5 / Top 10 / All). */
@@ -385,30 +360,22 @@ export async function fetchTypeBreakdown({
   tab = 'vdp',
   ga4PropertyId,
   onCancelCheck,
+  onProgress,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
-
-  const { data, error } = await supabase.rpc(
-    'get_type_breakdown',
-    withPropertyRpcParams(
-      {
-        p_client_id: String(clientId).trim(),
-        p_from: toDateOnly(from),
-        p_to: toDateOnly(to),
-        p_limit: limit,
-        ...vdpRpcExtraParams(vdpFilters, tab),
-      },
-      ga4PropertyId
-    )
-  );
-
-  if (error) {
-    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
-    throw new Error(error.message || 'Failed to fetch type breakdown.');
-  }
-  return data || [];
+  return fetchInventoryBreakdownChunked({
+    clientId,
+    from,
+    to,
+    limit,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck,
+    onProgress,
+    rpcName: 'get_type_breakdown',
+    bucketKey: 'type_bucket',
+  });
 }
 
 /** Model breakdown from smart_final_data (VDP tab only). */
@@ -421,29 +388,24 @@ export async function fetchModelBreakdown({
   tab = 'vdp',
   ga4PropertyId,
   onCancelCheck,
+  onProgress,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
-
-  const params = withPropertyRpcParams(
-    {
-      p_client_id: String(clientId).trim(),
-      p_from: toDateOnly(from),
-      p_to: toDateOnly(to),
-      p_limit: limit,
-      ...vdpRpcExtraParams(vdpFilters, tab),
-    },
-    ga4PropertyId
-  );
-
-  const { data, error } = await supabase.rpc('get_model_breakdown', params);
-
-  if (error) {
-    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
-    throw new Error(error.message || 'Failed to fetch model breakdown.');
-  }
-  return Array.isArray(data) ? data : data ? [data] : [];
+  const rows = await fetchInventoryBreakdownChunked({
+    clientId,
+    from,
+    to,
+    limit,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck,
+    onProgress,
+    rpcName: 'get_model_breakdown',
+    bucketKey: 'model_bucket',
+    secondaryBucketKey: 'make_bucket',
+  });
+  return Array.isArray(rows) ? rows : rows ? [rows] : [];
 }
 
 /** Year breakdown from smart_final_data (VDP tab only). */
@@ -456,30 +418,22 @@ export async function fetchYearBreakdown({
   tab = 'vdp',
   ga4PropertyId,
   onCancelCheck,
+  onProgress,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
-
-  const { data, error } = await supabase.rpc(
-    'get_year_breakdown',
-    withPropertyRpcParams(
-      {
-        p_client_id: String(clientId).trim(),
-        p_from: toDateOnly(from),
-        p_to: toDateOnly(to),
-        p_limit: limit,
-        ...vdpRpcExtraParams(vdpFilters, tab),
-      },
-      ga4PropertyId
-    )
-  );
-
-  if (error) {
-    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
-    throw new Error(error.message || 'Failed to fetch year breakdown.');
-  }
-  return data || [];
+  return fetchInventoryBreakdownChunked({
+    clientId,
+    from,
+    to,
+    limit,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck,
+    onProgress,
+    rpcName: 'get_year_breakdown',
+    bucketKey: 'year_bucket',
+  });
 }
 
 /** Condition breakdown from smart_final_data (VDP tab only). */
@@ -492,30 +446,22 @@ export async function fetchConditionBreakdown({
   tab = 'vdp',
   ga4PropertyId,
   onCancelCheck,
+  onProgress,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
-
-  const { data, error } = await supabase.rpc(
-    'get_condition_breakdown',
-    withPropertyRpcParams(
-      {
-        p_client_id: String(clientId).trim(),
-        p_from: toDateOnly(from),
-        p_to: toDateOnly(to),
-        p_limit: limit,
-        ...vdpRpcExtraParams(vdpFilters, tab),
-      },
-      ga4PropertyId
-    )
-  );
-
-  if (error) {
-    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
-    throw new Error(error.message || 'Failed to fetch condition breakdown.');
-  }
-  return data || [];
+  return fetchInventoryBreakdownChunked({
+    clientId,
+    from,
+    to,
+    limit,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck,
+    onProgress,
+    rpcName: 'get_condition_breakdown',
+    bucketKey: 'condition_bucket',
+  });
 }
 
 /** All campaigns by views from smart_ga4_page_data (merged across date chunks). */
@@ -556,68 +502,8 @@ function normalizeLocationRows(data) {
   }));
 }
 
-async function fetchLocationFromTable(supabase, params, onCancelCheck, ga4PropertyId) {
-  if (isPropertyScoped(ga4PropertyId)) return [];
-  let offset = 0;
-  const buffer = [];
-
-  while (true) { // eslint-disable-line no-constant-condition
-    if (onCancelCheck?.()) return undefined;
-
-    const { data, error } = await supabase
-      .from(FINAL_DATA_TABLE)
-      .select('inv_location, views')
-      .eq('client_id', params.p_client_id)
-      .gte('report_date', params.p_from)
-      .lte('report_date', params.p_to)
-      .range(offset, offset + LOCATION_PAGE_SIZE - 1);
-
-    if (error) return null;
-    if (!data?.length) break;
-
-    buffer.push(...data);
-    if (data.length < LOCATION_PAGE_SIZE) break;
-    offset += LOCATION_PAGE_SIZE;
-  }
-
-  return aggregateLocationBuckets(buffer);
-}
-
-/** Server route using service role when anon RPC returns [] (RLS). */
-async function fetchLocationBreakdownViaApi(params, onCancelCheck, labMode = false, ga4PropertyId) {
-  if (onCancelCheck?.()) return undefined;
-  if (typeof window === 'undefined') return null;
-
-  const qs = appendAnalyticsScope(
-    new URLSearchParams({
-      clientId: params.p_client_id,
-      from: params.p_from,
-      to: params.p_to,
-    }),
-    { ga4PropertyId }
-  );
-  if (params.p_limit != null) qs.set('limit', String(params.p_limit));
-  appendInvParamsToSearchParams(qs, params);
-
-  const apiPath = labMode
-    ? '/api/dashboard/location-breakdown-lab'
-    : '/api/dashboard/location-breakdown';
-
-  try {
-    const res = await fetch(`${apiPath}?${qs}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (onCancelCheck?.()) return undefined;
-    return normalizeLocationRows(json.data);
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Location breakdown — live: get_dealer_location_breakdown.
- * Lab (labMode): get_dealer_location_breakdown_lab (same filters as channel lab).
- * Falls back to non-dealer RPC, server API, then direct table read if needed.
+ * Location breakdown — date-chunked (server API first, then client chunked RPC).
  */
 export async function fetchLocationBreakdown({
   clientId,
@@ -629,58 +515,32 @@ export async function fetchLocationBreakdown({
   labMode = false,
   ga4PropertyId,
   onCancelCheck,
+  onProgress,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return undefined;
 
-  const params = withPropertyRpcParams(
-    {
-      p_client_id: String(clientId).trim(),
-      p_from: toDateOnly(from),
-      p_to: toDateOnly(to),
-      p_limit: limit,
-      ...vdpRpcExtraParams(vdpFilters, tab),
-    },
-    ga4PropertyId
-  );
-
-  const { data, error } = await rpcLocationBreakdown(supabase, params, labMode);
-
-  if (error) {
-    if (!(labMode && isMissingRpcError(error))) {
-      if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) {
-        return [];
-      }
-      throw new Error(error.message || 'Failed to fetch location breakdown.');
-    }
-  } else {
-    if (onCancelCheck?.()) return undefined;
-    const rpcRows = normalizeLocationRows(data);
-    if (rpcRows.length > 0) return rpcRows;
-  }
-
-  if (onCancelCheck?.()) return undefined;
-
-  const apiRows = await fetchLocationBreakdownViaApi(
-    params,
+  const rows = await fetchInventoryBreakdownChunked({
+    clientId,
+    from,
+    to,
+    limit,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
     onCancelCheck,
+    onProgress,
+    rpcName: labMode ? 'get_dealer_location_breakdown_lab' : 'get_dealer_location_breakdown',
+    fallbackRpc: labMode ? 'get_location_breakdown_lab' : 'get_location_breakdown',
+    apiPath: labMode
+      ? '/api/dashboard/location-breakdown-lab'
+      : '/api/dashboard/location-breakdown',
+    bucketKey: 'location_bucket',
     labMode,
-    ga4PropertyId
-  );
-  if (onCancelCheck?.()) return undefined;
-  if (apiRows?.length) return apiRows;
+  });
 
-  const tableRows = await fetchLocationFromTable(
-    supabase,
-    params,
-    onCancelCheck,
-    ga4PropertyId
-  );
   if (onCancelCheck?.()) return undefined;
-  if (tableRows?.length) return tableRows;
-
-  return [];
+  if (rows == null) return undefined;
+  return normalizeLocationRows(rows);
 }
 
 /** Active dealers from smart_hoot_config (same source as ClientContext). */

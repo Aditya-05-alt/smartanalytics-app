@@ -47,6 +47,10 @@ export function useBreakdownFetch({
       tab,
       ga4PropertyId,
       onCancelCheck: () => cancelled,
+      onProgress: (partial) => {
+        if (cancelled || partial == null) return;
+        setRows(normalize(partial));
+      },
     })
       .then((data) => {
         if (cancelled) return;

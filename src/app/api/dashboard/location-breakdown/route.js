@@ -1,12 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
-import { mergeAnalyticsExtra } from '@/lib/api/analyticsScope';
+import { runChunkedInventoryBreakdown } from '@/lib/api/inventoryBreakdownServer';
+
+export const maxDuration = 120;
 
 /**
- * Server-side location breakdown (uses service role when configured).
- * Browser anon key cannot read smart_final_data under RLS; this route is a fallback
- * until get_dealer_location_breakdown is deployed as SECURITY DEFINER in Supabase.
+ * Server-side location breakdown (service role + date-chunked RPC).
  */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -31,29 +30,22 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const inv = parseInvRpcFromSearchParams(searchParams);
-
-  const params = mergeAnalyticsExtra(searchParams, {
-    p_client_id: String(clientId).trim(),
-    p_from: String(from).slice(0, 10),
-    p_to: String(to).slice(0, 10),
-    ...inv,
-  });
-
-  let { data, error } = await supabase.rpc('get_dealer_location_breakdown', params);
-  if (
-    error
-    && /function.*does not exist|could not find the function|schema cache/i.test(error.message)
-  ) {
-    ({ data, error } = await supabase.rpc('get_location_breakdown', params));
-  }
-
-  if (error) {
-    if (params.p_ga4_property_id) {
+  try {
+    const data = await runChunkedInventoryBreakdown(supabase, searchParams, {
+      rpcName: 'get_dealer_location_breakdown',
+      fallbackRpc: 'get_location_breakdown',
+      bucketKey: 'location_bucket',
+    });
+    return NextResponse.json({ data });
+  } catch (err) {
+    const message = err?.message || 'Failed to load location breakdown';
+    const ga4PropertyId = searchParams.get('ga4PropertyId')?.trim();
+    if (ga4PropertyId && /function.*does not exist|could not find the function/i.test(message)) {
       return NextResponse.json({ data: [] });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const hint = /timeout|canceling statement/i.test(message)
+      ? ' Try a shorter date range or add indexes on smart_final_data (client_id, report_date).'
+      : '';
+    return NextResponse.json({ error: message + hint }, { status: 500 });
   }
-
-  return NextResponse.json({ data: data ?? [] });
 }
