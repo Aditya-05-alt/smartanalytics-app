@@ -9,6 +9,7 @@ import {
 import {
   channelFilterCacheSuffix,
   channelFilterLabCacheSuffix,
+  channelBreakdownUsesGroups,
 } from '@/lib/vdp/vdpFilterParams';
 import { scopeCacheId } from '@/lib/analytics/analyticsScope';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
@@ -184,6 +185,7 @@ function ChannelDonutDisplay({
   chartTopN,
   overviewLoading,
   baselineDonutData,
+  skipChannelGroups = false,
 }) {
   const allData = useMemo(() => channelRowsToDonutData(rows), [rows]);
   const chartData = useMemo(() => {
@@ -192,13 +194,14 @@ function ChannelDonutDisplay({
   }, [allData, chartTopN]);
 
   const listData = useMemo(() => {
+    if (skipChannelGroups) return allData;
     if (!baselineDonutData) {
       return applyChannelGroupsToDonutItems(allData);
     }
     const withCmp = attachCompareValuesForGrouping(allData, baselineDonutData);
     const { items } = buildDonutCompareDeltas(withCmp, baselineDonutData);
     return applyChannelGroupsToDonutItems(items);
-  }, [allData, baselineDonutData]);
+  }, [allData, baselineDonutData, skipChannelGroups]);
 
   const { totalDelta } = useMemo(() => {
     if (!baselineDonutData) return { totalDelta: null };
@@ -308,6 +311,7 @@ function ChannelDonutCompare({
   endBreakdownLoad,
   reportBreakdownChunk,
 }) {
+  const skipChannelGroups = !channelBreakdownUsesGroups(vdpFilters, tab);
   const [chartTopN, setChartTopN] = useState(null);
 
   const compareFetch = useChannelBreakdownRows({
@@ -369,6 +373,7 @@ function ChannelDonutCompare({
         centerLabel={centerLabel}
         chartTopN={chartTopN}
         overviewLoading={overviewLoading}
+        skipChannelGroups={skipChannelGroups}
       />
       <ChannelDonutDisplay
         rows={currentFetch.rows}
@@ -380,6 +385,7 @@ function ChannelDonutCompare({
         chartTopN={chartTopN}
         overviewLoading={overviewLoading}
         baselineDonutData={compareAllData}
+        skipChannelGroups={skipChannelGroups}
       />
     </CompareBreakdownSection>
   );
@@ -401,6 +407,7 @@ function ChannelDonutSingle({
   endBreakdownLoad,
   reportBreakdownChunk,
 }) {
+  const skipChannelGroups = !channelBreakdownUsesGroups(vdpFilters, tab);
   const [chartTopN, setChartTopN] = useState(null);
   const { rows, loading, error } = useChannelBreakdownRows({
     clientId,
@@ -423,8 +430,8 @@ function ChannelDonutSingle({
     return allData.slice(0, chartTopN);
   }, [allData, chartTopN]);
   const listData = useMemo(
-    () => applyChannelGroupsToDonutItems(allData),
-    [allData]
+    () => (skipChannelGroups ? allData : applyChannelGroupsToDonutItems(allData)),
+    [allData, skipChannelGroups]
   );
 
   const leafTotal = useMemo(

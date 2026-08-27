@@ -587,7 +587,9 @@ export function OverviewProvider({ children }) {
     };
   }, [scopeCacheKey, clientKey, ga4PropertyId, lyFrom, lyTo]);
 
-  // ── VDP filter dropdown options (from inventory in range) ──
+  // ── VDP filter dropdown options (cascade with active inventory filters) ──
+  const vdpOptionsFilterKey = vdpFilterCacheSuffix(vdpFilters, 'vdp');
+
   useEffect(() => {
     if (!clientKey || !from || !to) {
       setVdpFilterOptions(EMPTY_VDP_FILTER_OPTIONS);
@@ -600,6 +602,8 @@ export function OverviewProvider({ children }) {
       ga4PropertyId,
       from,
       to,
+      vdpFilters,
+      tab: 'vdp',
       onCancelCheck: () => cancelled,
     })
       .then((options) => {
@@ -620,7 +624,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [scopeCacheKey, clientKey, ga4PropertyId, from, to]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, from, to, vdpOptionsFilterKey]);
 
   // ── VDP daily views for KPI + chart (current period — priority) ──
   useEffect(() => {
@@ -671,9 +675,9 @@ export function OverviewProvider({ children }) {
     };
   }, [scopeCacheKey, clientKey, ga4PropertyId, from, to, vdpFilters]);
 
-  // ── VDP daily views for compare period (only when compare is on) ──
+  // ── VDP daily views for compare period (MoM baseline — always fetch filtered) ──
   useEffect(() => {
-    if (!compareEnabled || !clientKey || !compareFrom || !compareTo) {
+    if (!clientKey || !compareFrom || !compareTo) {
       setCompareVdpFilteredDaily(null);
       return undefined;
     }
@@ -707,7 +711,7 @@ export function OverviewProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [compareEnabled, scopeCacheKey, clientKey, ga4PropertyId, compareFrom, compareTo, vdpFilters]);
+  }, [scopeCacheKey, clientKey, ga4PropertyId, compareFrom, compareTo, vdpFilters]);
 
   // ── VDP daily views for YoY baseline (background) ──
   useEffect(() => {
@@ -948,20 +952,35 @@ export function OverviewProvider({ children }) {
   }, [compareRows]);
 
   const adjustedCompareDerived = useMemo(() => {
-    if (!compareVdpFilteredDaily) return compareDerived;
-    return {
-      ...compareDerived,
-      totals: { ...compareDerived.totals, vdp: compareVdpFilteredDaily.total || 0 },
-      daily: { ...compareDerived.daily, vdp: compareVdpFilteredDaily.daily || {} },
-    };
-  }, [compareDerived, compareVdpFilteredDaily]);
+    if (compareVdpFilteredDaily) {
+      return {
+        ...compareDerived,
+        totals: { ...compareDerived.totals, vdp: compareVdpFilteredDaily.total || 0 },
+        daily: { ...compareDerived.daily, vdp: compareVdpFilteredDaily.daily || {} },
+      };
+    }
+    // With active VDP filters, never fall back to unfiltered overview (MoM would disagree with channel table).
+    if (vdpFiltersActive(vdpFilters, 'vdp')) {
+      return {
+        ...compareDerived,
+        totals: { ...compareDerived.totals, vdp: 0 },
+        daily: { ...compareDerived.daily, vdp: {} },
+      };
+    }
+    return compareDerived;
+  }, [compareDerived, compareVdpFilteredDaily, vdpFilters]);
 
   const lyTotals = useMemo(() => totalsFromOverviewRows(lyRows), [lyRows]);
 
   const adjustedLyTotals = useMemo(() => {
-    if (!lyVdpFilteredDaily) return lyTotals;
-    return { ...lyTotals, vdp: lyVdpFilteredDaily.total || 0 };
-  }, [lyTotals, lyVdpFilteredDaily]);
+    if (lyVdpFilteredDaily) {
+      return { ...lyTotals, vdp: lyVdpFilteredDaily.total || 0 };
+    }
+    if (vdpFiltersActive(vdpFilters, 'vdp')) {
+      return { ...lyTotals, vdp: 0 };
+    }
+    return lyTotals;
+  }, [lyTotals, lyVdpFilteredDaily, vdpFilters]);
 
   const compareSeriesByTabRaw = useMemo(() => {
     if (!compareEnabled) return {};

@@ -4,7 +4,22 @@ import {
   normalizeChannelKey,
 } from '@/lib/ga4/channelGroups';
 
-/** Ungrouped channels shown in the VDP Channel filter (bundles replace their members). */
+/**
+ * Paid bundle members shown separately in the Channel filter.
+ * Channel Breakdown still rolls them up via CHANNEL_GROUP_DEFS in channelGroups.js.
+ */
+export const VDP_PAID_SEARCH_FILTER_CHANNELS = [
+  'Paid Search',
+  'Cross-network',
+  'Display',
+];
+
+/** Bundles that stay a single filter option (e.g. Paid Social + Organic Social). */
+const VDP_CHANNEL_FILTER_BUNDLE_LABELS = CHANNEL_GROUP_DEFS.filter(
+  (g) => g.key !== 'paid-search-bundle'
+).map((g) => g.label);
+
+/** Ungrouped channels shown in the VDP Channel filter. */
 const VDP_CHANNEL_FILTER_SOLOS = [
   'Direct',
   'Organic Search',
@@ -18,12 +33,53 @@ const VDP_CHANNEL_FILTER_SOLOS = [
   'SMS',
 ];
 
-/** Filter labels: group rollups + solo channels (matches Channel Breakdown groupings). */
+/** Filter labels: paid members + remaining bundles + solo channels. */
 export const VDP_CHANNEL_FILTER_OPTIONS = [
   'All',
-  ...CHANNEL_GROUP_DEFS.map((g) => g.label),
+  ...VDP_PAID_SEARCH_FILTER_CHANNELS,
+  ...VDP_CHANNEL_FILTER_BUNDLE_LABELS,
   ...VDP_CHANNEL_FILTER_SOLOS,
 ];
+
+const PAID_SEARCH_BUNDLE_LABEL = CHANNEL_GROUP_DEFS.find(
+  (g) => g.key === 'paid-search-bundle'
+)?.label;
+
+function paidSearchFilterLabelForRaw(rawName) {
+  const key = normalizeChannelKey(rawName);
+  return (
+    VDP_PAID_SEARCH_FILTER_CHANNELS.find(
+      (label) => normalizeChannelKey(label) === key
+    ) || rawName
+  );
+}
+
+/** Map one filter label → raw GA4 channel names for p_channels. */
+function expandFilterLabelToRpcChannels(label) {
+  if (label === PAID_SEARCH_BUNDLE_LABEL) {
+    const group = CHANNEL_GROUP_DEFS.find((g) => g.label === label);
+    return group ? [...group.members] : [label];
+  }
+  if (normalizeChannelKey(label) === normalizeChannelKey('Cross-network')) {
+    return ['Cross-network', 'Cross Network'];
+  }
+  const group = CHANNEL_GROUP_DEFS.find((g) => g.label === label);
+  if (group) return [...group.members];
+  return [label];
+}
+
+/** Expand legacy bundle label into separate paid filter options. */
+function migrateLegacyChannelFilterLabels(labels) {
+  const out = [];
+  for (const label of labels) {
+    if (label === PAID_SEARCH_BUNDLE_LABEL) {
+      out.push(...VDP_PAID_SEARCH_FILTER_CHANNELS);
+    } else {
+      out.push(label);
+    }
+  }
+  return [...new Set(out.filter(Boolean))];
+}
 
 /** Expand filter labels (incl. bundles) → raw GA4 channel names for p_channels. */
 export function expandChannelsForRpc(selected) {
@@ -32,12 +88,7 @@ export function expandChannelsForRpc(selected) {
 
   const out = [];
   for (const label of labels) {
-    const group = CHANNEL_GROUP_DEFS.find((g) => g.label === label);
-    if (group) {
-      for (const member of group.members) out.push(member);
-    } else {
-      out.push(label);
-    }
+    out.push(...expandFilterLabelToRpcChannels(label));
   }
   return [...new Set(out.filter(Boolean))];
 }
@@ -53,6 +104,18 @@ export function collapseChannelsToFilterLabels(rawChannels) {
   const labels = [];
 
   for (const group of CHANNEL_GROUP_DEFS) {
+    if (group.key === 'paid-search-bundle') {
+      for (const member of group.members) {
+        const key = normalizeChannelKey(member);
+        if (remaining.has(key)) {
+          const filterLabel = paidSearchFilterLabelForRaw(member);
+          if (!labels.includes(filterLabel)) labels.push(filterLabel);
+          remaining.delete(key);
+        }
+      }
+      continue;
+    }
+
     const hit = group.members.some((m) => remaining.has(normalizeChannelKey(m)));
     if (hit) {
       labels.push(group.label);
@@ -68,7 +131,6 @@ export function collapseChannelsToFilterLabels(rawChannels) {
     }
   }
 
-  // Keep any unknown leftover as display names
   for (const c of raw) {
     const key = normalizeChannelKey(c);
     if (remaining.has(key)) {
@@ -77,7 +139,7 @@ export function collapseChannelsToFilterLabels(rawChannels) {
     }
   }
 
-  return labels;
+  return migrateLegacyChannelFilterLabels(labels);
 }
 
 /** Default VDP tab inventory filters (All = no restriction). */
@@ -140,7 +202,7 @@ export function normalizeVdpFilters(input) {
     ...merged,
     condition,
     location: selectedLocations(merged.location),
-    channel: selectedChannels(merged.channel),
+    channel: migrateLegacyChannelFilterLabels(selectedChannels(merged.channel)),
   };
 }
 
@@ -191,6 +253,12 @@ export function channelFiltersActive(vdpFilters, tab) {
     f.location.length > 0 ||
     f.channel.length > 0
   );
+}
+
+/** Channel Breakdown rollups — skip when a channel filter is selected (show flat names). */
+export function channelBreakdownUsesGroups(vdpFilters, tab) {
+  if (tab !== 'vdp') return true;
+  return selectedChannels(vdpFilters?.channel).length === 0;
 }
 
 /** Lab: same as live channelFiltersActive. */

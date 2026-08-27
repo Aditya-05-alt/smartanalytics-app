@@ -134,7 +134,7 @@ BEGIN
            ON iu.customer_name_key = LOWER(TRIM(c.customer_name))
           AND u.page_path IS NOT NULL
           AND u.page_path <> ''
-          AND iu.url_lower LIKE '%' || LOWER(TRIM(u.page_path)) || '%'
+          AND public.inventory_matches_ga4_page_path(u.page_path, iu.url, iu.vin)
     ORDER BY u.client_id, u.report_date, u.page_path,
              LENGTH(iu.url_lower) DESC NULLS LAST
   )

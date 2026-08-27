@@ -13,6 +13,7 @@ import {
   applyChannelGroupsToComparisonRows,
   filterByExpandedGroups,
 } from '@/lib/ga4/channelGroups';
+import { channelBreakdownUsesGroups } from '@/lib/vdp/vdpFilterParams';
 import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
 import {
   mergeChannelComparison,
@@ -183,10 +184,15 @@ export default function CmpTable() {
     return mergeChannelComparison(curRows, cmpRows, lyCurRows);
   }, [tab, vdpChannelComparison, curRows, cmpRows, lyCurRows]);
 
+  const useChannelGroups = channelBreakdownUsesGroups(vdpFilters, tab);
+
   const rowsWithColors = useMemo(() => {
     const colored = rows.map((r, i) => ({ ...r, color: colorForChannel(r.ch, i) }));
+    if (!useChannelGroups) {
+      return colored.map((r) => ({ ...r, rowKey: r.ch }));
+    }
     return applyChannelGroupsToComparisonRows(colored);
-  }, [rows]);
+  }, [rows, useChannelGroups]);
 
   const visibleRows = useMemo(
     () => filterByExpandedGroups(rowsWithColors, expanded),

@@ -18,6 +18,7 @@ import {
 } from '@/lib/data/vdpDailyCache';
 import {
   vdpRpcExtraParams,
+  vdpFiltersToRpcParams,
   vdpFilterCacheSuffix,
   appendVdpFiltersToSearchParams,
 } from '@/lib/vdp/vdpFilterParams';
@@ -66,7 +67,15 @@ export async function fetchChannelBreakdown({
   });
 }
 
-async function fetchVdpFilterOptionsViaApi({ clientId, from, to, ga4PropertyId, onCancelCheck }) {
+async function fetchVdpFilterOptionsViaApi({
+  clientId,
+  from,
+  to,
+  vdpFilters,
+  tab,
+  ga4PropertyId,
+  onCancelCheck,
+}) {
   if (typeof window === 'undefined') return null;
   if (onCancelCheck?.()) return null;
 
@@ -78,6 +87,8 @@ async function fetchVdpFilterOptionsViaApi({ clientId, from, to, ga4PropertyId, 
     }),
     { ga4PropertyId }
   );
+  appendVdpFiltersToSearchParams(qs, vdpFilters, tab);
+
   const res = await fetch(`/api/dashboard/vdp-filter-options?${qs}`, {
     credentials: 'same-origin',
   });
@@ -92,16 +103,28 @@ async function fetchVdpFilterOptionsViaApi({ clientId, from, to, ga4PropertyId, 
   return json;
 }
 
-/** Distinct VDP filter dropdown values for dealer + date range. */
-export async function fetchVdpFilterOptions({ clientId, from, to, ga4PropertyId, onCancelCheck }) {
+/** Distinct VDP filter dropdown values for dealer + date range (cascades with active filters). */
+export async function fetchVdpFilterOptions({
+  clientId,
+  from,
+  to,
+  vdpFilters,
+  tab = 'vdp',
+  ga4PropertyId,
+  onCancelCheck,
+}) {
   if (!clientId || !from || !to) return null;
   if (onCancelCheck?.()) return null;
+
+  const invParams = vdpFiltersToRpcParams(vdpFilters, tab);
 
   try {
     const viaApi = await fetchVdpFilterOptionsViaApi({
       clientId,
       from,
       to,
+      vdpFilters,
+      tab,
       ga4PropertyId,
       onCancelCheck,
     });
@@ -121,11 +144,24 @@ export async function fetchVdpFilterOptions({ clientId, from, to, ga4PropertyId,
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const { data, error } = await supabase.rpc('get_vdp_filter_options', {
-    p_client_id: String(clientId).trim(),
-    p_from: toDateOnly(from),
-    p_to: toDateOnly(to),
-  });
+  const { data, error } = await supabase.rpc(
+    'get_vdp_filter_options',
+    withPropertyRpcParams(
+      {
+        p_client_id: String(clientId).trim(),
+        p_from: toDateOnly(from),
+        p_to: toDateOnly(to),
+        p_types: invParams.p_types ?? null,
+        p_makes: invParams.p_makes ?? null,
+        p_models: invParams.p_models ?? null,
+        p_locations: invParams.p_locations ?? null,
+        p_years: invParams.p_years ?? null,
+        p_condition: invParams.p_condition ?? 'BOTH',
+        p_channels: invParams.p_channels ?? null,
+      },
+      ga4PropertyId
+    )
+  );
 
   if (error) throw new Error(error.message || 'Failed to load VDP filter options.');
 

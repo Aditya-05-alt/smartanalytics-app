@@ -1,9 +1,26 @@
--- Step 3 inventory ↔ GA4 page_path matching.
--- 1) VIN match (scrap dealers: spaces vs underscores, extra -Touring- segments, etc.)
--- 2) Dealer Spike listing id (SEO slug / inventory/v1 trailing id -> id= in Hoot URL)
--- 3) Legacy substring match on full URL (hoot + dealers where paths align)
--- Requires: extract_vin_from_text.sql, extract_dealer_spike_listing_id_from_page_path.sql
--- Deploy before build_smart_final_data.sql and build_smart_final_data_scrap.sql.
+-- Dealer Spike: match GA4 SEO slug page_paths to Hoot default.asp?id= inventory URLs (Step 3).
+
+CREATE OR REPLACE FUNCTION public.extract_dealer_spike_listing_id_from_page_path(
+  p_page_path text
+)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    (regexp_match(p_page_path, '[?&]id=(\d+)', 'i'))[1],
+    (regexp_match(p_page_path, '---(\d+)$'))[1],
+    CASE
+      WHEN p_page_path ~* '/(?:New|Pre-?Owned)-Inventory-'
+        THEN (regexp_match(p_page_path, '-(\d+)$'))[1]
+      ELSE NULL
+    END
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.extract_dealer_spike_listing_id_from_page_path(text)
+  TO anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.inventory_matches_ga4_page_path(
   p_page_path text,
@@ -25,14 +42,12 @@ AS $$
     ) AS v
   )
   SELECT
-    -- VIN match (preferred for scrap inventory)
     (
       (SELECT v FROM ga4_vin) IS NOT NULL
       AND (SELECT v FROM inv_vin) IS NOT NULL
       AND (SELECT v FROM ga4_vin) = (SELECT v FROM inv_vin)
     )
     OR
-    -- Dealer Spike: SEO slug or inventory/v1 path id matches Hoot default.asp?id=
     (
       public.extract_dealer_spike_listing_id_from_page_path(p_page_path) IS NOT NULL
       AND p_inv_url IS NOT NULL
@@ -41,7 +56,6 @@ AS $$
         '%id=' || public.extract_dealer_spike_listing_id_from_page_path(p_page_path) || '%'
     )
     OR
-    -- Legacy: full inventory URL contains GA4 page_path (hoot + aligned paths)
     (
       p_page_path IS NOT NULL
       AND btrim(p_page_path) <> ''
@@ -53,3 +67,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.inventory_matches_ga4_page_path(text, text, text)
   TO anon, authenticated, service_role;
+
+-- build_smart_final_data: use inventory_matches_ga4_page_path (includes Dealer Spike id= matching)
+-- See supabase/rpc/build_smart_final_data.sql for full function body deployed via apply_migration.

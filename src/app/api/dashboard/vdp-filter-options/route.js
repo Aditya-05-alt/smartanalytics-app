@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { mergeAnalyticsExtra } from '@/lib/api/analyticsScope';
+import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
 function normalizeFilterOptionsRow(row) {
   const asList = (key) => {
@@ -11,7 +13,6 @@ function normalizeFilterOptionsRow(row) {
     years: ['All', ...asList('years')],
     makes: ['All', ...asList('makes')],
     models: ['All', ...asList('models')],
-    // Raw locations — client sanitizes/dedupes so variant map is available for RPC.
     locations: ['All', ...asList('locations')],
     configured_locations: asList('configured_locations'),
     types: ['All', ...asList('types')],
@@ -23,6 +24,7 @@ export async function GET(request) {
   const clientId = searchParams.get('clientId')?.trim();
   const from = searchParams.get('from')?.slice(0, 10);
   const to = searchParams.get('to')?.slice(0, 10);
+  const inv = parseInvRpcFromSearchParams(searchParams);
 
   if (!clientId || !from || !to) {
     return NextResponse.json({ error: 'Missing clientId, from, or to' }, { status: 400 });
@@ -42,11 +44,21 @@ export async function GET(request) {
   });
 
   try {
-    const { data, error } = await supabase.rpc('get_vdp_filter_options', {
-      p_client_id: clientId,
-      p_from: from,
-      p_to: to,
-    });
+    const { data, error } = await supabase.rpc('get_vdp_filter_options', mergeAnalyticsExtra(
+      searchParams,
+      {
+        p_client_id: clientId,
+        p_from: from,
+        p_to: to,
+        p_types: inv.p_types ?? null,
+        p_makes: inv.p_makes ?? null,
+        p_models: inv.p_models ?? null,
+        p_locations: inv.p_locations ?? null,
+        p_years: inv.p_years ?? null,
+        p_condition: inv.p_condition ?? 'BOTH',
+        p_channels: inv.p_channels ?? null,
+      }
+    ));
 
     if (error) throw error;
 
