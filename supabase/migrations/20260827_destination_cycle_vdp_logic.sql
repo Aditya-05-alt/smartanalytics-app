@@ -1,9 +1,10 @@
--- Destination Cycle: GA4 page_path uses SEO URLs, not default.asp?query strings.
--- Covers: default.asp query VDP, New/Pre-owned SEO slugs, inventory/v1 unit pages.
+-- Destination Cycle (1421445735): GA4 page_path uses SEO slugs + inventory/v1 paths.
+-- Hoot inventory uses default.asp?id= — matched in Step 3 via extract_dealer_spike_listing_id_from_page_path.
+-- VDP logic field supports multiple patterns separated by ` OR ` (Admin → VDP Logics).
 
 UPDATE public.smart_vdp_logic
 SET
-  vdp_logic = '/default\.asp\?page=x(?:New|PreOwned)InventoryDetail&id=\d+&p=\d+&s=[^&]+&d=[^&]+(?:&t=[^&]+)?&fr=x(?:New|PreOwned)Inventory|/(?:New|Pre-?[Oo]wned)-Inventory-[A-Za-z0-9-]+-\d+|/inventory/v1/Current/.+---\d+',
+  vdp_logic = '/(?:New|Pre-?owned)-Inventory-.+-\d+ OR /inventory/v1/Current/.+---\d+',
   updated_at = now()
 WHERE dealer_id = '1421445735'
    OR ga4_property_id = '483810815';

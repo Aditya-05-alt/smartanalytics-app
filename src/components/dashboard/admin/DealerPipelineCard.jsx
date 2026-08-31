@@ -10,6 +10,10 @@ import {
   runPipelinePageSync,
 } from '@/lib/api/adminPipeline';
 import { chunkDates, coerceDateRange } from '@/lib/pipeline/dates';
+import {
+  resolveHootFinalRpcName,
+  step3AdminBatchDays,
+} from '@/lib/pipeline/inventoryResolve';
 import PipelineSyncLog from '@/components/dashboard/admin/PipelineSyncLog';
 import {
   formatStep1BatchProgressLog,
@@ -416,22 +420,146 @@ export default function DealerPipelineCard({ dealer, from, to }) {
     setBusyStep(3);
     setMessage(null);
     setError(null);
-    const step3Rpc = stats?.inventory?.step3Rpc || stats?.workflow?.step3Rpc;
+    const step3Rpc =
+      stats?.inventory?.step3Rpc ||
+      stats?.workflow?.step3Rpc ||
+      resolveHootFinalRpcName(clientId);
+    const step3BatchDays = step3AdminBatchDays(clientId);
+    const { dates } = coerceDateRange(from, to);
+    const batches = chunkDates(dates, step3BatchDays);
+    const batchResults = [];
+
     setStepLog(3, [
-      logLine(`Step 3 — Final VDP · ${from} → ${to}`),
+      logLine(`Step 3 — Final VDP · date range ${from} → ${to}`),
+      logLine(`RPC: ${step3Rpc}`),
       logLine(
-        step3Rpc
-          ? `Running ${step3Rpc}…`
-          : 'Resolving inventory source (hoot vs scrap)…'
+        batches.length === 1
+          ? `Running single call for ${from} → ${to}…`
+          : `Will run ${batches.length} batch(es) of up to ${step3BatchDays} day(s)…`
       ),
     ]);
+
     try {
-      const res = await runPipelineFinalSync({ clientId, from, to });
-      setStep3Result(res);
-      setStepLog(3, formatStep3DayByDayLog(from, to, res));
-      setMessage(`Step 3 complete via ${res.rpcUsed}.`);
+      for (let i = 0; i < batches.length; i += 1) {
+        const batch = batches[i];
+        const batchFrom = batch[0];
+        const batchTo = batch[batch.length - 1];
+        const batchLabel = `${batchFrom} → ${batchTo}`;
+        const startedAt = Date.now();
+
+        setMessage(`Step 3 — ${batchLabel} (${i + 1}/${batches.length})…`);
+        appendStepLog(
+          3,
+          logLine(
+            batches.length === 1
+              ? `▶ Running ${step3Rpc} for ${batchLabel}…`
+              : `▶ Batch ${i + 1}/${batches.length}: ${batchLabel}…`
+          )
+        );
+
+        const res = await runPipelineFinalSync({
+          clientId,
+          from: batchFrom,
+          to: batchTo,
+        });
+        batchResults.push(res);
+
+        const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+        appendStepLog(
+          3,
+          logLine(
+            `✓ ${batchLabel} done in ${secs}s — ${(Number(res.totalRows) || 0).toLocaleString()} rows · ${(Number(res.totalVdpTrue) || 0).toLocaleString()} matched`
+          )
+        );
+        for (const line of res.log || []) {
+          appendStepLog(3, line.startsWith('[') ? line : `  ${line}`);
+        }
+
+        if (i < batches.length - 1) {
+          setMessage(
+            `Batch ${i + 1}/${batches.length} done — pausing ${PAUSE_BETWEEN_BATCHES_MS / 1000}s…`
+          );
+          await sleep(PAUSE_BETWEEN_BATCHES_MS);
+        }
+      }
+
+      const merged = {
+        success: true,
+        rpcUsed: batchResults[0]?.rpcUsed || step3Rpc,
+        inventorySource: batchResults[0]?.inventorySource,
+        rpcMode: batchResults[0]?.rpcMode || 'date_range',
+        clientId,
+        from,
+        to,
+        chunkDays: batchResults[0]?.chunkDays || step3BatchDays,
+        chunks: batchResults.flatMap((r) => r.chunks || []),
+        totalRows: batchResults.reduce((s, r) => s + (Number(r.totalRows) || 0), 0),
+        totalVdpTrue: batchResults.reduce(
+          (s, r) => s + (Number(r.totalVdpTrue) || 0),
+          0
+        ),
+        summary: [
+          {
+            clientId,
+            accountName:
+              batchResults.find((r) => r.summary?.[0]?.accountName)?.summary?.[0]
+                ?.accountName || null,
+            cms:
+              batchResults.find((r) => r.summary?.[0]?.cms)?.summary?.[0]?.cms ||
+              null,
+            totalRows: batchResults.reduce(
+              (s, r) => s + (Number(r.totalRows) || 0),
+              0
+            ),
+            vdpRows: batchResults.reduce(
+              (s, r) => s + (Number(r.totalVdpTrue) || 0),
+              0
+            ),
+          },
+        ],
+      };
+
+      setStep3Result(merged);
+      setStepLog(3, formatStep3DayByDayLog(from, to, merged));
+      setMessage(
+        `Step 3 complete via ${merged.rpcUsed} — ${merged.totalRows.toLocaleString()} rows · ${merged.totalVdpTrue.toLocaleString()} matched${
+          batches.length > 1 ? ` (${batches.length} batches)` : ''
+        }.`
+      );
       await loadPipelineData();
     } catch (e) {
+      if (batchResults.length) {
+        const partial = {
+          success: false,
+          rpcUsed: batchResults[0]?.rpcUsed,
+          rpcMode: 'date_range',
+          clientId,
+          from,
+          to,
+          chunkDays: batchResults[0]?.chunkDays || step3BatchDays,
+          chunks: batchResults.flatMap((r) => r.chunks || []),
+          totalRows: batchResults.reduce((s, r) => s + (Number(r.totalRows) || 0), 0),
+          totalVdpTrue: batchResults.reduce(
+            (s, r) => s + (Number(r.totalVdpTrue) || 0),
+            0
+          ),
+          summary: [
+            {
+              clientId,
+              totalRows: batchResults.reduce(
+                (s, r) => s + (Number(r.totalRows) || 0),
+                0
+              ),
+              vdpRows: batchResults.reduce(
+                (s, r) => s + (Number(r.totalVdpTrue) || 0),
+                0
+              ),
+            },
+          ],
+        };
+        setStep3Result(partial);
+        setStepLog(3, formatStep3DayByDayLog(from, to, partial));
+      }
       appendStepLog(3, logLine(`Error: ${e?.message || 'Final sync failed.'}`));
       setError(e?.message || 'Final sync failed.');
     } finally {
@@ -570,12 +698,18 @@ export default function DealerPipelineCard({ dealer, from, to }) {
           </div>
           <p className="pipeline-step-desc">
             Syncs VDP rows into smart_final_data (inventory match).
-            {stats?.inventory?.step3Rpc && (
+            {(stats?.inventory?.step3Rpc || clientId) && (
               <>
                 {' '}
                 Uses{' '}
-                <code className="pipeline-step-code">{stats.inventory.step3Rpc}</code>
-                {stats.inventory.step3Reason ? (' because ' + stats.inventory.step3Reason) : ''}
+                <code className="pipeline-step-code">
+                  {stats?.inventory?.step3Rpc || resolveHootFinalRpcName(clientId)}
+                </code>
+                {stats?.inventory?.step3Reason
+                  ? ` because ${stats.inventory.step3Reason}`
+                  : stats?.inventory?.step3Rpc === 'build_smart_final_data_qs'
+                    ? ' (page_path_q_s / Destination Cycle)'
+                    : ' (fast page_path path)'}
                 .
               </>
             )}

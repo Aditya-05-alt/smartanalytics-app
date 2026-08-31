@@ -1,7 +1,10 @@
 -- VDP Lab: dealer compare GA4 (vdp_conditions) vs full BigQ VDP
--- Join: ga4_property_id = profile_id
+-- Join: ga4_property_id = profile_id::text
 -- Includes BigQ-only profiles (missing from report) with names from page_title ("at Dealer |").
 -- Caps p_to to CURRENT_DATE - 2.
+--
+-- Perf: no full-table MODE()/regexp over all BigQ titles; no smart_final_data scan.
+-- Prefer partial index idx_ga4_page_vdp_date_prop for GA4 CTE.
 
 DROP FUNCTION IF EXISTS public.compare_vdp_ga4_vs_bigq(text, date, date);
 DROP FUNCTION IF EXISTS public.compare_vdp_ga4_vs_bigq(date, date);
@@ -27,7 +30,7 @@ LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
-SET statement_timeout = '55s'
+SET statement_timeout = '90s'
 AS $$
 DECLARE
   v_from date;
@@ -64,14 +67,13 @@ BEGIN
   ),
   ga4 AS (
     SELECT
-      g.ga4_property_id::text AS pid,
+      NULLIF(btrim(g.ga4_property_id::text), '') AS pid,
       COALESCE(SUM(g.views), 0)::bigint AS views
     FROM public.smart_ga4_page_data g
     WHERE g.report_date BETWEEN v_from AND v_to
       AND g.vdp_conditions IS TRUE
-      AND g.ga4_property_id IS NOT NULL
-      AND btrim(g.ga4_property_id::text) <> ''
-    GROUP BY g.ga4_property_id::text
+      AND NULLIF(btrim(g.ga4_property_id::text), '') IS NOT NULL
+    GROUP BY NULLIF(btrim(g.ga4_property_id::text), '')
   ),
   bigq AS (
     SELECT
@@ -83,37 +85,29 @@ BEGIN
       AND b.profile_id IS NOT NULL
     GROUP BY b.profile_id::text
   ),
-  -- Dealer name guess from BigQ titles: "... at Dealer Name | City"
+  -- Name guess only for BigQ profiles not in smart_ga4_config (1 title sample each)
   bigq_names AS (
     SELECT
-      x.pid,
-      MODE() WITHIN GROUP (ORDER BY x.guess) AS guessed_name
+      m.pid,
+      n.guessed_name
     FROM (
+      SELECT bq.pid
+      FROM bigq bq
+      WHERE NOT EXISTS (SELECT 1 FROM cfg c WHERE c.pid = bq.pid)
+    ) m
+    LEFT JOIN LATERAL (
       SELECT
-        b.profile_id::text AS pid,
         NULLIF(
-          btrim(
-            (regexp_match(b.page_title, ' at ([^|]+)\|', 'i'))[1]
-          ),
+          btrim((regexp_match(b.page_title, ' at ([^|]+)\|', 'i'))[1]),
           ''
-        ) AS guess
+        ) AS guessed_name
       FROM public.smart_ga4_bigq_daily_raw_data b
-      WHERE b.date BETWEEN v_from AND v_to
-        AND b.profile_id IS NOT NULL
+      WHERE b.profile_id::text = m.pid
+        AND b.date BETWEEN v_from AND v_to
         AND b.page_title IS NOT NULL
         AND b.page_title ~* ' at [^|]+\|'
-    ) x
-    WHERE x.guess IS NOT NULL
-    GROUP BY x.pid
-  ),
-  -- On VDP report = has smart_final_data in range for this client's property
-  final_report AS (
-    SELECT DISTINCT
-      NULLIF(btrim(s.ga4_property_id::text), '') AS pid
-    FROM public.smart_final_data s
-    WHERE s.report_date BETWEEN v_from AND v_to
-      AND s.ga4_property_id IS NOT NULL
-      AND btrim(s.ga4_property_id::text) <> ''
+      LIMIT 1
+    ) n ON true
   ),
   keys AS (
     SELECT pid FROM cfg
@@ -156,7 +150,7 @@ BEGIN
         THEN 'bigq_only'
       ELSE 'other'
     END::text AS match_status,
-    (final_report.pid IS NOT NULL OR cfg.pid IS NOT NULL) AS on_report,
+    (cfg.pid IS NOT NULL) AS on_report,
     v_from AS range_from,
     v_to AS range_to
   FROM keys
@@ -164,7 +158,6 @@ BEGIN
   LEFT JOIN ga4 ON ga4.pid = keys.pid
   LEFT JOIN bigq ON bigq.pid = keys.pid
   LEFT JOIN bigq_names ON bigq_names.pid = keys.pid
-  LEFT JOIN final_report ON final_report.pid = keys.pid
   WHERE COALESCE(ga4.views, 0) > 0
      OR COALESCE(bigq.views, 0) > 0
   ORDER BY
@@ -179,7 +172,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.compare_vdp_ga4_vs_bigq(date, date) IS
-  'VDP Lab: GA4 vdp_conditions vs full BigQ VDP by profile_id=ga4_property_id. Flags dealers missing from report; names BigQ-only via page_title.';
+  'VDP Lab: GA4 vdp_conditions vs full BigQ VDP by profile_id=ga4_property_id. Flags dealers missing from report; names BigQ-only via page_title sample.';
 
 REVOKE ALL ON FUNCTION public.compare_vdp_ga4_vs_bigq(date, date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.compare_vdp_ga4_vs_bigq(date, date)

@@ -3,8 +3,10 @@ import { buildVdpMatchers, classifyPage } from '@/lib/ga4/classifyPage';
 import { coerceDateRange } from '@/lib/pipeline/dates';
 import { loadGcpServiceAccountCredentials } from '@/lib/pipeline/gcpCredentials';
 
-const PAGE_TABLE = 'smart_ga4_page_data';
+const DEFAULT_PAGE_TABLE = 'smart_ga4_page_data';
 const CONFIG_TABLE = 'smart_ga4_config';
+/** Dealers that store pathname+query in page_path_q_s (page_path stays pathname-only). */
+const PAGE_PATH_QS_CLIENT_IDS = new Set(['1421445735']);
 const CHUNK_SIZE = 500;
 const GLOBAL_BUDGET_MS = 130_000;
 const DEALER_BUDGET_MS = 100_000;
@@ -60,8 +62,23 @@ async function fetchDealerConfig(supabase, clientId) {
   return data;
 }
 
+function pagePathFromLocation(loc, includeQueryInPagePath) {
+  if (!loc) return { page_path: '', page_path_q_s: null };
+  try {
+    const u = new URL(loc);
+    const page_path = u.pathname;
+    const page_path_q_s = includeQueryInPagePath ? page_path + u.search : null;
+    return { page_path, page_path_q_s };
+  } catch {
+    return { page_path: loc, page_path_q_s: null };
+  }
+}
+
 /**
- * Sync GA4 page data into smart_ga4_page_data for one dealer (Node port of edge V30).
+ * Sync GA4 page data for one dealer (Node port of edge V30).
+ * Options:
+ *   targetTable — default smart_ga4_page_data; use smart_ga4_page_ps_data for PS raw loads
+ *   includeQueryInPagePath — when true, page_path = pathname + query string
  */
 export async function syncGa4PageDataForDealer(supabase, options) {
   const startTime = Date.now();
@@ -69,6 +86,9 @@ export async function syncGa4PageDataForDealer(supabase, options) {
   const L = (m) => {
     log.push(m);
   };
+
+  const pageTable = String(options.targetTable || DEFAULT_PAGE_TABLE).trim();
+  const includeQueryInPagePath = options.includeQueryInPagePath === true;
 
   const clientId = String(options.clientId || '').trim();
   const {
@@ -90,6 +110,7 @@ export async function syncGa4PageDataForDealer(supabase, options) {
   const vdpMatchers = buildVdpMatchers(dealer.vdp_url_pattern ?? null);
 
   L(`=== GA4 PAGE SYNC (Node) — ${accountName} (${clientId}) ===`);
+  L(`Table: ${pageTable}${includeQueryInPagePath ? ' · page_path includes query string' : ''}`);
   L(`Window: ${dateFrom} → ${dateTo} (full range apply)`);
 
   if (!allDates.length) {
@@ -117,7 +138,7 @@ export async function syncGa4PageDataForDealer(supabase, options) {
       });
     }
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const { error } = await supabase.from(PAGE_TABLE).insert(working);
+      const { error } = await supabase.from(pageTable).insert(working);
       if (!error) return { inserted: working.length, error: null };
       const msg = error.message || '';
       const m = msg.match(
@@ -151,7 +172,7 @@ export async function syncGa4PageDataForDealer(supabase, options) {
 
     try {
       await supabase
-        .from(PAGE_TABLE)
+        .from(pageTable)
         .delete()
         .eq('client_id', clientId)
         .eq('report_date', dateStr);
@@ -205,12 +226,11 @@ export async function syncGa4PageDataForDealer(supabase, options) {
           const dv = row.dimensionValues;
           const mv = row.metricValues;
           const loc = dv?.[0]?.value || '';
-          let path = loc;
-          try {
-            path = new URL(loc).pathname;
-          } catch {
-            path = loc;
-          }
+          const usePathQs = PAGE_PATH_QS_CLIENT_IDS.has(clientId);
+          const { page_path: path, page_path_q_s } = pagePathFromLocation(
+            loc,
+            usePathQs
+          );
           const src = dv?.[3]?.value || '(direct)';
           const med = dv?.[4]?.value || '(none)';
           const pageType = classifyPage(loc, path, vdpMatchers);
@@ -221,6 +241,7 @@ export async function syncGa4PageDataForDealer(supabase, options) {
             report_date: dateStr,
             page_location: loc,
             page_path: path,
+            page_path_q_s,
             page_title: dv?.[1]?.value || '',
             channel: channelNorm(dv?.[2]?.value),
             source: src,
@@ -262,7 +283,7 @@ export async function syncGa4PageDataForDealer(supabase, options) {
       dayResults.push({ date: dateStr, rows: 0, status: 'error', error: dealerError });
       L(`❌ ${dateStr}: ${dealerError}`);
       await supabase
-        .from(PAGE_TABLE)
+        .from(pageTable)
         .delete()
         .eq('client_id', clientId)
         .eq('report_date', dateStr);
@@ -276,6 +297,8 @@ export async function syncGa4PageDataForDealer(supabase, options) {
   return {
     success: !dealerError || dealerRows > 0,
     complete,
+    table: pageTable,
+    includeQueryInPagePath,
     accountName,
     clientId,
     propertyId,

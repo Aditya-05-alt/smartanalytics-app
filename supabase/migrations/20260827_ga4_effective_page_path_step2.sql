@@ -1,13 +1,33 @@
--- Cron / edge Step 2: apply_vdp_filtration(p_client_id, p_days_back).
--- Uses ga4_effective_page_path so dealers with page_path_q_s (Destination Cycle) match
--- on query-string paths; all others fall back to page_path unchanged.
---
--- Drop legacy 1-arg overload if present:
-DROP FUNCTION IF EXISTS public.apply_vdp_filtration(text);
+-- Use page_path_q_s for VDP/inventory matching when populated (Destination Cycle).
+-- Falls back to page_path for all other dealers.
 
-CREATE OR REPLACE FUNCTION public.apply_vdp_filtration(
+CREATE OR REPLACE FUNCTION public.ga4_effective_page_path(
+  p_page_path text,
+  p_page_path_q_s text
+)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public
+AS $$
+  SELECT COALESCE(NULLIF(TRIM(p_page_path_q_s), ''), NULLIF(TRIM(p_page_path), ''));
+$$;
+
+GRANT EXECUTE ON FUNCTION public.ga4_effective_page_path(text, text)
+  TO anon, authenticated, service_role;
+
+-- Destination Cycle: add default.asp InventoryDetail pattern for page_path_q_s matching.
+UPDATE public.smart_vdp_logic
+SET
+  vdp_logic = '/(?:New|Pre-?owned)-Inventory-.+-\d+ OR /inventory/v1/Current/.+---\d+ OR /default\.asp\?.*InventoryDetail.*id=\d+',
+  updated_at = now()
+WHERE dealer_id = '1421445735';
+
+-- Step 2: apply_vdp_filtration_range uses ga4_effective_page_path for VDP logic.
+CREATE OR REPLACE FUNCTION public.apply_vdp_filtration_range(
   p_client_id text DEFAULT NULL,
-  p_days_back integer DEFAULT NULL
+  p_from      date  DEFAULT NULL,
+  p_to        date  DEFAULT NULL
 )
 RETURNS TABLE(out_account_name text, out_cms text, out_updated_rows bigint)
 LANGUAGE plpgsql
@@ -15,17 +35,19 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  -- STEP 1: Self-heal CMS
+  IF p_from IS NULL OR p_to IS NULL THEN
+    RAISE EXCEPTION 'p_from and p_to are required';
+  END IF;
+
   UPDATE smart_ga4_page_data g
   SET cms = h.website_platform
   FROM smart_hoot_config h
-  WHERE g.report_date >= (CURRENT_DATE - p_days_back)
+  WHERE g.report_date BETWEEN p_from AND p_to
     AND (g.cms IS NULL OR g.cms = '')
     AND g.client_id = h.ga4_customer_id::text
     AND public.ga4_property_scope_matches(g.ga4_property_id, h.ga4_property_id)
     AND (p_client_id IS NULL OR g.client_id = p_client_id);
 
-  -- STEP 2: Dealer-by-dealer classification
   RETURN QUERY
   WITH updated_data AS (
     UPDATE smart_ga4_page_data g
@@ -74,7 +96,7 @@ BEGIN
       END
 
     FROM smart_vdp_logic sl
-    WHERE g.report_date >= (CURRENT_DATE - p_days_back)
+    WHERE g.report_date BETWEEN p_from AND p_to
       AND g.client_id = sl.dealer_id
       AND public.ga4_property_scope_matches(g.ga4_property_id, sl.ga4_property_id)
       AND sl.vdp_logic IS NOT NULL
@@ -97,6 +119,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.apply_vdp_filtration(text, integer) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.apply_vdp_filtration(text, integer)
+REVOKE ALL ON FUNCTION public.apply_vdp_filtration_range(text, date, date) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.apply_vdp_filtration_range(text, date, date)
   TO service_role;

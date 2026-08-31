@@ -61,7 +61,7 @@ BEGIN
           FROM public.smart_final_data f
           WHERE f.client_id::text = v_client
             AND f.report_date = p.report_date
-            AND f.page_path = p.page_path
+            AND f.page_path = public.ga4_effective_page_path(p.page_path, p.page_path_q_s)
             AND (COALESCE(array_length(p_types, 1), 0) = 0 OR f.inv_type = ANY(p_types))
             AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR f.inv_make = ANY(p_makes))
             AND (COALESCE(array_length(p_models, 1), 0) = 0 OR f.inv_model = ANY(p_models))
@@ -76,6 +76,16 @@ BEGIN
             AND public.vdp_condition_matches(f.inv_condition, p_condition)
         );
     END IF;
+    RETURN COALESCE(v_total, 0);
+  END IF;
+
+  IF NOT v_inv THEN
+    SELECT COALESCE(SUM(COALESCE(p.views, 0)), 0)::bigint
+    INTO v_total
+    FROM public.smart_ga4_page_data p
+    WHERE p.client_id::text = v_client
+      AND p.report_date BETWEEN p_from AND p_to
+      AND p.vdp_conditions IS TRUE;
     RETURN COALESCE(v_total, 0);
   END IF;
 

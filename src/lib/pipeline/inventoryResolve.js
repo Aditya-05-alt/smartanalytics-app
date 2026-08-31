@@ -1,7 +1,26 @@
 import { isScrapLinkOn } from '@/lib/vdpLogics/scrapStatus';
 
 export const FINAL_RPC_HOOT = 'build_smart_final_data';
+/** Destination Cycle / page_path_q_s dealers only — uses ga4_effective_page_path. */
+export const FINAL_RPC_HOOT_QS = 'build_smart_final_data_qs';
 export const FINAL_RPC_SCRAP = 'build_smart_final_data_scrap';
+
+/** Dealers that must use build_smart_final_data_qs (pathname+query matching). */
+export const PAGE_PATH_QS_CLIENT_IDS = new Set(['1421445735']);
+
+export function resolveHootFinalRpcName(clientId) {
+  const id = String(clientId || '').trim();
+  return PAGE_PATH_QS_CLIENT_IDS.has(id) ? FINAL_RPC_HOOT_QS : FINAL_RPC_HOOT;
+}
+
+export function isPagePathQsClient(clientId) {
+  return PAGE_PATH_QS_CLIENT_IDS.has(String(clientId || '').trim());
+}
+
+/** Admin UI / API date batch size — QS dealers stay small; others run full range like before. */
+export function step3AdminBatchDays(clientId) {
+  return isPagePathQsClient(clientId) ? 2 : 366;
+}
 
 function hasText(value) {
   return Boolean(String(value ?? '').trim());
@@ -166,9 +185,13 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
   }
 
   return {
-    rpcName: useHoot ? FINAL_RPC_HOOT : FINAL_RPC_SCRAP,
+    rpcName: useHoot ? resolveHootFinalRpcName(trimmedId) : FINAL_RPC_SCRAP,
     inventorySource: useHoot ? 'hoot' : 'scrap',
-    step3Reason,
+    step3Reason: useHoot
+      ? PAGE_PATH_QS_CLIENT_IDS.has(trimmedId)
+        ? `${step3Reason} · page_path_q_s RPC`
+        : step3Reason
+      : step3Reason,
     customerName,
     hasHootLink,
     hasScrapLink,

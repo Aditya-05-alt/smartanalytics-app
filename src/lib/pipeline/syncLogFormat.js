@@ -174,16 +174,31 @@ export function formatStep2Log(clientId, result, from, to) {
 
 export function formatStep3DayByDayLog(from, to, result) {
   const { from: f, to: t, dates } = coerceDateRange(from, to);
-  const rpcLabel = result?.rpcUsed || 'build_smart_final_data';
+  const rpcLabel = result?.rpcUsed || 'build_smart_final_data / build_smart_final_data_qs';
   const lines = [
-    logLine(`Step 3 — ${rpcLabel} · ${f} → ${t}`),
+    logLine(`Step 3 — ${rpcLabel}`),
+    logLine(`Date range: ${f} → ${t} (${dates.length} day${dates.length === 1 ? '' : 's'})`),
     result?.rpcMode === 'date_range'
-      ? logLine('Using exact date range (p_date_from / p_date_to)')
+      ? logLine(
+          result?.chunkDays && result.chunks?.length > 1
+            ? `Using exact date range in ${result.chunkDays}-day chunk(s)`
+            : 'Using exact date range (p_date_from / p_date_to) — single call'
+        )
       : logLine('Using legacy p_days_back — deploy updated RPC for exact dates'),
     '',
-    '── Dealer summary ──',
   ];
 
+  if (result?.chunks?.length) {
+    lines.push('── Per date-range result ──');
+    for (const c of result.chunks) {
+      lines.push(
+        `  ${c.from}${c.to !== c.from ? ` → ${c.to}` : ''} · ${(c.rows || 0).toLocaleString()} rows · matched ${(c.matched || 0).toLocaleString()}`
+      );
+    }
+    lines.push('');
+  }
+
+  lines.push('── Dealer summary ──');
   for (const row of result?.summary || []) {
     lines.push(
       `  ${row.accountName || row.clientId} · CMS ${row.cms || '—'} · ${(row.totalRows || 0).toLocaleString()} rows · matched ${(row.vdpRows || 0).toLocaleString()}`
@@ -198,9 +213,8 @@ export function formatStep3DayByDayLog(from, to, result) {
   );
   lines.push('');
   lines.push(`── Your selected days (${dates.length}) ──`);
-  lines.push('  Refresh tables below to see views per report_date.');
   for (const date of dates) {
-    lines.push(`  ${date}  ·  see Final VDP column after refresh`);
+    lines.push(`  ${date}`);
   }
 
   return lines;
