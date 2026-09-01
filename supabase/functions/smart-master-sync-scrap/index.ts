@@ -8,7 +8,20 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const GLOBAL_BUDGET_MS = 140_000;
+const DEFAULT_GROUP_COUNT = 4;
+
 type RpcRow = Record<string, unknown>;
+
+function pickDealerGroup(
+  clientIds: string[],
+  groupId: number | null,
+  groupCount: number,
+): string[] {
+  if (!groupId || groupCount <= 1) return clientIds;
+  const g = Math.max(1, Math.min(groupId, groupCount));
+  return clientIds.filter((_, idx) => idx % groupCount === g - 1);
+}
 
 function summarizeRows(data: RpcRow[]) {
   let totalRows = 0;
@@ -16,7 +29,7 @@ function summarizeRows(data: RpcRow[]) {
   const cmsSummary: Record<string, { rows: number; vdp_true: number }> = {};
 
   for (const row of data) {
-    const cms = String(row.out_cms || row.cms || "Unknown");
+    const cms = String(row.cms || row.out_cms || "Unknown");
     const rows = Number(row.out_total_rows) || 0;
     const vdp = Number(row.out_vdp_true_rows) || 0;
     totalRows += rows;
@@ -29,7 +42,14 @@ function summarizeRows(data: RpcRow[]) {
   return { totalRows, totalVdpTrue, cmsSummary };
 }
 
-/** Dealers with scrap_link = on in smart_vdp_logic (via get_scrap_dealers_for_sync). */
+function formatErr(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
 async function loadScrapClientIds(
   supabase: ReturnType<typeof createClient>,
   onlyClientId: string | null,
@@ -56,32 +76,16 @@ async function loadScrapClientIds(
   return { clientIds, dealers };
 }
 
-async function buildScrapForClient(
-  supabase: ReturnType<typeof createClient>,
-  clientId: string,
-  daysBack: number,
-) {
-  const { data, error } = await supabase.rpc("build_smart_final_data_scrap", {
-    p_client_id: clientId,
-    p_days_back: daysBack,
-    p_date_from: null,
-    p_date_to: null,
-  });
-
-  if (error) throw error;
-  return (data || []) as RpcRow[];
-}
-
 /**
- * Scrap Step 3 — runs build_smart_final_data_scrap only for VDP Logics dealers
- * where scrap_link = 'on' (get_scrap_dealers_for_sync). Optional body.client_id
- * limits to one scrap dealer.
+ * Scrap Step 3 ONLY — build_smart_final_data_scrap for scrap_link=on dealers.
+ * Independent of Hoot / QS. Cron should pass group_id 1..4 + group_count 4.
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
   let body: Record<string, unknown> = {};
   try {
     body = await req.json();
@@ -94,6 +98,12 @@ serve(async (req) => {
     : null;
   const daysBack: number =
     body?.days_back != null ? Number(body.days_back) : 5;
+  const groupId: number | null =
+    body?.group_id != null ? Number(body.group_id) : null;
+  const groupCount: number =
+    body?.group_count != null
+      ? Math.max(1, Number(body.group_count))
+      : DEFAULT_GROUP_COUNT;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -101,21 +111,23 @@ serve(async (req) => {
   );
 
   try {
-    const { clientIds, dealers } = await loadScrapClientIds(
+    const { clientIds: allIds, dealers } = await loadScrapClientIds(
       supabase,
       onlyClientId,
     );
+    const clientIds = pickDealerGroup(allIds, groupId, groupCount);
 
     const scope = onlyClientId
       ? `dealer ${onlyClientId} (scrap on)`
-      : `${clientIds.length} scrap dealer(s)`;
+      : groupId
+        ? `group ${groupId}/${groupCount} (${clientIds.length}/${allIds.length} scrap)`
+        : `${clientIds.length} scrap dealer(s)`;
 
     console.log(
-      `🧹 Building smart_final_data (scrap) for ${scope} (days_back=${daysBack})`,
+      `🧹 Scrap Step 3 (build_smart_final_data_scrap) for ${scope} (days_back=${daysBack})`,
     );
 
     if (!clientIds.length) {
-      console.log("ℹ️ No scrap dealers (scrap_link = on in VDP Logics).");
       return new Response(
         JSON.stringify({
           success: true,
@@ -124,9 +136,7 @@ serve(async (req) => {
           dealerCount: 0,
           totalRows: 0,
           totalVdpTrue: 0,
-          cmsSummary: {},
           processed: [],
-          dealers: [],
         }),
         {
           status: 200,
@@ -138,43 +148,65 @@ serve(async (req) => {
     const processed: RpcRow[] = [];
     const failures: { clientId: string; customerName: string; error: string }[] =
       [];
+    let cutoffReached = false;
 
     for (const clientId of clientIds) {
+      if (Date.now() - startTime > GLOBAL_BUDGET_MS - 5_000) {
+        console.log(`⏱️ Budget reached — stopping before ${clientId}`);
+        cutoffReached = true;
+        break;
+      }
+
       const dealer = dealers.find(
         (d) => String(d.ga4_customer_id).trim() === clientId,
       );
-      const label = String(
-        dealer?.customer_name ?? clientId,
-      );
+      const label = String(dealer?.customer_name ?? clientId);
 
       try {
         console.log(`  ▶ ${label} (${clientId})`);
-        const rows = await buildScrapForClient(supabase, clientId, daysBack);
+        const { data, error } = await supabase.rpc(
+          "build_smart_final_data_scrap",
+          {
+            p_client_id: clientId,
+            p_days_back: daysBack,
+            p_date_from: null,
+            p_date_to: null,
+          },
+        );
+        if (error) throw new Error(error.message);
+
+        const rows = (data || []) as RpcRow[];
         for (const row of rows) {
           console.log(
-            `    👉 ${row.out_account_name ?? row.client_id ?? clientId} | CMS: ${row.out_cms ?? "—"} | Rows: ${row.out_total_rows ?? 0} | VDP=TRUE: ${row.out_vdp_true_rows ?? 0}`,
+            `    👉 ${row.account_name ?? row.out_account_name ?? clientId} | CMS: ${row.cms ?? "—"} | Rows: ${row.out_total_rows ?? 0} | VDP=TRUE: ${row.out_vdp_true_rows ?? 0}`,
           );
         }
         processed.push(...rows);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = formatErr(err);
         console.error(`    ❌ ${label}: ${message}`);
         failures.push({ clientId, customerName: label, error: message });
       }
     }
 
     const { totalRows, totalVdpTrue, cmsSummary } = summarizeRows(processed);
+    const ok = !cutoffReached && failures.length === 0;
 
     console.log(
-      `\n📊 Scrap build done: ${clientIds.length - failures.length}/${clientIds.length} dealers | Total Rows: ${totalRows} | VDP=TRUE: ${totalVdpTrue}`,
+      `\n📊 Scrap done: ${clientIds.length - failures.length}/${clientIds.length} | Rows: ${totalRows} | VDP=TRUE: ${totalVdpTrue}`,
     );
 
     return new Response(
       JSON.stringify({
-        success: failures.length === 0,
+        success: ok,
         rpc: "build_smart_final_data_scrap",
         scope,
-        dealerCount: clientIds.length,
+        days_back: daysBack,
+        group_id: groupId,
+        group_count: groupCount,
+        cutoff_reached: cutoffReached,
+        dealerCount: allIds.length,
+        batch_dealers: clientIds.length,
         dealersSucceeded: clientIds.length - failures.length,
         totalRows,
         totalVdpTrue,
@@ -183,13 +215,13 @@ serve(async (req) => {
         failures,
       }),
       {
-        status: failures.length ? 207 : 200,
+        status: ok ? 200 : 207,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("❌ Build error (scrap):", message);
+    const message = formatErr(err);
+    console.error("❌ Scrap Step 3 error:", message);
     return new Response(
       JSON.stringify({
         success: false,

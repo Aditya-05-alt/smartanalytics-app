@@ -1,0 +1,8 @@
+# Resume later — Step 3 (do not delete until done)
+
+- Dealer: SouthWest Volkswagen
+- client_id: 9052006098
+- Completed: 2026-06-01 → 2026-06-22
+- Resume from: 2026-06-23 → 2026-08-30
+- Command:
+  node scripts/run-step3-dealer.mjs --clientId=9052006098 --from=2026-06-23 --to=2026-08-30

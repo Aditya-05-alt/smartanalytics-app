@@ -1,0 +1,835 @@
+{
+  "generated_at": "2026-08-27T11:41:52.015Z",
+  "rows": [
+    {
+      "client_id": "8749374349",
+      "account_name": "4Zs RVs",
+      "aug_total_vdp": 27155,
+      "aug_paid_search_vdp": 3062,
+      "jul_total_vdp": 29606,
+      "jul_paid_search_vdp": 4039,
+      "mom_total_vdp": "↓ 8%",
+      "mom_paid_search_vdp": "↓ 24%"
+    },
+    {
+      "client_id": "2728830488",
+      "account_name": "A&L RV Sales",
+      "aug_total_vdp": 90134,
+      "aug_paid_search_vdp": 20814,
+      "jul_total_vdp": 114830,
+      "jul_paid_search_vdp": 22099,
+      "mom_total_vdp": "↓ 22%",
+      "mom_paid_search_vdp": "↓ 6%"
+    },
+    {
+      "client_id": "9990551793",
+      "account_name": "B&E Marine",
+      "aug_total_vdp": 2808,
+      "aug_paid_search_vdp": 241,
+      "jul_total_vdp": 4025,
+      "jul_paid_search_vdp": 254,
+      "mom_total_vdp": "↓ 30%",
+      "mom_paid_search_vdp": "↓ 5%"
+    },
+    {
+      "client_id": "8881717635",
+      "account_name": "BamaRV",
+      "aug_total_vdp": 49897,
+      "aug_paid_search_vdp": 13317,
+      "jul_total_vdp": 62374,
+      "jul_paid_search_vdp": 14650,
+      "mom_total_vdp": "↓ 20%",
+      "mom_paid_search_vdp": "↓ 9%"
+    },
+    {
+      "client_id": "7979377615",
+      "account_name": "BC - McKibben Boating Center",
+      "aug_total_vdp": 6027,
+      "aug_paid_search_vdp": 1599,
+      "jul_total_vdp": 5845,
+      "jul_paid_search_vdp": 1721,
+      "mom_total_vdp": "↑ 3%",
+      "mom_paid_search_vdp": "↓ 7%"
+    },
+    {
+      "client_id": "7293893546",
+      "account_name": "Beaver Coach Sales",
+      "aug_total_vdp": 47392,
+      "aug_paid_search_vdp": 3167,
+      "jul_total_vdp": 46667,
+      "jul_paid_search_vdp": 3120,
+      "mom_total_vdp": "↑ 2%",
+      "mom_paid_search_vdp": "↑ 2%"
+    },
+    {
+      "client_id": "5364794945",
+      "account_name": "Bill Thomas Campers",
+      "aug_total_vdp": 0,
+      "aug_paid_search_vdp": 0,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "0%",
+      "mom_paid_search_vdp": "0%"
+    },
+    {
+      "client_id": "8335076188",
+      "account_name": "Bowling RV Center",
+      "aug_total_vdp": 15910,
+      "aug_paid_search_vdp": 4213,
+      "jul_total_vdp": 17047,
+      "jul_paid_search_vdp": 4652,
+      "mom_total_vdp": "↓ 7%",
+      "mom_paid_search_vdp": "↓ 9%"
+    },
+    {
+      "client_id": "3244269598",
+      "account_name": "BP Greenville",
+      "aug_total_vdp": 9906,
+      "aug_paid_search_vdp": 1001,
+      "jul_total_vdp": 10358,
+      "jul_paid_search_vdp": 1182,
+      "mom_total_vdp": "↓ 4%",
+      "mom_paid_search_vdp": "↓ 15%"
+    },
+    {
+      "client_id": "5100919895",
+      "account_name": "BP Longview",
+      "aug_total_vdp": 11662,
+      "aug_paid_search_vdp": 1425,
+      "jul_total_vdp": 9226,
+      "jul_paid_search_vdp": 1527,
+      "mom_total_vdp": "↑ 26%",
+      "mom_paid_search_vdp": "↓ 7%"
+    },
+    {
+      "client_id": "3787010900",
+      "account_name": "BP Tyler",
+      "aug_total_vdp": 15235,
+      "aug_paid_search_vdp": 2489,
+      "jul_total_vdp": 15781,
+      "jul_paid_search_vdp": 2038,
+      "mom_total_vdp": "↓ 3%",
+      "mom_paid_search_vdp": "↑ 22%"
+    },
+    {
+      "client_id": "2584163609",
+      "account_name": "Brinson Powersports of Athens",
+      "aug_total_vdp": 11014,
+      "aug_paid_search_vdp": 1675,
+      "jul_total_vdp": 9726,
+      "jul_paid_search_vdp": 1828,
+      "mom_total_vdp": "↑ 13%",
+      "mom_paid_search_vdp": "↓ 8%"
+    },
+    {
+      "client_id": "8383799654",
+      "account_name": "Brinson Powersports of Corsicana",
+      "aug_total_vdp": 9170,
+      "aug_paid_search_vdp": 1747,
+      "jul_total_vdp": 11397,
+      "jul_paid_search_vdp": 2209,
+      "mom_total_vdp": "↓ 20%",
+      "mom_paid_search_vdp": "↓ 21%"
+    },
+    {
+      "client_id": "8182570850",
+      "account_name": "Camp-A-Rama-1",
+      "aug_total_vdp": 1796,
+      "aug_paid_search_vdp": 437,
+      "jul_total_vdp": 1922,
+      "jul_paid_search_vdp": 583,
+      "mom_total_vdp": "↓ 7%",
+      "mom_paid_search_vdp": "↓ 25%"
+    },
+    {
+      "client_id": "3592267600",
+      "account_name": "Campnorth rv",
+      "aug_total_vdp": 5811,
+      "aug_paid_search_vdp": 831,
+      "jul_total_vdp": 9695,
+      "jul_paid_search_vdp": 1114,
+      "mom_total_vdp": "↓ 40%",
+      "mom_paid_search_vdp": "↓ 25%"
+    },
+    {
+      "client_id": "6999622645",
+      "account_name": "Chesaco RV",
+      "aug_total_vdp": 52444,
+      "aug_paid_search_vdp": 5783,
+      "jul_total_vdp": 61793,
+      "jul_paid_search_vdp": 10735,
+      "mom_total_vdp": "↓ 15%",
+      "mom_paid_search_vdp": "↓ 46%"
+    },
+    {
+      "client_id": "3759117472",
+      "account_name": "Clearcreek RVs TX",
+      "aug_total_vdp": 16253,
+      "aug_paid_search_vdp": 3418,
+      "jul_total_vdp": 24135,
+      "jul_paid_search_vdp": 4565,
+      "mom_total_vdp": "↓ 33%",
+      "mom_paid_search_vdp": "↓ 25%"
+    },
+    {
+      "client_id": "2360685226",
+      "account_name": "Coastal RV",
+      "aug_total_vdp": 9664,
+      "aug_paid_search_vdp": 1840,
+      "jul_total_vdp": 15216,
+      "jul_paid_search_vdp": 2173,
+      "mom_total_vdp": "↓ 36%",
+      "mom_paid_search_vdp": "↓ 15%"
+    },
+    {
+      "client_id": "1421445735",
+      "account_name": "Destination Cycle",
+      "aug_total_vdp": 10629,
+      "aug_paid_search_vdp": 469,
+      "jul_total_vdp": 7893,
+      "jul_paid_search_vdp": 467,
+      "mom_total_vdp": "↑ 35%",
+      "mom_paid_search_vdp": "0%"
+    },
+    {
+      "client_id": "3264886766",
+      "account_name": "Epic Cottonwood",
+      "aug_total_vdp": 2314,
+      "aug_paid_search_vdp": 133,
+      "jul_total_vdp": 275,
+      "jul_paid_search_vdp": 54,
+      "mom_total_vdp": "↑ 741%",
+      "mom_paid_search_vdp": "↑ 146%"
+    },
+    {
+      "client_id": "2513593398",
+      "account_name": "Epic Powersports Gilla Valley",
+      "aug_total_vdp": 2086,
+      "aug_paid_search_vdp": 529,
+      "jul_total_vdp": 980,
+      "jul_paid_search_vdp": 415,
+      "mom_total_vdp": "↑ 113%",
+      "mom_paid_search_vdp": "↑ 27%"
+    },
+    {
+      "client_id": "5281027171",
+      "account_name": "FIFE RV CENTER",
+      "aug_total_vdp": 32206,
+      "aug_paid_search_vdp": 5070,
+      "jul_total_vdp": 33542,
+      "jul_paid_search_vdp": 4301,
+      "mom_total_vdp": "↓ 4%",
+      "mom_paid_search_vdp": "↑ 18%"
+    },
+    {
+      "client_id": "6478055275",
+      "account_name": "Flip My Cycle",
+      "aug_total_vdp": 21880,
+      "aug_paid_search_vdp": 911,
+      "jul_total_vdp": 14904,
+      "jul_paid_search_vdp": 1001,
+      "mom_total_vdp": "↑ 47%",
+      "mom_paid_search_vdp": "↓ 9%"
+    },
+    {
+      "client_id": "3454932870",
+      "account_name": "Fort Kent Powersports",
+      "aug_total_vdp": 0,
+      "aug_paid_search_vdp": 0,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "0%",
+      "mom_paid_search_vdp": "0%"
+    },
+    {
+      "client_id": "9153783749",
+      "account_name": "Gainesville Harley-Davidson",
+      "aug_total_vdp": 11553,
+      "aug_paid_search_vdp": 1062,
+      "jul_total_vdp": 34760,
+      "jul_paid_search_vdp": 969,
+      "mom_total_vdp": "↓ 67%",
+      "mom_paid_search_vdp": "↑ 10%"
+    },
+    {
+      "client_id": "1162028739",
+      "account_name": "Gerzeny’s RV",
+      "aug_total_vdp": 88924,
+      "aug_paid_search_vdp": 10441,
+      "jul_total_vdp": 81104,
+      "jul_paid_search_vdp": 7052,
+      "mom_total_vdp": "↑ 10%",
+      "mom_paid_search_vdp": "↑ 48%"
+    },
+    {
+      "client_id": "5152307309",
+      "account_name": "Happy Camper RV",
+      "aug_total_vdp": 19428,
+      "aug_paid_search_vdp": 2406,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "—",
+      "mom_paid_search_vdp": "—"
+    },
+    {
+      "client_id": "7928680699",
+      "account_name": "Hobbytime Boliver",
+      "aug_total_vdp": 3308,
+      "aug_paid_search_vdp": 670,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "—",
+      "mom_paid_search_vdp": "—"
+    },
+    {
+      "client_id": "8846906688",
+      "account_name": "Hobbytime Clinton",
+      "aug_total_vdp": 4258,
+      "aug_paid_search_vdp": 1026,
+      "jul_total_vdp": 2747,
+      "jul_paid_search_vdp": 961,
+      "mom_total_vdp": "↑ 55%",
+      "mom_paid_search_vdp": "↑ 7%"
+    },
+    {
+      "client_id": "4847086431",
+      "account_name": "Honda Fairfield",
+      "aug_total_vdp": 3711,
+      "aug_paid_search_vdp": 1051,
+      "jul_total_vdp": 3630,
+      "jul_paid_search_vdp": 461,
+      "mom_total_vdp": "↑ 2%",
+      "mom_paid_search_vdp": "↑ 128%"
+    },
+    {
+      "client_id": "4662386311",
+      "account_name": "Jay's of Mauston",
+      "aug_total_vdp": 9509,
+      "aug_paid_search_vdp": 2429,
+      "jul_total_vdp": 7036,
+      "jul_paid_search_vdp": 2482,
+      "mom_total_vdp": "↑ 35%",
+      "mom_paid_search_vdp": "↓ 2%"
+    },
+    {
+      "client_id": "7543766464",
+      "account_name": "Jay's Power Center Update",
+      "aug_total_vdp": 7294,
+      "aug_paid_search_vdp": 2673,
+      "jul_total_vdp": 5562,
+      "jul_paid_search_vdp": 2096,
+      "mom_total_vdp": "↑ 31%",
+      "mom_paid_search_vdp": "↑ 28%"
+    },
+    {
+      "client_id": "2113544353",
+      "account_name": "Johnson Bros Ford",
+      "aug_total_vdp": 19038,
+      "aug_paid_search_vdp": 2710,
+      "jul_total_vdp": 20593,
+      "jul_paid_search_vdp": 2913,
+      "mom_total_vdp": "↓ 8%",
+      "mom_paid_search_vdp": "↓ 7%"
+    },
+    {
+      "client_id": "2072369251",
+      "account_name": "Johnson Bros Lincoln",
+      "aug_total_vdp": 1142,
+      "aug_paid_search_vdp": 388,
+      "jul_total_vdp": 2255,
+      "jul_paid_search_vdp": 306,
+      "mom_total_vdp": "↓ 49%",
+      "mom_paid_search_vdp": "↑ 27%"
+    },
+    {
+      "client_id": "8841710958",
+      "account_name": "Johnston RV",
+      "aug_total_vdp": 26716,
+      "aug_paid_search_vdp": 3627,
+      "jul_total_vdp": 28979,
+      "jul_paid_search_vdp": 4457,
+      "mom_total_vdp": "↓ 8%",
+      "mom_paid_search_vdp": "↓ 19%"
+    },
+    {
+      "client_id": "9771759813",
+      "account_name": "Kendallville Powersports",
+      "aug_total_vdp": 2236,
+      "aug_paid_search_vdp": 890,
+      "jul_total_vdp": 2247,
+      "jul_paid_search_vdp": 791,
+      "mom_total_vdp": "0%",
+      "mom_paid_search_vdp": "↑ 13%"
+    },
+    {
+      "client_id": "4174607404",
+      "account_name": "Kokomo Honda",
+      "aug_total_vdp": 4816,
+      "aug_paid_search_vdp": 393,
+      "jul_total_vdp": 4306,
+      "jul_paid_search_vdp": 528,
+      "mom_total_vdp": "↑ 12%",
+      "mom_paid_search_vdp": "↓ 26%"
+    },
+    {
+      "client_id": "4174607403",
+      "account_name": "Kokomo Toyota",
+      "aug_total_vdp": 8202,
+      "aug_paid_search_vdp": 810,
+      "jul_total_vdp": 8081,
+      "jul_paid_search_vdp": 800,
+      "mom_total_vdp": "↑ 1%",
+      "mom_paid_search_vdp": "↑ 1%"
+    },
+    {
+      "client_id": "4914417019",
+      "account_name": "Krenek RV",
+      "aug_total_vdp": 11703,
+      "aug_paid_search_vdp": 3137,
+      "jul_total_vdp": 10796,
+      "jul_paid_search_vdp": 3539,
+      "mom_total_vdp": "↑ 8%",
+      "mom_paid_search_vdp": "↓ 11%"
+    },
+    {
+      "client_id": "2097350174",
+      "account_name": "LB- McKibben Powersports Labelle",
+      "aug_total_vdp": 7449,
+      "aug_paid_search_vdp": 2029,
+      "jul_total_vdp": 7339,
+      "jul_paid_search_vdp": 2256,
+      "mom_total_vdp": "↑ 1%",
+      "mom_paid_search_vdp": "↓ 10%"
+    },
+    {
+      "client_id": "3166555059",
+      "account_name": "Link Chrysler Dodge Jeep Ram - Rice Lake",
+      "aug_total_vdp": 7803,
+      "aug_paid_search_vdp": 1095,
+      "jul_total_vdp": 7732,
+      "jul_paid_search_vdp": 879,
+      "mom_total_vdp": "↑ 1%",
+      "mom_paid_search_vdp": "↑ 25%"
+    },
+    {
+      "client_id": "5950314334",
+      "account_name": "Link RVs Minong",
+      "aug_total_vdp": 9184,
+      "aug_paid_search_vdp": 1989,
+      "jul_total_vdp": 9372,
+      "jul_paid_search_vdp": 1935,
+      "mom_total_vdp": "↓ 2%",
+      "mom_paid_search_vdp": "↑ 3%"
+    },
+    {
+      "client_id": "9713006747",
+      "account_name": "LW - McKibben Powersports Lake Wales",
+      "aug_total_vdp": 22816,
+      "aug_paid_search_vdp": 5500,
+      "jul_total_vdp": 17412,
+      "jul_paid_search_vdp": 6654,
+      "mom_total_vdp": "↑ 31%",
+      "mom_paid_search_vdp": "↓ 17%"
+    },
+    {
+      "client_id": "6460838510",
+      "account_name": "Midway RV Center",
+      "aug_total_vdp": 8076,
+      "aug_paid_search_vdp": 2058,
+      "jul_total_vdp": 7584,
+      "jul_paid_search_vdp": 1633,
+      "mom_total_vdp": "↑ 6%",
+      "mom_paid_search_vdp": "↑ 26%"
+    },
+    {
+      "client_id": "7816421446",
+      "account_name": "Millers RV",
+      "aug_total_vdp": 34531,
+      "aug_paid_search_vdp": 7728,
+      "jul_total_vdp": 35528,
+      "jul_paid_search_vdp": 8022,
+      "mom_total_vdp": "↓ 3%",
+      "mom_paid_search_vdp": "↓ 4%"
+    },
+    {
+      "client_id": "488499138",
+      "account_name": "Moix Rv",
+      "aug_total_vdp": 76460,
+      "aug_paid_search_vdp": 11072,
+      "jul_total_vdp": 113594,
+      "jul_paid_search_vdp": 13000,
+      "mom_total_vdp": "↓ 33%",
+      "mom_paid_search_vdp": "↓ 15%"
+    },
+    {
+      "client_id": "7216129807",
+      "account_name": "Navigant HD - Davidson of Waco",
+      "aug_total_vdp": 2571,
+      "aug_paid_search_vdp": 236,
+      "jul_total_vdp": 1680,
+      "jul_paid_search_vdp": 128,
+      "mom_total_vdp": "↑ 53%",
+      "mom_paid_search_vdp": "↑ 84%"
+    },
+    {
+      "client_id": "3292237794",
+      "account_name": "Navigant HD - Lucky Penny Cycle",
+      "aug_total_vdp": 10033,
+      "aug_paid_search_vdp": 316,
+      "jul_total_vdp": 8419,
+      "jul_paid_search_vdp": 305,
+      "mom_total_vdp": "↑ 19%",
+      "mom_paid_search_vdp": "↑ 4%"
+    },
+    {
+      "client_id": "8944768193",
+      "account_name": "Navigant HD - Lumberjack Harley Davidson",
+      "aug_total_vdp": 1098,
+      "aug_paid_search_vdp": 458,
+      "jul_total_vdp": 1034,
+      "jul_paid_search_vdp": 350,
+      "mom_total_vdp": "↑ 6%",
+      "mom_paid_search_vdp": "↑ 31%"
+    },
+    {
+      "client_id": "8437525652",
+      "account_name": "Navigant HD - Texarkana Harley Davidson",
+      "aug_total_vdp": 1634,
+      "aug_paid_search_vdp": 673,
+      "jul_total_vdp": 1418,
+      "jul_paid_search_vdp": 455,
+      "mom_total_vdp": "↑ 15%",
+      "mom_paid_search_vdp": "↑ 48%"
+    },
+    {
+      "client_id": "4369029458",
+      "account_name": "Navigant HD - Texas Harley Davidson",
+      "aug_total_vdp": 7115,
+      "aug_paid_search_vdp": 1345,
+      "jul_total_vdp": 6287,
+      "jul_paid_search_vdp": 1110,
+      "mom_total_vdp": "↑ 13%",
+      "mom_paid_search_vdp": "↑ 21%"
+    },
+    {
+      "client_id": "4510529843",
+      "account_name": "Navigant HD - Texoma Harley Davidson",
+      "aug_total_vdp": 8259,
+      "aug_paid_search_vdp": 1103,
+      "jul_total_vdp": 5985,
+      "jul_paid_search_vdp": 784,
+      "mom_total_vdp": "↑ 38%",
+      "mom_paid_search_vdp": "↑ 41%"
+    },
+    {
+      "client_id": "9839025427",
+      "account_name": "Navigant HD- Rough Neck Harley Davidson",
+      "aug_total_vdp": 4109,
+      "aug_paid_search_vdp": 554,
+      "jul_total_vdp": 3899,
+      "jul_paid_search_vdp": 796,
+      "mom_total_vdp": "↑ 5%",
+      "mom_paid_search_vdp": "↓ 30%"
+    },
+    {
+      "client_id": "8441648962",
+      "account_name": "Owensboro RV",
+      "aug_total_vdp": 29773,
+      "aug_paid_search_vdp": 3512,
+      "jul_total_vdp": 34385,
+      "jul_paid_search_vdp": 5708,
+      "mom_total_vdp": "↓ 13%",
+      "mom_paid_search_vdp": "↓ 38%"
+    },
+    {
+      "client_id": "2721177227",
+      "account_name": "Peak Honda World",
+      "aug_total_vdp": 11851,
+      "aug_paid_search_vdp": 2098,
+      "jul_total_vdp": 17324,
+      "jul_paid_search_vdp": 2115,
+      "mom_total_vdp": "↓ 32%",
+      "mom_paid_search_vdp": "↓ 1%"
+    },
+    {
+      "client_id": "5592824688",
+      "account_name": "Pierce Rv Great Falls",
+      "aug_total_vdp": 12197,
+      "aug_paid_search_vdp": 2572,
+      "jul_total_vdp": 39763,
+      "jul_paid_search_vdp": 5543,
+      "mom_total_vdp": "↓ 69%",
+      "mom_paid_search_vdp": "↓ 54%"
+    },
+    {
+      "client_id": "2562396503",
+      "account_name": "Ricks RV",
+      "aug_total_vdp": 20298,
+      "aug_paid_search_vdp": 4506,
+      "jul_total_vdp": 28960,
+      "jul_paid_search_vdp": 3901,
+      "mom_total_vdp": "↓ 30%",
+      "mom_paid_search_vdp": "↑ 16%"
+    },
+    {
+      "client_id": "5390291095",
+      "account_name": "Rover DFW",
+      "aug_total_vdp": 0,
+      "aug_paid_search_vdp": 0,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "0%",
+      "mom_paid_search_vdp": "0%"
+    },
+    {
+      "client_id": "5836514870",
+      "account_name": "Royal RV Center",
+      "aug_total_vdp": 15364,
+      "aug_paid_search_vdp": 2937,
+      "jul_total_vdp": 19811,
+      "jul_paid_search_vdp": 3731,
+      "mom_total_vdp": "↓ 22%",
+      "mom_paid_search_vdp": "↓ 21%"
+    },
+    {
+      "client_id": "9306581564",
+      "account_name": "RV Connection Inc",
+      "aug_total_vdp": 11837,
+      "aug_paid_search_vdp": 2257,
+      "jul_total_vdp": 11029,
+      "jul_paid_search_vdp": 2529,
+      "mom_total_vdp": "↑ 7%",
+      "mom_paid_search_vdp": "↓ 11%"
+    },
+    {
+      "client_id": "4748993588",
+      "account_name": "RV Dynasty",
+      "aug_total_vdp": 54121,
+      "aug_paid_search_vdp": 8158,
+      "jul_total_vdp": 60818,
+      "jul_paid_search_vdp": 10921,
+      "mom_total_vdp": "↓ 11%",
+      "mom_paid_search_vdp": "↓ 25%"
+    },
+    {
+      "client_id": "7725571478",
+      "account_name": "SB - McKibben Powersports Sebring",
+      "aug_total_vdp": 21238,
+      "aug_paid_search_vdp": 6100,
+      "jul_total_vdp": 16253,
+      "jul_paid_search_vdp": 6780,
+      "mom_total_vdp": "↑ 31%",
+      "mom_paid_search_vdp": "↓ 10%"
+    },
+    {
+      "client_id": "1037529590",
+      "account_name": "Scranton Powersports",
+      "aug_total_vdp": 9528,
+      "aug_paid_search_vdp": 265,
+      "jul_total_vdp": 9431,
+      "jul_paid_search_vdp": 344,
+      "mom_total_vdp": "↑ 1%",
+      "mom_paid_search_vdp": "↓ 23%"
+    },
+    {
+      "client_id": "9842851162",
+      "account_name": "Sky River RV",
+      "aug_total_vdp": 55026,
+      "aug_paid_search_vdp": 11024,
+      "jul_total_vdp": 82998,
+      "jul_paid_search_vdp": 10415,
+      "mom_total_vdp": "↓ 34%",
+      "mom_paid_search_vdp": "↑ 6%"
+    },
+    {
+      "client_id": "8155900509",
+      "account_name": "Souheganvalley Motorsports",
+      "aug_total_vdp": 17209,
+      "aug_paid_search_vdp": 3256,
+      "jul_total_vdp": 15861,
+      "jul_paid_search_vdp": 2960,
+      "mom_total_vdp": "↑ 8%",
+      "mom_paid_search_vdp": "↑ 10%"
+    },
+    {
+      "client_id": "9080903239",
+      "account_name": "Southland RV",
+      "aug_total_vdp": 29708,
+      "aug_paid_search_vdp": 9779,
+      "jul_total_vdp": 38295,
+      "jul_paid_search_vdp": 7097,
+      "mom_total_vdp": "↓ 22%",
+      "mom_paid_search_vdp": "↑ 38%"
+    },
+    {
+      "client_id": "3625691103",
+      "account_name": "Southwest Ford",
+      "aug_total_vdp": 0,
+      "aug_paid_search_vdp": 0,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "0%",
+      "mom_paid_search_vdp": "0%"
+    },
+    {
+      "client_id": "4910589035",
+      "account_name": "Stream RV",
+      "aug_total_vdp": 0,
+      "aug_paid_search_vdp": 0,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "0%",
+      "mom_paid_search_vdp": "0%"
+    },
+    {
+      "client_id": "3403433847",
+      "account_name": "Tallahassee Harley-Davidson",
+      "aug_total_vdp": 7995,
+      "aug_paid_search_vdp": 1082,
+      "jul_total_vdp": 6712,
+      "jul_paid_search_vdp": 1096,
+      "mom_total_vdp": "↑ 19%",
+      "mom_paid_search_vdp": "↓ 1%"
+    },
+    {
+      "client_id": "4311838303",
+      "account_name": "Tipton Motorsports",
+      "aug_total_vdp": 3975,
+      "aug_paid_search_vdp": 1135,
+      "jul_total_vdp": 4283,
+      "jul_paid_search_vdp": 1112,
+      "mom_total_vdp": "↓ 7%",
+      "mom_paid_search_vdp": "↑ 2%"
+    },
+    {
+      "client_id": "4668711550",
+      "account_name": "Trailer Source Inc",
+      "aug_total_vdp": 55392,
+      "aug_paid_search_vdp": 7239,
+      "jul_total_vdp": 57055,
+      "jul_paid_search_vdp": 2771,
+      "mom_total_vdp": "↓ 3%",
+      "mom_paid_search_vdp": "↑ 161%"
+    },
+    {
+      "client_id": "6250904299",
+      "account_name": "United Motorsports & RV",
+      "aug_total_vdp": 73435,
+      "aug_paid_search_vdp": 12385,
+      "jul_total_vdp": 96790,
+      "jul_paid_search_vdp": 9534,
+      "mom_total_vdp": "↓ 24%",
+      "mom_paid_search_vdp": "↑ 30%"
+    },
+    {
+      "client_id": "5458560480",
+      "account_name": "United Motorsports of Belfry",
+      "aug_total_vdp": 4724,
+      "aug_paid_search_vdp": 539,
+      "jul_total_vdp": 5966,
+      "jul_paid_search_vdp": 612,
+      "mom_total_vdp": "↓ 21%",
+      "mom_paid_search_vdp": "↓ 12%"
+    },
+    {
+      "client_id": "3335577278",
+      "account_name": "United Motorsports of Cincinnati",
+      "aug_total_vdp": 7915,
+      "aug_paid_search_vdp": 722,
+      "jul_total_vdp": 2198,
+      "jul_paid_search_vdp": 604,
+      "mom_total_vdp": "↑ 260%",
+      "mom_paid_search_vdp": "↑ 20%"
+    },
+    {
+      "client_id": "3393059792",
+      "account_name": "United Motorsports of Danville",
+      "aug_total_vdp": 14777,
+      "aug_paid_search_vdp": 801,
+      "jul_total_vdp": 8204,
+      "jul_paid_search_vdp": 698,
+      "mom_total_vdp": "↑ 80%",
+      "mom_paid_search_vdp": "↑ 15%"
+    },
+    {
+      "client_id": "2396719901",
+      "account_name": "United Motorsports of Fairfield",
+      "aug_total_vdp": 11248,
+      "aug_paid_search_vdp": 1182,
+      "jul_total_vdp": 8585,
+      "jul_paid_search_vdp": 916,
+      "mom_total_vdp": "↑ 31%",
+      "mom_paid_search_vdp": "↑ 29%"
+    },
+    {
+      "client_id": "5232980684",
+      "account_name": "United Motorsports of Lexington",
+      "aug_total_vdp": 0,
+      "aug_paid_search_vdp": 0,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "0%",
+      "mom_paid_search_vdp": "0%"
+    },
+    {
+      "client_id": "5855948560",
+      "account_name": "United Motorsports of Logan",
+      "aug_total_vdp": 9958,
+      "aug_paid_search_vdp": 1025,
+      "jul_total_vdp": 8501,
+      "jul_paid_search_vdp": 557,
+      "mom_total_vdp": "↑ 17%",
+      "mom_paid_search_vdp": "↑ 84%"
+    },
+    {
+      "client_id": "6206132000",
+      "account_name": "United Motorsports of Middlesboro",
+      "aug_total_vdp": 3431,
+      "aug_paid_search_vdp": 761,
+      "jul_total_vdp": 3582,
+      "jul_paid_search_vdp": 768,
+      "mom_total_vdp": "↓ 4%",
+      "mom_paid_search_vdp": "↓ 1%"
+    },
+    {
+      "client_id": "7908005170",
+      "account_name": "United Motorsports of Pikeville",
+      "aug_total_vdp": 1270,
+      "aug_paid_search_vdp": 478,
+      "jul_total_vdp": 1422,
+      "jul_paid_search_vdp": 410,
+      "mom_total_vdp": "↓ 11%",
+      "mom_paid_search_vdp": "↑ 17%"
+    },
+    {
+      "client_id": "5225311962",
+      "account_name": "United Motorsports of Richmond",
+      "aug_total_vdp": 15822,
+      "aug_paid_search_vdp": 3405,
+      "jul_total_vdp": 17250,
+      "jul_paid_search_vdp": 2856,
+      "mom_total_vdp": "↓ 8%",
+      "mom_paid_search_vdp": "↑ 19%"
+    },
+    {
+      "client_id": "7231326744",
+      "account_name": "XGRiD Campers (Master)",
+      "aug_total_vdp": 2661,
+      "aug_paid_search_vdp": 114,
+      "jul_total_vdp": 0,
+      "jul_paid_search_vdp": 0,
+      "mom_total_vdp": "—",
+      "mom_paid_search_vdp": "—"
+    },
+    {
+      "client_id": "5691491478",
+      "account_name": "Zoomers Rv",
+      "aug_total_vdp": 69148,
+      "aug_paid_search_vdp": 15142,
+      "jul_total_vdp": 91605,
+      "jul_paid_search_vdp": 17192,
+      "mom_total_vdp": "↓ 25%",
+      "mom_paid_search_vdp": "↓ 12%"
+    }
+  ]
+}
