@@ -1,0 +1,788 @@
+{
+  "parsed": [
+    {
+      "page_path": "/inventory/new/2024-echo-elite-eew-17-14-utility-trailer-r1072950",
+      "condition": "New",
+      "year": "2024",
+      "make": "Echo",
+      "model": "elite-eew-17-14",
+      "type": "Utility Trailer",
+      "stock": "r1072950"
+    },
+    {
+      "page_path": "/inventory/new/2025-echo-elite-eew-9-13-utility-trailer-sa078545",
+      "condition": "New",
+      "year": "2025",
+      "make": "Echo",
+      "model": "elite-eew-9-13",
+      "type": "Utility Trailer",
+      "stock": "sa078545"
+    },
+    {
+      "page_path": "/inventory/new/2025-echo-elite-utility-trailer-sa077643",
+      "condition": "New",
+      "year": "2025",
+      "make": "Echo",
+      "model": "elite",
+      "type": "Utility Trailer",
+      "stock": "sa077643"
+    },
+    {
+      "page_path": "/inventory/new/2025-echo-emc-7-12-class-a-s1076027",
+      "condition": "New",
+      "year": "2025",
+      "make": "Echo",
+      "model": "emc-7-12",
+      "type": "Class A",
+      "stock": "s1076027"
+    },
+    {
+      "page_path": "/inventory/new/2025-honda-dax-125-as-motorcycle-s5003866",
+      "condition": "New",
+      "year": "2025",
+      "make": "Honda",
+      "model": "dax-125-as",
+      "type": "Motorcycle",
+      "stock": "s5003866"
+    },
+    {
+      "page_path": "/inventory/new/2025-honda-rebel-300-cmx300s-motorcycle-s5800062",
+      "condition": "New",
+      "year": "2025",
+      "make": "Honda",
+      "model": "rebel-300-cmx300s",
+      "type": "Motorcycle",
+      "stock": "s5800062"
+    },
+    {
+      "page_path": "/inventory/new/2025-honda-rebel-300-cmx300s-motorcycle-s5802141",
+      "condition": "New",
+      "year": "2025",
+      "make": "Honda",
+      "model": "rebel-300-cmx300s",
+      "type": "Motorcycle",
+      "stock": "s5802141"
+    },
+    {
+      "page_path": "/inventory/new/2026-echo-ea-14-15-utility-trailer-ta081244",
+      "condition": "New",
+      "year": "2026",
+      "make": "Echo",
+      "model": "ea-14-15",
+      "type": "Utility Trailer",
+      "stock": "ta081244"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cb300rat-t5600344",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cb300rat",
+      "type": "",
+      "stock": "t5600344"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cb300rat-t5600506",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cb300rat",
+      "type": "",
+      "stock": "t5600506"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cb300rat-t5600606",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cb300rat",
+      "type": "",
+      "stock": "t5600606"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cmx300act-t5902088",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cmx300act",
+      "type": "",
+      "stock": "t5902088"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cmx300act-t5902120",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cmx300act",
+      "type": "",
+      "stock": "t5902120"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cmx300act-t5902139",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cmx300act",
+      "type": "",
+      "stock": "t5902139"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf110ft-t3406835",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf110ft",
+      "type": "",
+      "stock": "t3406835"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf110ft-t3407688",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf110ft",
+      "type": "",
+      "stock": "t3407688"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf110ft-t3407699",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf110ft",
+      "type": "",
+      "stock": "t3407699"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf110ft-t3410170",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf110ft",
+      "type": "",
+      "stock": "t3410170"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf110ft-t3410190",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf110ft",
+      "type": "",
+      "stock": "t3410190"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf125f-big-wheel-dirt-bike-t3304514",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf125f",
+      "type": "Dirt Bike",
+      "stock": "t3304514"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf125f-dirt-bike-t3302002",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf125f",
+      "type": "Dirt Bike",
+      "stock": "t3302002"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf125fbt-dirt-bike-t3304051",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf125fbt",
+      "type": "Dirt Bike",
+      "stock": "t3304051"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf125fbt-dirt-bike-t3304531",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf125fbt",
+      "type": "Dirt Bike",
+      "stock": "t3304531"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf125fbt-motorcycle-t3304756",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf125fbt",
+      "type": "Motorcycle",
+      "stock": "t3304756"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300f-dirt-bike-tr403478",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300f",
+      "type": "Dirt Bike",
+      "stock": "tr403478"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300f-dirt-bike-tr403510",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300f",
+      "type": "Dirt Bike",
+      "stock": "tr403510"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300f-dirt-bike-tr403562",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300f",
+      "type": "Dirt Bike",
+      "stock": "tr403562"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300f-dirt-bike-tr403582",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300f",
+      "type": "Dirt Bike",
+      "stock": "tr403582"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300f-dirt-bike-tr403985",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300f",
+      "type": "Dirt Bike",
+      "stock": "tr403985"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300ft-dirt-bike-tr403978",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300ft",
+      "type": "Dirt Bike",
+      "stock": "tr403978"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300ft-dirt-bike-tr404046",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300ft",
+      "type": "Dirt Bike",
+      "stock": "tr404046"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300ft-dirt-bike-tr404051",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300ft",
+      "type": "Dirt Bike",
+      "stock": "tr404051"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf50f-dirt-bike-t3102770",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf50f",
+      "type": "Dirt Bike",
+      "stock": "t3102770"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf50f-dirt-bike-t3104237",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf50f",
+      "type": "Dirt Bike",
+      "stock": "t3104237"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf50f-dirt-bike-t3104288",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf50f",
+      "type": "Dirt Bike",
+      "stock": "t3104288"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf50ft-dirt-bike-t3104853",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf50ft",
+      "type": "Dirt Bike",
+      "stock": "t3104853"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf50ft-dirt-bike-t3104854",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf50ft",
+      "type": "Dirt Bike",
+      "stock": "t3104854"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-ct125a-motorcycle-t5301302",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "ct125a",
+      "type": "Motorcycle",
+      "stock": "t5301302"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-ct125a-motorcycle-t5301325",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "ct125a",
+      "type": "Motorcycle",
+      "stock": "t5301325"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-ct125a-motorcycle-t5301348",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "ct125a",
+      "type": "Motorcycle",
+      "stock": "t5301348"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-ct125at-motorcycle-t5301397",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "ct125at",
+      "type": "Motorcycle",
+      "stock": "t5301397"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-ct125at-t5300137",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "ct125at",
+      "type": "",
+      "stock": "t5300137"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-ct125at-t5300174",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "ct125at",
+      "type": "",
+      "stock": "t5300174"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-dax125at-t5100374",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "dax125at",
+      "type": "",
+      "stock": "t5100374"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-fourtrax-recon-atv-tj203665",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "fourtrax-recon",
+      "type": "Atv",
+      "stock": "tj203665"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-fourtrax-recon-atv-tj204066",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "fourtrax-recon",
+      "type": "Atv",
+      "stock": "tj204066"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-fourtrax-recon-motorcycle-tj202969",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "fourtrax-recon",
+      "type": "Motorcycle",
+      "stock": "tj202969"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-grom-125spt-motorcycle-t5400101",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "grom-125spt",
+      "type": "Motorcycle",
+      "stock": "t5400101"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-grom-125t-motorcycle-t5402908",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "grom-125t",
+      "type": "Motorcycle",
+      "stock": "t5402908"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-metropolitan-motorcycle-tk900378",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "metropolitan",
+      "type": "Motorcycle",
+      "stock": "tk900378"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-monkey-125-at-motorcycle-t5100902",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "monkey-125-at",
+      "type": "Motorcycle",
+      "stock": "t5100902"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-monkey-125-motorcycle-t5100500",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "monkey-125",
+      "type": "Motorcycle",
+      "stock": "t5100500"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-monkey-125-motorcycle-t5100562",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "monkey-125",
+      "type": "Motorcycle",
+      "stock": "t5100562"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-navi-motorcycle-td200182",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "navi",
+      "type": "Motorcycle",
+      "stock": "td200182"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-navi-motorcycle-td200205",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "navi",
+      "type": "Motorcycle",
+      "stock": "td200205"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-navi-motorcycle-td200484",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "navi",
+      "type": "Motorcycle",
+      "stock": "td200484"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-navi-motorcycle-td201699",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "navi",
+      "type": "Motorcycle",
+      "stock": "td201699"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-navi-motorcycle-td201740",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "navi",
+      "type": "Motorcycle",
+      "stock": "td201740"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-nva110bt-td200224",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "nva110bt",
+      "type": "",
+      "stock": "td200224"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-nva110bt-td400473",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "nva110bt",
+      "type": "",
+      "stock": "td400473"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-pcx-motorcycle-ty100428",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "pcx",
+      "type": "Motorcycle",
+      "stock": "ty100428"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-pcx160at-motorcycle-ty100377",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "pcx160at",
+      "type": "Motorcycle",
+      "stock": "ty100377"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-pcx160at-motorcycle-ty100424",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "pcx160at",
+      "type": "Motorcycle",
+      "stock": "ty100424"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-rebel-300-e-clutchcmx300act-motorcycle-t5901199",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "rebel-300-e-clutchcmx300act",
+      "type": "Motorcycle",
+      "stock": "t5901199"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-rebel-300-motorcycle-t5900592",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "rebel-300",
+      "type": "Motorcycle",
+      "stock": "t5900592"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-rebel-300-motorcycle-t5902656",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "rebel-300",
+      "type": "Motorcycle",
+      "stock": "t5902656"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trail125-motorcycle-t5301368",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trail125",
+      "type": "Motorcycle",
+      "stock": "t5301368"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trail125-motorcycle-t5302070",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trail125",
+      "type": "Motorcycle",
+      "stock": "t5302070"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx250te1t-atv-tj202180",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx250te1t",
+      "type": "Atv",
+      "stock": "tj202180"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx250te1t-tj201562",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx250te1t",
+      "type": "",
+      "stock": "tj201562"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx250xt-atv-tj202385",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx250xt",
+      "type": "Atv",
+      "stock": "tj202385"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx90xt-tj200159",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx90xt",
+      "type": "",
+      "stock": "tj200159"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx90xt-tj200183",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx90xt",
+      "type": "",
+      "stock": "tj200183"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx90xt-tj200612",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx90xt",
+      "type": "",
+      "stock": "tj200612"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-xr150l-motorcycle-td300324",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "xr150l",
+      "type": "Motorcycle",
+      "stock": "td300324"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-xr150l-motorcycle-td300329",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "xr150l",
+      "type": "Motorcycle",
+      "stock": "td300329"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-xr150l-motorcycle-td300334",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "xr150l",
+      "type": "Motorcycle",
+      "stock": "td300334"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-xr150l-motorcycle-td300339",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "xr150l",
+      "type": "Motorcycle",
+      "stock": "td300339"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-adv160-motorcycle-v5300054",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "adv160",
+      "type": "Motorcycle",
+      "stock": "v5300054"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-adv160-motorcycle-v5300262",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "adv160",
+      "type": "Motorcycle",
+      "stock": "v5300262"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-crf125f-dirt-bike-v3400376",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "crf125f",
+      "type": "Dirt Bike",
+      "stock": "v3400376"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-crf125fbv-dirt-bike-v3400756",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "crf125fbv",
+      "type": "Dirt Bike",
+      "stock": "v3400756"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-crf125fbv-motorcycle-v3400779",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "crf125fbv",
+      "type": "Motorcycle",
+      "stock": "v3400779"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-crf125fv-dirt-bike-v3400371",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "crf125fv",
+      "type": "Dirt Bike",
+      "stock": "v3400371"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-crf50fv-dirt-bike-v3100907",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "crf50fv",
+      "type": "Dirt Bike",
+      "stock": "v3100907"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-crf50fv-dirt-bike-v3100910",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "crf50fv",
+      "type": "Dirt Bike",
+      "stock": "v3100910"
+    },
+    {
+      "page_path": "/inventory/used/2002-honda-fourtrax-foreman-rubicon-atv-24100230",
+      "condition": "Used",
+      "year": "2002",
+      "make": "Honda",
+      "model": "fourtrax-foreman-rubicon",
+      "type": "Atv",
+      "stock": "24100230"
+    }
+  ],
+  "skipped": []
+}

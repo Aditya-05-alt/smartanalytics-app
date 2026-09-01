@@ -1,0 +1,581 @@
+{
+  "parsed": [
+    {
+      "page_path": "/inventory/new/2025-honda-crf300las-motorcycle-s5402717",
+      "condition": "New",
+      "year": "2025",
+      "make": "Honda",
+      "model": "crf300las",
+      "type": "Motorcycle",
+      "stock": "s5402717"
+    },
+    {
+      "page_path": "/inventory/new/2025-honda-pioneer-1000-6-deluxe-crew-utv-s4201805",
+      "condition": "New",
+      "year": "2025",
+      "make": "Honda",
+      "model": "pioneer-1000-6-deluxe-crew",
+      "type": "Utv",
+      "stock": "s4201805"
+    },
+    {
+      "page_path": "/inventory/new/2025-honda-pioneer-1000-deluxe-utv-s4902340",
+      "condition": "New",
+      "year": "2025",
+      "make": "Honda",
+      "model": "pioneer-1000-deluxe",
+      "type": "Utv",
+      "stock": "s4902340"
+    },
+    {
+      "page_path": "/inventory/new/2025-vm-pro-pontoon-trlr-s1013602",
+      "condition": "New",
+      "year": "2025",
+      "make": "VM",
+      "model": "pro",
+      "type": "Boat Trailer",
+      "stock": "s1013602"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-africa-twin-adventure-sports-motorcycle-tk200569",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "africa-twin-adventure-sports",
+      "type": "Motorcycle",
+      "stock": "tk200569"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cb650ract-motorcycle-t5201036",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cb650ract",
+      "type": "Motorcycle",
+      "stock": "t5201036"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr10rat-motorcycle-tk900357",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr10rat",
+      "type": "Motorcycle",
+      "stock": "tk900357"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr600rat-motorcycle-tk100429",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr600rat",
+      "type": "Motorcycle",
+      "stock": "tk100429"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr650r-motorcycle-t5201964",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr650r",
+      "type": "Motorcycle",
+      "stock": "t5201964"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr650ract-motorcycle-t5202482",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr650ract",
+      "type": "Motorcycle",
+      "stock": "t5202482"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr650ract-motorcycle-t5202506",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr650ract",
+      "type": "Motorcycle",
+      "stock": "t5202506"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr650ract-motorcycle-t5202520",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr650ract",
+      "type": "Motorcycle",
+      "stock": "t5202520"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr650ract-motorcycle-t5202532",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr650ract",
+      "type": "Motorcycle",
+      "stock": "t5202532"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cbr650ract-motorcycle-t5202533",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cbr650ract",
+      "type": "Motorcycle",
+      "stock": "t5202533"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cmx1100dt-motorcycle-tk100960",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cmx1100dt",
+      "type": "Motorcycle",
+      "stock": "tk100960"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cmx1100t-tk100594",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cmx1100t",
+      "type": "",
+      "stock": "tk100594"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cmx1100t-tk100744",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cmx1100t",
+      "type": "",
+      "stock": "tk100744"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-cmx500a2t-t5900694",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "cmx500a2t",
+      "type": "",
+      "stock": "t5900694"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf1100l4t-motorcycle-tk200300",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf1100l4t",
+      "type": "Motorcycle",
+      "stock": "tk200300"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf1100ldt-motorcycle-tk200147",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf1100ldt",
+      "type": "Motorcycle",
+      "stock": "tk200147"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf1100ldt-motorcycle-tk200186",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf1100ldt",
+      "type": "Motorcycle",
+      "stock": "tk200186"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf1100lt-motorcycle-tk200335",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf1100lt",
+      "type": "Motorcycle",
+      "stock": "tk200335"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf1100lt-motorcycle-tk200363",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf1100lt",
+      "type": "Motorcycle",
+      "stock": "tk200363"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf150rbt-tk800589",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf150rbt",
+      "type": "",
+      "stock": "tk800589"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf150rt-motorcycle-tk800237",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf150rt",
+      "type": "Motorcycle",
+      "stock": "tk800237"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf250r-motorcycle-tk802470",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf250r",
+      "type": "Motorcycle",
+      "stock": "tk802470"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf250rt-motorcycle-tk800647",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf250rt",
+      "type": "Motorcycle",
+      "stock": "tk800647"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf300l-rally-motorcycle-t5500585",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf300l-rally",
+      "type": "Motorcycle",
+      "stock": "t5500585"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf450rt-tk901547",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf450rt",
+      "type": "",
+      "stock": "tk901547"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf450x-motorcycle-tk700265",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf450x",
+      "type": "Motorcycle",
+      "stock": "tk700265"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-crf450x-motorcycle-tk700270",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "crf450x",
+      "type": "Motorcycle",
+      "stock": "tk700270"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-fourtrax-rancher-4x4-trx420fm1t-atv-tj203319",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "fourtrax-rancher-4x4-trx420fm1t",
+      "type": "Atv",
+      "stock": "tj203319"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-gl1800bdt-tk800129",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "gl1800bdt",
+      "type": "",
+      "stock": "tk800129"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-gl1800dt-motorcycle-tk800791",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "gl1800dt",
+      "type": "Motorcycle",
+      "stock": "tk800791"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-gl1800dt-motorcycle-tk800865",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "gl1800dt",
+      "type": "Motorcycle",
+      "stock": "tk800865"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-gold-wing-tour-airbag-dct-gl1800tdaset-motorcycle-tk800047",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "gold-wing-tour-airbag-dct-gl1800tdaset",
+      "type": "Motorcycle",
+      "stock": "tk800047"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-nt1100dt-motorcycle-tk100654",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "nt1100dt",
+      "type": "Motorcycle",
+      "stock": "tk100654"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-pioneer-700-2-sxs700m2t-utv-t4100056",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "pioneer-700-2-sxs700m2t",
+      "type": "Utv",
+      "stock": "t4100056"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-pioneer-700-deluxe-sxs700m2dt-utv-t4101213",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "pioneer-700-deluxe-sxs700m2dt",
+      "type": "Utv",
+      "stock": "t4101213"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs10s2rdt-t4700046-r",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs10s2rdt-t4700046",
+      "type": "",
+      "stock": "r"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs10s2rdt-t4700180",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs10s2rdt",
+      "type": "",
+      "stock": "t4700180"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs10s2xdt-t4700046-x",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs10s2xdt-t4700046",
+      "type": "",
+      "stock": "x"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs10s2xdt-t4700146",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs10s2xdt",
+      "type": "",
+      "stock": "t4700146"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs10s4xdt-t4600267",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs10s4xdt",
+      "type": "",
+      "stock": "t4600267"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs10s4xt-t4600048",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs10s4xt",
+      "type": "",
+      "stock": "t4600048"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs700m2ft-t4100543",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs700m2ft",
+      "type": "",
+      "stock": "t4100543"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-sxs700m4dt-t4102133",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "sxs700m4dt",
+      "type": "",
+      "stock": "t4102133"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx520fm1t-tj200419",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx520fm1t",
+      "type": "",
+      "stock": "tj200419"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx520fm1t-tj201743",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx520fm1t",
+      "type": "",
+      "stock": "tj201743"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx520fm6t-tj200674",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx520fm6t",
+      "type": "",
+      "stock": "tj200674"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx520fm6t-tj201025",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx520fm6t",
+      "type": "",
+      "stock": "tj201025"
+    },
+    {
+      "page_path": "/inventory/new/2026-honda-trx700fat-tj200127",
+      "condition": "New",
+      "year": "2026",
+      "make": "Honda",
+      "model": "trx700fat",
+      "type": "",
+      "stock": "tj200127"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-crf250rv-dirt-bike-vk900620",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "crf250rv",
+      "type": "Dirt Bike",
+      "stock": "vk900620"
+    },
+    {
+      "page_path": "/inventory/new/2027-honda-trx420fa2v-motorcycle-vj300474",
+      "condition": "New",
+      "year": "2027",
+      "make": "Honda",
+      "model": "trx420fa2v",
+      "type": "Motorcycle",
+      "stock": "vj300474"
+    },
+    {
+      "page_path": "/inventory/used/2004-honda-gl18at4-motorcycle-4a300521",
+      "condition": "Used",
+      "year": "2004",
+      "make": "Honda",
+      "model": "gl18at4",
+      "type": "Motorcycle",
+      "stock": "4a300521"
+    },
+    {
+      "page_path": "/inventory/used/2009-bmw-g-650-gs-motorcycle-9zw16799",
+      "condition": "Used",
+      "year": "2009",
+      "make": "BMW",
+      "model": "g-650-gs",
+      "type": "Motorcycle",
+      "stock": "9zw16799"
+    },
+    {
+      "page_path": "/inventory/used/2013-harley-davidson-fltrxse-motorcycle-db962090",
+      "condition": "Used",
+      "year": "2013",
+      "make": "Harley-Davidson",
+      "model": "fltrxse",
+      "type": "Motorcycle",
+      "stock": "db962090"
+    },
+    {
+      "page_path": "/inventory/used/2019-harley-davidson-softail-slim-motorcycle-kb059704",
+      "condition": "Used",
+      "year": "2019",
+      "make": "Harley-Davidson",
+      "model": "softail-slim",
+      "type": "Motorcycle",
+      "stock": "kb059704"
+    },
+    {
+      "page_path": "/inventory/used/2022-harley-davidson-flhxs-street-glide-special-motorcycle-nb628535",
+      "condition": "Used",
+      "year": "2022",
+      "make": "Harley-Davidson",
+      "model": "flhxs-street-glide-special",
+      "type": "Motorcycle",
+      "stock": "nb628535"
+    },
+    {
+      "page_path": "/inventory/used/2022-honda-rebel-300-motorcycle-n5500602",
+      "condition": "Used",
+      "year": "2022",
+      "make": "Honda",
+      "model": "rebel-300",
+      "type": "Motorcycle",
+      "stock": "n5500602"
+    },
+    {
+      "page_path": "/inventory/used/2023-honda-rebel-500-motorcycle-p5600035",
+      "condition": "Used",
+      "year": "2023",
+      "make": "Honda",
+      "model": "rebel-500",
+      "type": "Motorcycle",
+      "stock": "p5600035"
+    },
+    {
+      "page_path": "/inventory/used/2025-suzuki-gsx-r600-motorcycle-s7101139",
+      "condition": "Used",
+      "year": "2025",
+      "make": "Suzuki",
+      "model": "gsx-r600",
+      "type": "Motorcycle",
+      "stock": "s7101139"
+    },
+    {
+      "page_path": "/inventory/used/2025-yamaha-yz450f-dirt-bike-sa015815",
+      "condition": "Used",
+      "year": "2025",
+      "make": "Yamaha",
+      "model": "yz450f",
+      "type": "Dirt Bike",
+      "stock": "sa015815"
+    },
+    {
+      "page_path": "/inventory/used/2026-honda-nt1100-motorcycle-tk100125",
+      "condition": "Used",
+      "year": "2026",
+      "make": "Honda",
+      "model": "nt1100",
+      "type": "Motorcycle",
+      "stock": "tk100125"
+    }
+  ],
+  "skipped": []
+}

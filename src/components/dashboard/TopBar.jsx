@@ -16,15 +16,6 @@ import {
   isInventoryReportPath,
 } from '@/lib/inventory/inventoryReport';
 
-const NAV = [
-  // { id: 'overview',    href: '/dashboard',              label: 'Overview' },
-  // { id: 'health',      href: '/dashboard/health',       label: 'Portfolio Health' },
-  // { id: 'attribution', href: '/dashboard/attribution',  label: 'Attribution' },
-  // { id: 'local',       href: '/dashboard/local',        label: 'Local Intel' },
-  // { id: 'reports',     href: '/reports/date-wise-views', label: 'Date-wise Views' },
-  { id: 'admin', href: '/dashboard/admin/pipeline', label: 'Admin' },
-];
-
 function DealerCategoryFilter() {
   const {
     dealerCategoryFilter,
@@ -268,18 +259,9 @@ export default function TopBar() {
   const hideDealerPicker =
     pathname?.startsWith('/dashboard/admin') || pathname?.startsWith('/reports');
 
-  const activeId = useMemo(() => {
-    if (pathname.startsWith('/dashboard/admin')) return 'admin';
-    // if (pathname === '/dashboard') return 'overview';
-    // if (pathname.startsWith('/reports')) return 'reports';
-    // const seg = pathname.replace('/dashboard/', '').split('/')[0];
-    // return seg || 'overview';
-    return 'admin';
-  }, [pathname]);
-
   return (
     <header className="topbar">
-      <Link href="/dashboard/admin/pipeline" className="logo" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <Link href="/dashboard" className="logo" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div
           style={{
             width: 26, height: 26, background: 'var(--acc)',
@@ -315,17 +297,6 @@ export default function TopBar() {
       )}
 
       <nav className="topbar-right" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-        {NAV.map((n) => (
-          <Link
-            key={n.id}
-            href={n.href}
-            className={`tb-btn ${activeId === n.id ? 'active' : ''}`}
-            prefetch={false}
-          >
-            {n.label}
-          </Link>
-        ))}
-        <div className="tb-div" />
         <ThemeToggle variant="icon" />
         <UserAccountMenu />
       </nav>
