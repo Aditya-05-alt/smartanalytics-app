@@ -142,11 +142,11 @@ export default function SideBar() {
     () =>
       accessLoading
         ? []
-        : ITEMS.filter((item) =>
-            item.id === 'vdplab'
-              ? canAccessReport(access, 'overview')
-              : canAccessReport(access, item.id)
-          ),
+        : ITEMS.filter((item) => {
+            // VDP Lab is admin-only — not part of user report access.
+            if (item.id === 'vdplab') return access?.role !== 'user';
+            return canAccessReport(access, item.id);
+          }),
     [access, accessLoading]
   );
 

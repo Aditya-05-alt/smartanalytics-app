@@ -10,12 +10,17 @@ import {
 import { loadUserAccessRecord } from '@/lib/access/userAccess';
 
 async function enforceDashboardReportAccess(supabase, user, response, request, pathname) {
+  const isVdpLab = pathname.startsWith('/dashboard/vdp-lab');
   const reportKey = reportKeyFromPathname(pathname);
-  if (!reportKey) return response;
+  if (!reportKey && !isVdpLab) return response;
 
   try {
     const record = await loadUserAccessRecord(supabase, user.id);
     const access = normalizeAccess(record);
+    if (isVdpLab) {
+      if (access.role !== 'user') return response;
+      return NextResponse.redirect(new URL(firstAllowedReportHref(access), request.url));
+    }
     if (canAccessReport(access, reportKey)) return response;
     return NextResponse.redirect(new URL(firstAllowedReportHref(access), request.url));
   } catch {
