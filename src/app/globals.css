@@ -2287,6 +2287,14 @@ body {
   gap: 8px;
   margin-top: 0.55rem;
 }
+.pipeline-step4-logic2 {
+  margin-top: 0.65rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--bd);
+}
+.pipeline-step4-logic2 .vdp-logics-vdp-patterns-head {
+  margin-bottom: 0.35rem;
+}
 .pipeline-badge {
   margin-left: auto;
   padding: 2px 8px;

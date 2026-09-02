@@ -26,7 +26,7 @@ function colorForRank(rank) {
 function normalizeRows(data) {
   const list = Array.isArray(data) ? data : data ? [data] : [];
   return list.map((row) => ({
-    type_bucket: String(row.type_bucket ?? row.type ?? row.inv_type ?? 'Unknown'),
+    type_bucket: String(row.type_bucket ?? row.type ?? row.inv_type ?? 'Other'),
     views: Number(row.views ?? 0) || 0,
     pct: Number(row.pct ?? row.percentage ?? 0) || 0,
     rank: Number(row.rank ?? 999) || 999,

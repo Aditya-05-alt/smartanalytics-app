@@ -33,7 +33,7 @@ function normalizeRows(data) {
   // Dedupe by model+make in case RPC/whitespace returns twin rows.
   const byKey = new Map();
   for (const row of list) {
-    const model = String(row.model_bucket ?? row.inv_model ?? 'Unknown').trim() || 'Unknown';
+    const model = String(row.model_bucket ?? row.inv_model ?? 'Other').trim() || 'Other';
     const make = String(row.make_bucket ?? row.inv_make ?? '').trim();
     const key = `${model.toLowerCase()}||${make.toLowerCase()}`;
     const views = Number(row.views ?? 0) || 0;

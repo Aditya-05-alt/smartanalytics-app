@@ -80,3 +80,52 @@ export async function runPipelineFinalSync({ clientId, from, to }) {
   if (!res.ok) throw new Error(json.error || 'Final sync failed.');
   return json;
 }
+
+/** Step 4 ??? Unknown / Other URLs + counts */
+export async function fetchPipelineUnknownUrls({ clientId, from, to, signal }) {
+  const qs = new URLSearchParams({ clientId, from, to });
+  const res = await fetch(`/api/admin/pipeline/unknown-urls?${qs}`, {
+    credentials: 'same-origin',
+    signal,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Failed to load unknown URLs.');
+  return json;
+}
+
+/** Step 4 ??? load smart_vdp_logic_2 for dealer */
+export async function fetchPipelineVdpLogic2({ clientId, signal }) {
+  const qs = new URLSearchParams({ clientId });
+  const res = await fetch(`/api/admin/pipeline/vdp-logic-2?${qs}`, {
+    credentials: 'same-origin',
+    signal,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Failed to load VDP logic 2.');
+  return json;
+}
+
+/** Step 4 ??? save smart_vdp_logic_2.vdp_logic */
+export async function savePipelineVdpLogic2({ clientId, vdpLogicPatterns, vdpLogic }) {
+  const res = await fetch('/api/admin/pipeline/vdp-logic-2', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, vdpLogicPatterns, vdpLogic }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Failed to save VDP logic 2.');
+  return json;
+}
+
+/** Step 4 Exception ??? Unknown/Other URLs that still miss smart_vdp_logic_2 */
+export async function fetchPipelineExceptionUrls({ clientId, from, to, signal }) {
+  const qs = new URLSearchParams({ clientId, from, to });
+  const res = await fetch(`/api/admin/pipeline/exception-urls?${qs}`, {
+    credentials: 'same-origin',
+    signal,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Failed to load exception URLs.');
+  return json;
+}

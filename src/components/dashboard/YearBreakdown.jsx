@@ -28,7 +28,7 @@ function normalizeRows(data) {
   return list.map((row) => {
     const raw = String(row.year_bucket ?? row.inv_year ?? '').trim();
     return {
-      year_bucket: raw || 'Unknown',
+      year_bucket: raw || 'Other',
       views: Number(row.views ?? 0) || 0,
       pct: Number(row.pct ?? row.percentage ?? 0) || 0,
       rank: Number(row.rank ?? 999) || 999,

@@ -1,13 +1,16 @@
 -- Thin wrapper over get_location_breakdown.
--- Old logic stays unchanged. If dealer has exactly ONE row in
--- smart_dealer_locations, rename Unknown → that hardcoded location name.
--- Deploy in Supabase SQL editor (replaces the heavy matching version).
+-- If dealer has exactly ONE row in smart_dealer_locations, rename blank/Other/Unknown → that name.
+-- Forwards p_channels so channel filter matches other inventory breakdowns.
+-- Always keeps the same view total as get_location_breakdown (no dropped buckets).
 
 DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text
 );
 DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text, text
+);
+DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 );
 
 CREATE OR REPLACE FUNCTION public.get_dealer_location_breakdown(
@@ -21,6 +24,7 @@ CREATE OR REPLACE FUNCTION public.get_dealer_location_breakdown(
   p_locations text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
   p_condition text DEFAULT 'BOTH',
+  p_channels text[] DEFAULT NULL,
   p_ga4_property_id text DEFAULT NULL
 )
 RETURNS TABLE (
@@ -46,23 +50,23 @@ BEGIN
   WHERE dl.customer_id::text = trim(p_client_id)
     AND TRIM(dl.location_name) <> '';
 
-  -- 0 or 2+ configured names → exact old breakdown (no remap).
+  -- 0 or 2+ configured names → exact location breakdown (same total as other charts).
   IF COALESCE(v_loc_count, 0) <> 1 THEN
     RETURN QUERY
     SELECT * FROM public.get_location_breakdown(
       p_client_id, p_from, p_to, p_limit,
       p_types, p_makes, p_models, p_locations, p_years, p_condition,
-      NULL, p_ga4_property_id
+      p_channels, p_ga4_property_id
     );
     RETURN;
   END IF;
 
-  -- Exactly one hardcoded name: run old logic, then Unknown → that name.
+  -- Exactly one hardcoded name: remap blank/Other/Unknown → that name.
   RETURN QUERY
   WITH base AS (
     SELECT
       CASE
-        WHEN LOWER(TRIM(lb.location_bucket)) IN ('unknown', '')
+        WHEN LOWER(TRIM(lb.location_bucket)) IN ('unknown', 'other', '')
           THEN v_single_location
         ELSE lb.location_bucket
       END AS location_bucket,
@@ -70,7 +74,7 @@ BEGIN
     FROM public.get_location_breakdown(
       p_client_id, p_from, p_to, p_limit,
       p_types, p_makes, p_models, p_locations, p_years, p_condition,
-      NULL, p_ga4_property_id
+      p_channels, p_ga4_property_id
     ) lb
   ),
   agg AS (
@@ -102,9 +106,9 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_dealer_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_dealer_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) TO anon, authenticated, service_role;

@@ -35,7 +35,7 @@ SET statement_timeout = '55s'
 AS $$
   WITH base AS (
     SELECT
-      COALESCE(NULLIF(TRIM(f.inv_model), ''), 'Unknown') AS model_bucket,
+      COALESCE(NULLIF(TRIM(f.inv_model), ''), 'Other') AS model_bucket,
       COALESCE(NULLIF(TRIM(f.inv_make), ''), '') AS make_bucket,
       COALESCE(p.views, 0)::bigint AS views
     FROM public.smart_ga4_page_data p
@@ -66,7 +66,7 @@ AS $$
     UNION ALL
 
     SELECT
-      COALESCE(NULLIF(TRIM(inv_model), ''), 'Unknown') AS model_bucket,
+      COALESCE(NULLIF(TRIM(inv_model), ''), 'Other') AS model_bucket,
       COALESCE(NULLIF(TRIM(inv_make), ''), '') AS make_bucket,
       COALESCE(views, 0)::bigint AS views
     FROM public.smart_final_data

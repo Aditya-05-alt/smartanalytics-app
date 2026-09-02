@@ -28,7 +28,7 @@ function normalizeRows(data) {
   const list = Array.isArray(data) ? data : data ? [data] : [];
   const raw = list.map((row) => ({
     location_bucket: String(
-      row.location_bucket ?? row.location ?? row.inv_location ?? 'Unknown'
+      row.location_bucket ?? row.location ?? row.inv_location ?? 'Other'
     ),
     views: Number(row.views ?? 0) || 0,
     pct: Number(row.pct ?? row.percentage ?? 0) || 0,
@@ -39,7 +39,7 @@ function normalizeRows(data) {
 }
 
 function toDonutRow(row) {
-  const fullName = String(row.location_bucket || 'Unknown').trim() || 'Unknown';
+  const fullName = String(row.location_bucket || 'Other').trim() || 'Other';
   return {
     name: fullName,
     fullName,

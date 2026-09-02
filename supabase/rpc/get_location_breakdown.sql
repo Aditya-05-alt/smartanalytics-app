@@ -42,7 +42,7 @@ SET statement_timeout = '55s'
 AS $$
   WITH base AS (
     SELECT
-      COALESCE(NULLIF(TRIM(f.inv_location), ''), 'Unknown') AS location_bucket,
+      COALESCE(NULLIF(TRIM(f.inv_location), ''), 'Other') AS location_bucket,
       COALESCE(p.views, 0)::bigint AS views
     FROM public.smart_ga4_page_data p
     INNER JOIN public.smart_final_data f
@@ -72,7 +72,7 @@ AS $$
     UNION ALL
 
     SELECT
-      COALESCE(NULLIF(TRIM(inv_location), ''), 'Unknown') AS location_bucket,
+      COALESCE(NULLIF(TRIM(inv_location), ''), 'Other') AS location_bucket,
       COALESCE(views, 0)::bigint AS views
     FROM public.smart_final_data
     WHERE COALESCE(array_length(p_channels, 1), 0) = 0

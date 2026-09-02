@@ -38,7 +38,7 @@ AS $$
       COALESCE(
         NULLIF(TRIM(f.inv_custom_type), ''),
         NULLIF(TRIM(f.inv_type), ''),
-        'Unknown'
+        'Other'
       ) AS type_bucket,
       COALESCE(p.views, 0)::bigint AS views
     FROM public.smart_ga4_page_data p
@@ -62,7 +62,7 @@ AS $$
             COALESCE(
               NULLIF(TRIM(f.inv_custom_type), ''),
               NULLIF(TRIM(f.inv_type), ''),
-              'Unknown'
+              'Other'
             )
           )
         )
@@ -85,7 +85,7 @@ AS $$
       COALESCE(
         NULLIF(TRIM(s.inv_custom_type), ''),
         NULLIF(TRIM(s.inv_type), ''),
-        'Unknown'
+        'Other'
       ) AS type_bucket,
       COALESCE(s.views, 0)::bigint AS views
     FROM public.smart_final_data s
@@ -102,7 +102,7 @@ AS $$
             COALESCE(
               NULLIF(TRIM(s.inv_custom_type), ''),
               NULLIF(TRIM(s.inv_type), ''),
-              'Unknown'
+              'Other'
             )
           )
         )

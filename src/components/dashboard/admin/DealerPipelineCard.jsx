@@ -4,10 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchPipelineViewsChunk,
   fetchPipelineWorkflow,
+  fetchPipelineUnknownUrls,
+  fetchPipelineVdpLogic2,
+  fetchPipelineExceptionUrls,
   mergePipelineRangeViews,
   runPipelineFiltration,
   runPipelineFinalSync,
   runPipelinePageSync,
+  savePipelineVdpLogic2,
 } from '@/lib/api/adminPipeline';
 import { chunkDates, coerceDateRange } from '@/lib/pipeline/dates';
 import {
@@ -152,7 +156,11 @@ export default function DealerPipelineCard({ dealer, from, to }) {
   const [step1Result, setStep1Result] = useState(null);
   const [step2Result, setStep2Result] = useState(null);
   const [step3Result, setStep3Result] = useState(null);
-  const [stepLogs, setStepLogs] = useState({ 1: [], 2: [], 3: [] });
+  const [step4Result, setStep4Result] = useState(null);
+  const [exceptionResult, setExceptionResult] = useState(null);
+  const [stepLogs, setStepLogs] = useState({ 1: [], 2: [], 3: [], 4: [], E: [] });
+  const [logic2Patterns, setLogic2Patterns] = useState(['']);
+  const [logic2Meta, setLogic2Meta] = useState(null);
   const loadAbortRef = useRef(null);
 
   const clientId = dealer.ga4CustomerId;
@@ -567,6 +575,173 @@ export default function DealerPipelineCard({ dealer, from, to }) {
     }
   };
 
+  const loadLogic2 = useCallback(async () => {
+    if (!clientId) {
+      setLogic2Patterns(['']);
+      setLogic2Meta(null);
+      return;
+    }
+    try {
+      const res = await fetchPipelineVdpLogic2({ clientId });
+      setLogic2Patterns(
+        res.vdpLogicPatterns?.length ? res.vdpLogicPatterns : ['']
+      );
+      setLogic2Meta({
+        found: res.found,
+        dealerName: res.dealerName,
+        updatedAt: res.updatedAt,
+      });
+    } catch (e) {
+      setLogic2Patterns(['']);
+      setLogic2Meta({ found: false, error: e?.message || 'Load failed' });
+    }
+  }, [clientId]);
+
+  useEffect(() => {
+    loadLogic2();
+  }, [loadLogic2]);
+
+  const runStep4LoadUnknowns = async () => {
+    if (!clientId) return;
+    setBusyStep(4);
+    setError(null);
+    setMessage(null);
+    setStep4Result(null);
+    setStepLog(4, [
+      logLine(`Step 4 — Unknown / Other URLs · ${from} → ${to}`),
+      logLine('Scanning smart_final_data…'),
+    ]);
+    try {
+      const res = await fetchPipelineUnknownUrls({ clientId, from, to });
+      const lines = [
+        logLine(
+          `Found ${res.uniqueUrls.toLocaleString()} unique URL(s) · ${(res.totalRows || 0).toLocaleString()} row(s) · ${(res.totalViews || 0).toLocaleString()} view(s)`
+        ),
+        logLine('Format: views × count · page_path'),
+        logLine('—'.repeat(36)),
+      ];
+      for (const u of res.urls || []) {
+        const views = Number(u.views) || 0;
+        const rows = Number(u.rows) || 0;
+        lines.push(
+          `${views.toLocaleString().padStart(8)} views · ${String(rows).padStart(4)} rows  ${u.page_path}`
+        );
+      }
+      if (!(res.urls || []).length) {
+        lines.push(logLine('No Unknown / Other URLs in this range.'));
+      }
+      setStepLog(4, lines);
+      setStep4Result(res);
+      setMessage(
+        `Step 4 — ${res.uniqueUrls.toLocaleString()} Unknown/Other URL(s), ${(res.totalViews || 0).toLocaleString()} views.`
+      );
+    } catch (e) {
+      appendStepLog(4, logLine(`Error: ${e?.message || 'Load failed.'}`));
+      setError(e?.message || 'Failed to load unknown URLs.');
+    } finally {
+      setBusyStep(null);
+    }
+  };
+
+  const runStep4SaveLogic2 = async () => {
+    if (!clientId) return;
+    setBusyStep(4);
+    setError(null);
+    setMessage(null);
+    appendStepLog(4, logLine('Saving VDP logic 2 → smart_vdp_logic_2…'));
+    try {
+      const res = await savePipelineVdpLogic2({
+        clientId,
+        vdpLogicPatterns: logic2Patterns,
+      });
+      setLogic2Patterns(
+        res.vdpLogicPatterns?.length ? res.vdpLogicPatterns : ['']
+      );
+      setLogic2Meta({
+        found: true,
+        dealerName: res.dealerName,
+        updatedAt: res.updatedAt,
+      });
+      appendStepLog(
+        4,
+        logLine(
+          `Saved VDP logic 2 (${(res.vdpLogicPatterns || []).filter(Boolean).length} pattern(s)).`
+        )
+      );
+      if (res.vdpLogic) {
+        appendStepLog(4, logLine(`vdp_logic: ${res.vdpLogic}`));
+      }
+      setMessage('Step 4 — VDP logic 2 saved to smart_vdp_logic_2.');
+    } catch (e) {
+      appendStepLog(4, logLine(`Error: ${e?.message || 'Save failed.'}`));
+      setError(e?.message || 'Failed to save VDP logic 2.');
+    } finally {
+      setBusyStep(null);
+    }
+  };
+
+  const runExceptionLoad = async () => {
+    if (!clientId) return;
+    setBusyStep('E');
+    setError(null);
+    setMessage(null);
+    setExceptionResult(null);
+    setStepLog('E', [
+      logLine(`Exception — leftover Unknown / Other after logic_2 · ${from} → ${to}`),
+      logLine('Comparing smart_final_data unknowns vs smart_vdp_logic_2…'),
+    ]);
+    try {
+      const res = await fetchPipelineExceptionUrls({ clientId, from, to });
+      const lines = [
+        logLine(
+          res.hasLogic2
+            ? 'logic_2 patterns loaded — listing URLs that still do not match.'
+            : 'No vdp_logic on smart_vdp_logic_2 — all Unknown/Other listed as exceptions.'
+        ),
+        logLine(
+          `Exceptions: ${res.uniqueUrls.toLocaleString()} unique URL(s) · ${(res.totalRows || 0).toLocaleString()} row(s) · ${(res.totalViews || 0).toLocaleString()} view(s)`
+        ),
+        logLine('Format: views × rows · page_path'),
+        logLine('—'.repeat(36)),
+      ];
+      for (const u of res.urls || []) {
+        const views = Number(u.views) || 0;
+        const rows = Number(u.rows) || 0;
+        lines.push(
+          `${views.toLocaleString().padStart(8)} views · ${String(rows).padStart(4)} rows  ${u.page_path}`
+        );
+      }
+      if (!(res.urls || []).length) {
+        lines.push(logLine('No exception URLs — all Unknown/Other match logic_2 (or none found).'));
+      }
+      setStepLog('E', lines);
+      setExceptionResult(res);
+      setMessage(
+        `Exception — ${res.uniqueUrls.toLocaleString()} leftover URL(s), ${(res.totalViews || 0).toLocaleString()} views.`
+      );
+    } catch (e) {
+      appendStepLog('E', logLine(`Error: ${e?.message || 'Load failed.'}`));
+      setError(e?.message || 'Failed to load exception URLs.');
+    } finally {
+      setBusyStep(null);
+    }
+  };
+
+  const updateLogic2Pattern = (index, value) => {
+    setLogic2Patterns((prev) => prev.map((p, i) => (i === index ? value : p)));
+  };
+
+  const addLogic2Pattern = () => {
+    setLogic2Patterns((prev) => [...prev, '']);
+  };
+
+  const removeLogic2Pattern = (index) => {
+    setLogic2Patterns((prev) => {
+      if (prev.length <= 1) return [''];
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   /** Table columns always match the From / To pickers exactly. */
   const selectedRange = useMemo(() => coerceDateRange(from, to), [from, to]);
   const rangeDates = selectedRange.dates;
@@ -740,6 +915,181 @@ export default function DealerPipelineCard({ dealer, from, to }) {
           </button>
           <PipelineSyncLog step={3} busyStep={busyStep} lines={stepLogs[3] || []} />
           <StepResultPanel title="Step 3 — final sync result" result={step3Result} />
+        </div>
+
+        <div className="pipeline-step">
+          <div className="pipeline-step-head">
+            <span className="pipeline-step-num">4</span>
+            <span>Unknown / Other URLs · VDP logic 2</span>
+            <span
+              className={`pipeline-badge ${
+                step4Result?.uniqueUrls > 0
+                  ? 'pipeline-badge--pending'
+                  : step4Result
+                    ? 'pipeline-badge--ok'
+                    : 'pipeline-badge--pending'
+              }`}
+            >
+              {step4Result
+                ? `${step4Result.uniqueUrls} URL${step4Result.uniqueUrls === 1 ? '' : 's'}`
+                : 'Ready'}
+            </span>
+          </div>
+          <p className="pipeline-step-desc">
+            Lists Unknown / Other URLs from smart_final_data for the selected From → To
+            range (blank or Other make, blank inv_url, or unmatched VDP). Upload alternate
+            patterns to <code className="pipeline-step-code">smart_vdp_logic_2</code> only
+            — live <code className="pipeline-step-code">smart_vdp_logic</code> is unchanged.
+          </p>
+          {step4Result && (
+            <p className="pipeline-step-meta">
+              {(step4Result.uniqueUrls || 0).toLocaleString()} unique URL(s) ·{' '}
+              {(step4Result.totalRows || 0).toLocaleString()} row(s) ·{' '}
+              {(step4Result.totalViews || 0).toLocaleString()} view(s)
+            </p>
+          )}
+          {logic2Meta && (
+            <p className="pipeline-step-meta">
+              logic_2:{' '}
+              {logic2Meta.found
+                ? `${logic2Meta.dealerName || clientId}${
+                    logic2Meta.updatedAt
+                      ? ` · updated ${String(logic2Meta.updatedAt).slice(0, 19).replace('T', ' ')}`
+                      : ''
+                  }`
+                : logic2Meta.error || 'no row for this dealer yet'}
+            </p>
+          )}
+
+          <div className="pipeline-step4-logic2">
+            <div className="vdp-logics-vdp-patterns-head">
+              <span className="admin-date-label">VDP logic 2</span>
+              <span className="vdp-logics-vdp-patterns-hint">
+                Patterns saved to smart_vdp_logic_2 (OR rules).
+              </span>
+            </div>
+            {logic2Patterns.map((pattern, index) => (
+              <div key={`logic2-${index}`} className="vdp-logics-pattern-row">
+                <textarea
+                  className="vdp-logics-textarea vdp-logics-pattern-input"
+                  rows={2}
+                  value={pattern}
+                  placeholder="e.g. ^/inventory/(?:new|used)/\d{4}-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/?$"
+                  disabled={!clientId || busyStep != null}
+                  onChange={(e) => updateLogic2Pattern(index, e.target.value)}
+                />
+                <div className="vdp-logics-pattern-actions">
+                  {logic2Patterns.length > 1 && (
+                    <button
+                      type="button"
+                      className="vdp-logics-pattern-btn vdp-logics-pattern-btn--remove"
+                      aria-label={`Remove VDP logic 2 pattern ${index + 1}`}
+                      disabled={busyStep != null}
+                      onClick={() => removeLogic2Pattern(index)}
+                    >
+                      −
+                    </button>
+                  )}
+                  {index === logic2Patterns.length - 1 && (
+                    <button
+                      type="button"
+                      className="vdp-logics-pattern-btn vdp-logics-pattern-btn--add"
+                      aria-label="Add another VDP logic 2 pattern"
+                      disabled={busyStep != null}
+                      onClick={addLogic2Pattern}
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="pipeline-step-actions">
+            <button
+              type="button"
+              className="ga4-count-export-btn"
+              disabled={!clientId || busyStep != null}
+              onClick={runStep4LoadUnknowns}
+            >
+              {busyStep === 4 ? 'Working…' : 'Load Unknown / Other URLs'}
+            </button>
+            <button
+              type="button"
+              className="ga4-count-export-btn"
+              disabled={!clientId || busyStep != null || !logic2Meta?.found}
+              onClick={runStep4SaveLogic2}
+            >
+              {busyStep === 4 ? 'Working…' : 'Upload VDP logic 2'}
+            </button>
+            <button
+              type="button"
+              className="ga4-count-page-btn"
+              disabled={!clientId || busyStep != null}
+              onClick={loadLogic2}
+            >
+              Reload logic 2
+            </button>
+          </div>
+          <PipelineSyncLog
+            step={4}
+            busyStep={busyStep}
+            lines={stepLogs[4] || []}
+            forceOpen={Boolean(step4Result)}
+          />
+        </div>
+
+        <div className="pipeline-step">
+          <div className="pipeline-step-head">
+            <span className="pipeline-step-num">E</span>
+            <span>Exception — leftover after logic 2</span>
+            <span
+              className={`pipeline-badge ${
+                exceptionResult?.uniqueUrls > 0
+                  ? 'pipeline-badge--pending'
+                  : exceptionResult
+                    ? 'pipeline-badge--ok'
+                    : 'pipeline-badge--pending'
+              }`}
+            >
+              {exceptionResult
+                ? `${exceptionResult.uniqueUrls} left`
+                : 'Ready'}
+            </span>
+          </div>
+          <p className="pipeline-step-desc">
+            After uploading VDP logic 2, some Unknown / Other URLs may still not match.
+            This exception list shows only those leftover paths (still unknown after
+            filtering against <code className="pipeline-step-code">smart_vdp_logic_2</code>
+            ).
+          </p>
+          {exceptionResult && (
+            <p className="pipeline-step-meta">
+              {(exceptionResult.uniqueUrls || 0).toLocaleString()} exception URL(s) ·{' '}
+              {(exceptionResult.totalRows || 0).toLocaleString()} row(s) ·{' '}
+              {(exceptionResult.totalViews || 0).toLocaleString()} view(s)
+              {exceptionResult.hasLogic2 === false
+                ? ' · no logic_2 pattern set yet'
+                : ''}
+            </p>
+          )}
+          <div className="pipeline-step-actions">
+            <button
+              type="button"
+              className="ga4-count-export-btn"
+              disabled={!clientId || busyStep != null}
+              onClick={runExceptionLoad}
+            >
+              {busyStep === 'E' ? 'Loading exceptions…' : 'Load exception URLs'}
+            </button>
+          </div>
+          <PipelineSyncLog
+            step="E"
+            busyStep={busyStep}
+            lines={stepLogs.E || []}
+            forceOpen={Boolean(exceptionResult)}
+          />
         </div>
       </div>
 
