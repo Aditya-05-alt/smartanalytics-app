@@ -1,20 +1,6 @@
--- All-dealer portfolio channel matrix (VDP / All tabs + date range).
--- Uses MATERIALIZED VIEWS only (fast). No live smart_ga4_page_data scan.
---
--- Grain:
---   yearly  → mv_ga4_channel_yearly   (full calendar year Jan 1 → Dec 31 only)
---   monthly → mv_ga4_channel_monthly  (Last Month / month-aligned + long ranges)
---   daily   → mv_ga4_channel_daily    (Current Month MTD / short mid-month ranges)
---
--- Optional p_client_ids for chunked fetches.
--- Deploy in Supabase SQL editor AFTER/AFTER MVs exist.
---
--- Prerequisite MVs:
---   mv_ga4_channel_daily
---   mv_ga4_channel_monthly
---   mv_ga4_channel_yearly
---
--- After GA4 sync / Step 2 filtration, refresh all three (see cron).
+-- Unbundle Paid Search / Cross-network / Display in All Dealers channel matrix.
+-- Keep Paid Social + Organic Social rollup only.
+-- Source of truth also updated in supabase/rpc/get_all_dealers_channel_matrix.sql
 
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text);
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text, text[]);
@@ -58,34 +44,24 @@ BEGIN
   v_year_end  := make_date(v_year_from, 12, 31);
   v_month_from := date_trunc('month', p_from)::date;
   v_month_to   := date_trunc('month', p_to)::date;
-  -- Last calendar day of p_to's month (for "Last Month" / full-month detection)
   v_month_last := (v_month_to + INTERVAL '1 month' - INTERVAL '1 day')::date;
 
-  -- Full calendar year only → yearly MV
-  -- (Do not use yearly for YTD — that over-counted vs dealer Overview.)
   IF v_year_from = v_year_to
      AND EXTRACT(MONTH FROM p_from)::int = 1
      AND EXTRACT(DAY FROM p_from)::int = 1
      AND p_to = v_year_end
   THEN
     v_grain := 'yearly';
-
-  -- Last Month / any full month (1st → last day) → monthly MV (fast)
   ELSIF EXTRACT(DAY FROM p_from)::int = 1
      AND p_to = v_month_last
   THEN
     v_grain := 'monthly';
-
-  -- Long multi-month spans → monthly MV
   ELSIF (p_to - p_from) >= 60 THEN
     v_grain := 'monthly';
-
-  -- Current Month MTD / short custom ranges → daily MV
   ELSE
     v_grain := 'daily';
   END IF;
 
-  -- If daily MV is stale (refresh timed out), fall back to live page data for this range.
   IF v_grain = 'daily' THEN
     SELECT MAX(d.report_date) INTO v_daily_max FROM public.mv_ga4_channel_daily d;
     IF v_daily_max IS NULL OR v_daily_max < p_to THEN
@@ -109,64 +85,29 @@ BEGIN
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
   base AS (
-    SELECT
-      y.client_id,
-      y.channel,
-      y.ga4_page_type,
-      y.views
+    SELECT y.client_id, y.channel, y.ga4_page_type, y.views
     FROM public.mv_ga4_channel_yearly y
     WHERE v_grain = 'yearly'
       AND y.report_year = v_year_from
-      AND (
-        NOT v_chunked
-        OR y.client_id = ANY (p_client_ids)
-      )
-
+      AND (NOT v_chunked OR y.client_id = ANY (p_client_ids))
     UNION ALL
-
-    SELECT
-      m.client_id,
-      m.channel,
-      m.ga4_page_type,
-      m.views
+    SELECT m.client_id, m.channel, m.ga4_page_type, m.views
     FROM public.mv_ga4_channel_monthly m
     WHERE v_grain = 'monthly'
       AND m.month_start BETWEEN v_month_from AND v_month_to
-      AND (
-        NOT v_chunked
-        OR m.client_id = ANY (p_client_ids)
-      )
-
+      AND (NOT v_chunked OR m.client_id = ANY (p_client_ids))
     UNION ALL
-
-    SELECT
-      d.client_id,
-      d.channel,
-      d.ga4_page_type,
-      d.views
+    SELECT d.client_id, d.channel, d.ga4_page_type, d.views
     FROM public.mv_ga4_channel_daily d
     WHERE v_grain = 'daily'
       AND d.report_date BETWEEN p_from AND p_to
-      AND (
-        NOT v_chunked
-        OR d.client_id = ANY (p_client_ids)
-      )
-
+      AND (NOT v_chunked OR d.client_id = ANY (p_client_ids))
     UNION ALL
-
-    -- Live fallback when daily MV is behind p_to (failed / delayed refresh)
-    SELECT
-      p.client_id,
-      p.channel,
-      p.ga4_page_type,
-      SUM(COALESCE(p.views, 0))::bigint AS views
+    SELECT p.client_id, p.channel, p.ga4_page_type, SUM(COALESCE(p.views, 0))::bigint AS views
     FROM public.smart_ga4_page_data p
     WHERE v_grain = 'live'
       AND p.report_date BETWEEN p_from AND p_to
-      AND (
-        NOT v_chunked
-        OR p.client_id = ANY (p_client_ids)
-      )
+      AND (NOT v_chunked OR p.client_id = ANY (p_client_ids))
     GROUP BY p.client_id, p.channel, p.ga4_page_type
   ),
   pages AS (
@@ -243,8 +184,3 @@ REVOKE ALL ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, t
 
 GRANT EXECUTE ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, text[])
   TO anon, authenticated, service_role;
-
--- Keep MVs fresh after GA4 sync / filtration:
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_monthly;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_yearly;

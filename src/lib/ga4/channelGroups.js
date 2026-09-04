@@ -4,13 +4,6 @@ import { colorForChannel } from '@/lib/ga4/channelDisplay';
 /** Rollup rows shown above their member channels. */
 export const CHANNEL_GROUP_DEFS = [
   {
-    key: 'paid-search-bundle',
-    label: 'Paid Search + Cross Network + Display',
-    members: ['Paid Search', 'Cross-network', 'Cross Network', 'Display'],
-    color: '#60a5fa',
-    includeMembers: true,
-  },
-  {
     key: 'social-bundle',
     label: 'Paid Social + Organic Social',
     members: ['Paid Social', 'Organic Social'],

@@ -4,20 +4,18 @@ import {
   normalizeChannelKey,
 } from '@/lib/ga4/channelGroups';
 
-/**
- * Paid bundle members shown separately in the Channel filter.
- * Channel Breakdown still rolls them up via CHANNEL_GROUP_DEFS in channelGroups.js.
- */
+/** Paid Search / Cross-network / Display stay separate filter options (not bundled). */
 export const VDP_PAID_SEARCH_FILTER_CHANNELS = [
   'Paid Search',
   'Cross-network',
   'Display',
 ];
 
+/** Legacy rollup label — expand to individual channels if still in saved UI state. */
+const LEGACY_PAID_SEARCH_BUNDLE_LABEL = 'Paid Search + Cross Network + Display';
+
 /** Bundles that stay a single filter option (e.g. Paid Social + Organic Social). */
-const VDP_CHANNEL_FILTER_BUNDLE_LABELS = CHANNEL_GROUP_DEFS.filter(
-  (g) => g.key !== 'paid-search-bundle'
-).map((g) => g.label);
+const VDP_CHANNEL_FILTER_BUNDLE_LABELS = CHANNEL_GROUP_DEFS.map((g) => g.label);
 
 /** Ungrouped channels shown in the VDP Channel filter. */
 const VDP_CHANNEL_FILTER_SOLOS = [
@@ -41,10 +39,6 @@ export const VDP_CHANNEL_FILTER_OPTIONS = [
   ...VDP_CHANNEL_FILTER_SOLOS,
 ];
 
-const PAID_SEARCH_BUNDLE_LABEL = CHANNEL_GROUP_DEFS.find(
-  (g) => g.key === 'paid-search-bundle'
-)?.label;
-
 function paidSearchFilterLabelForRaw(rawName) {
   const key = normalizeChannelKey(rawName);
   return (
@@ -56,9 +50,8 @@ function paidSearchFilterLabelForRaw(rawName) {
 
 /** Map one filter label → raw GA4 channel names for p_channels. */
 function expandFilterLabelToRpcChannels(label) {
-  if (label === PAID_SEARCH_BUNDLE_LABEL) {
-    const group = CHANNEL_GROUP_DEFS.find((g) => g.label === label);
-    return group ? [...group.members] : [label];
+  if (label === LEGACY_PAID_SEARCH_BUNDLE_LABEL) {
+    return [...VDP_PAID_SEARCH_FILTER_CHANNELS, 'Cross Network'];
   }
   if (normalizeChannelKey(label) === normalizeChannelKey('Cross-network')) {
     return ['Cross-network', 'Cross Network'];
@@ -68,11 +61,11 @@ function expandFilterLabelToRpcChannels(label) {
   return [label];
 }
 
-/** Expand legacy bundle label into separate paid filter options. */
+/** Expand legacy paid bundle label into separate paid filter options. */
 function migrateLegacyChannelFilterLabels(labels) {
   const out = [];
   for (const label of labels) {
-    if (label === PAID_SEARCH_BUNDLE_LABEL) {
+    if (label === LEGACY_PAID_SEARCH_BUNDLE_LABEL) {
       out.push(...VDP_PAID_SEARCH_FILTER_CHANNELS);
     } else {
       out.push(label);
@@ -103,19 +96,21 @@ export function collapseChannelsToFilterLabels(rawChannels) {
   const remaining = new Set(raw.map((c) => normalizeChannelKey(c)));
   const labels = [];
 
-  for (const group of CHANNEL_GROUP_DEFS) {
-    if (group.key === 'paid-search-bundle') {
-      for (const member of group.members) {
-        const key = normalizeChannelKey(member);
-        if (remaining.has(key)) {
-          const filterLabel = paidSearchFilterLabelForRaw(member);
-          if (!labels.includes(filterLabel)) labels.push(filterLabel);
-          remaining.delete(key);
-        }
-      }
-      continue;
+  for (const member of VDP_PAID_SEARCH_FILTER_CHANNELS) {
+    const key = normalizeChannelKey(member);
+    if (remaining.has(key)) {
+      const filterLabel = paidSearchFilterLabelForRaw(member);
+      if (!labels.includes(filterLabel)) labels.push(filterLabel);
+      remaining.delete(key);
     }
+  }
+  // GA4 may emit "Cross Network" — same filter as Cross-network
+  if (remaining.has(normalizeChannelKey('Cross Network'))) {
+    if (!labels.includes('Cross-network')) labels.push('Cross-network');
+    remaining.delete(normalizeChannelKey('Cross Network'));
+  }
 
+  for (const group of CHANNEL_GROUP_DEFS) {
     const hit = group.members.some((m) => remaining.has(normalizeChannelKey(m)));
     if (hit) {
       labels.push(group.label);

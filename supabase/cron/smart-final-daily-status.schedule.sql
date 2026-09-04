@@ -1,18 +1,7 @@
--- Smart Final Data daily status email (Google SMTP).
+-- Smart Analytics Data Update daily email
 -- Edge: smart-final-daily-status
---   • Lists every active GA4 dealer
---   • smart_final_data coverage for last 7 report_dates + rebuilt today
---   • Emails YES/NO + row/matched counts via Google SMTP
---
--- Window: after Step 3 (Hoot/QS/Scrap)
---   10:00 AM IST = 04:30 UTC
---   10:15 AM IST = 04:45 UTC (retry)
---
--- Deploy:
---   1. supabase/rpc/get_smart_final_daily_status.sql
---   2. supabase functions deploy smart-final-daily-status
---   3. Set Edge secret SMTP_PASS (Google app password) if not already
---   4. Replace __SERVICE_ROLE_KEY__ OR use migration that reuses existing cron key
+-- 10:30 AM IST = 05:00 UTC
+-- 10:45 AM IST = 05:15 UTC (retry)
 
 DO $$
 DECLARE
@@ -25,10 +14,10 @@ BEGIN
   END LOOP;
 END $$;
 
--- 10:00 AM IST → 04:30 UTC
+-- 10:30 AM IST → 05:00 UTC
 SELECT cron.schedule(
   'smart-final-daily-status',
-  '30 4 * * *',
+  '0 5 * * *',
   $$
   SELECT net.http_post(
     url := 'https://rllwmeqingvuohyctddg.supabase.co/functions/v1/smart-final-daily-status',
@@ -41,10 +30,10 @@ SELECT cron.schedule(
   $$
 );
 
--- 10:15 AM IST → 04:45 UTC (retry / catch late scrap)
+-- 10:45 AM IST → 05:15 UTC (retry)
 SELECT cron.schedule(
   'smart-final-daily-status-2',
-  '45 4 * * *',
+  '15 5 * * *',
   $$
   SELECT net.http_post(
     url := 'https://rllwmeqingvuohyctddg.supabase.co/functions/v1/smart-final-daily-status',

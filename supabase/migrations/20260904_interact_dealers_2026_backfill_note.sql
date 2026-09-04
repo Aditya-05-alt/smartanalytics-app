@@ -1,0 +1,11 @@
+-- Interact RV dealers full-2026 make/model/type backfill (excl Midway + Utah 5978801601).
+-- Applied 2026-09-04 via MCP + RPC.
+--
+-- 1) Copied Midway vdp_logic_2 product regex onto Interact dealers (Bill Thomas got
+--    /rv-inventory/... pattern instead — different CMS URL shape).
+-- 2) backfill_interact_dealer_2026(client_id): URL make/model + filler type.
+-- 3) backfill_interact_type_only_2026(client_id): fuzzy model type fill.
+-- 4) backfill_bill_thomas_2026(): rv-inventory parse with type from URL segment.
+-- 5) Make-level filler fallback for remaining blanks.
+--
+-- Excluded: 6460838510 Midway, 5978801601 The RV Store of Utah.

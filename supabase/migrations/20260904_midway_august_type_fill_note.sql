@@ -1,0 +1,12 @@
+-- Midway RV Center (6460838510) August 2026 type backfill.
+-- Applied 2026-09-04 via MCP (one-time).
+--
+-- What we did:
+-- 1) Enriched smart_custom_unknown_fillers (cms = 'Interact RV') from Midway hoot
+--    raw_data->>'RV_type' make/model pairs (+ a few manual Interact combinations).
+-- 2) Synced inv_type <- inv_custom_type for Aug Midway rows that already had custom type
+--    but blank inv_type (so type filters / UIs reading inv_type work).
+-- 3) Filled remaining blank inv_custom_type + inv_type from fillers (prefer Midway hoot
+--    majority type when make/model has multiple filler types).
+--
+-- Result: 0 blank inv_type / inv_custom_type for Midway Aug 2026.

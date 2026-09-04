@@ -1,8 +1,7 @@
 -- Refresh All Dealers channel MVs once daily in the 8:30–9:30 AM IST window.
 -- 8:30 AM IST = 03:00 UTC
---
--- Requires: pg_cron + unique indexes on each MV (for CONCURRENTLY).
--- Deploy: run this in Supabase SQL editor after creating the MVs.
+-- statement_timeout raised: full refresh was canceling at ~2 minutes and
+-- leaving mv_ga4_channel_daily stale (Current Month matrix empty).
 
 DO $$
 DECLARE
@@ -25,17 +24,26 @@ END $$;
 SELECT cron.schedule(
   'refresh-mv-ga4-channel-daily',
   '0 3 * * *',
-  $$REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;$$
+  $cron$
+  SET statement_timeout TO '900000';
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;
+  $cron$
 );
 
 SELECT cron.schedule(
   'refresh-mv-ga4-channel-monthly',
   '5 3 * * *',
-  $$REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_monthly;$$
+  $cron$
+  SET statement_timeout TO '900000';
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_monthly;
+  $cron$
 );
 
 SELECT cron.schedule(
   'refresh-mv-ga4-channel-yearly',
   '10 3 * * *',
-  $$REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_yearly;$$
+  $cron$
+  SET statement_timeout TO '900000';
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_yearly;
+  $cron$
 );

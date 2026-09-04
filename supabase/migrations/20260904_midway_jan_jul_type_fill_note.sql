@@ -1,0 +1,12 @@
+-- Midway RV Center (6460838510) Jan–Jul 2026 type (+ make/model) backfill.
+-- Applied 2026-09-04 via MCP (one-time).
+--
+-- Steps:
+-- 1) URL-parse missing make/model from /product/{condition}-{year}-... paths
+--    via smart_make / smart_models (longest slug); derive model from slug when catalog miss.
+-- 2) Enrich smart_custom_unknown_fillers (cms = Interact RV) from Midway hoot RV_type
+--    + Interact dominant types + Midway-specific combinations.
+-- 3) Sync inv_type <- inv_custom_type; fill blanks from fillers
+--    (hoot make/model preferred, then unique filler, then make-alias / make-level hoot).
+--
+-- Result: 0 blank inv_type / inv_custom_type for Midway Jan–Jul 2026.
