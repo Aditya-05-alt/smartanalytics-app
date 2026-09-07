@@ -8,8 +8,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/** Edge wall-clock limit — more groups (not a longer single invoke) is the scale lever. */
 const GLOBAL_BUDGET_MS = 140_000;
-const DEFAULT_GROUP_COUNT = 10;
+/** Smaller batches so every dealer is covered across parallel cron posts. */
+const DEFAULT_GROUP_COUNT = 15;
 
 /** Destination Cycle — handled only by smart-master-sync-qs. */
 const PAGE_PATH_QS_CLIENT_IDS = new Set(["1421445735"]);
@@ -25,9 +27,11 @@ function pickDealerGroup(
 }
 
 /**
- * Hoot Step 3 ONLY — build_smart_final_data per dealer.
- * Skips Destination Cycle (QS) and scrap_link=on dealers (handled by separate fns).
- * Pass group_id + group_count from cron so all ~88 dealers finish under 140s budget.
+ * Hoot Step 3 — build_smart_final_data per dealer.
+ * NEW (safe): run apply_vdp_filtration for the same dealer/days_back first so
+ * Step 3 is not wall-clock-dependent on the separate Step 2 cron finishing.
+ * Skips Destination Cycle (QS) and scrap_link=on dealers (separate fns).
+ * Pass group_id + group_count from cron so all dealers finish under 140s budget.
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -53,6 +57,8 @@ serve(async (req) => {
     body?.group_count != null
       ? Math.max(1, Number(body.group_count))
       : DEFAULT_GROUP_COUNT;
+  /** Default true — set run_step2:false only for emergency Step3-only reruns. */
+  const runStep2 = body?.run_step2 !== false;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -99,19 +105,41 @@ serve(async (req) => {
         : `${clientIds.length} hoot dealers`;
 
     console.log(
-      `🧹 Hoot Step 3 (build_smart_final_data) for ${scope} (days_back=${daysBack})`,
+      `🧹 Hoot Step 3 (build_smart_final_data) for ${scope} (days_back=${daysBack}, run_step2=${runStep2})`,
     );
 
     const results: Record<string, unknown>[] = [];
+    const skippedBudget: string[] = [];
     let totalRows = 0;
     let totalVdpTrue = 0;
     let cutoffReached = false;
 
-    for (const clientId of batchIds) {
+    for (let i = 0; i < batchIds.length; i++) {
+      const clientId = batchIds[i];
       if (Date.now() - startTime > GLOBAL_BUDGET_MS - 5_000) {
         console.log(`⏱️ Budget reached — stopping before ${clientId}`);
         cutoffReached = true;
+        skippedBudget.push(...batchIds.slice(i));
         break;
+      }
+
+      if (runStep2) {
+        const { error: filtErr } = await supabase.rpc("apply_vdp_filtration", {
+          p_client_id: clientId,
+          p_days_back: daysBack,
+        });
+        if (filtErr) {
+          console.error(
+            `❌ [${clientId}] apply_vdp_filtration: ${filtErr.message}`,
+          );
+          results.push({
+            client_id: clientId,
+            rpc: "apply_vdp_filtration",
+            status: "error",
+            error: filtErr.message,
+          });
+          continue;
+        }
       }
 
       const { data, error } = await supabase.rpc("build_smart_final_data", {
@@ -149,6 +177,7 @@ serve(async (req) => {
         account_name: row?.out_account_name ?? row?.account_name ?? null,
         rpc: "build_smart_final_data",
         status: "ok",
+        step2_ran: runStep2,
         total_rows: rows,
         vdp_true_rows: vdp,
       });
@@ -164,9 +193,11 @@ serve(async (req) => {
         rpc: "build_smart_final_data",
         scope,
         days_back: daysBack,
+        run_step2: runStep2,
         group_id: groupId,
         group_count: groupCount,
         cutoff_reached: cutoffReached,
+        skipped_budget_client_ids: skippedBudget,
         total_dealers: clientIds.length,
         batch_dealers: batchIds.length,
         processed_dealers: results.length,

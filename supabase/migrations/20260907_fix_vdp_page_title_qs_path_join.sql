@@ -1,0 +1,8 @@
+-- Destination Cycle page titles: join GA4 via page_path_q_s when present
+-- (ELSE page_path for all other dealers). Index-friendly OR form.
+-- Also allow ®™© in title ASCII filter so real GA4 titles show.
+--
+-- Source of truth: supabase/rpc/get_vdp_page_title_by_channel.sql
+-- Applied 2026-09-07 via MCP:
+--   fix_vdp_page_title_qs_path_join
+--   fix_vdp_page_title_qs_join_index_friendly

@@ -51,7 +51,28 @@ serve(async (req) => {
     let totalRows = 0;
     let totalVdpTrue = 0;
 
+    const runStep2 = body?.run_step2 !== false;
+
     for (const clientId of clientIds) {
+      if (runStep2) {
+        const { error: filtErr } = await supabase.rpc("apply_vdp_filtration", {
+          p_client_id: clientId,
+          p_days_back: daysBack,
+        });
+        if (filtErr) {
+          console.error(
+            `❌ [${clientId}] apply_vdp_filtration: ${filtErr.message}`,
+          );
+          results.push({
+            client_id: clientId,
+            rpc: "apply_vdp_filtration",
+            status: "error",
+            error: filtErr.message,
+          });
+          continue;
+        }
+      }
+
       const { data, error } = await supabase.rpc("build_smart_final_data_qs", {
         p_client_id: clientId,
         p_days_back: daysBack,

@@ -27,7 +27,8 @@ const PAGE_SIZE = 1500;
 const SETTLING_DAYS = 5;
 
 /** Dealers that store pathname+query in page_path_q_s (page_path stays pathname-only). */
-const PAGE_PATH_QS_CLIENT_IDS = new Set(["1421445735"]);
+/** Destination Cycle + XGRID (Dealer Spike query-string VDPs). */
+const PAGE_PATH_QS_CLIENT_IDS = new Set(["1421445735", "7231326744"]);
 
 const todayUTC = () => new Date().toISOString().split("T")[0];
 
@@ -235,7 +236,7 @@ serve(async (req) => {
     const settlingCutoff = daysAgoUTC(SETTLING_DAYS);
 
     log(
-      `=== GA4 PAGE SYNC V36 (Admin-aligned pageLocation) - ${modeLabel} ===`,
+      `=== GA4 PAGE SYNC V37 (page_path_q_s: Destination Cycle + XGRID) - ${modeLabel} ===`,
     );
     log(`Window: ${dateFrom} -> ${dateTo} ${windowMode}`);
     log(

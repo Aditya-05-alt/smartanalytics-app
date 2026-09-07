@@ -17,7 +17,8 @@ const DEALER_BUDGET_MS = 100_000;
 const PAGE_SIZE = 1500;
 
 /** Dealers that store pathname+query in page_path_q_s (page_path stays pathname-only). */
-const PAGE_PATH_QS_CLIENT_IDS = new Set(["1421445735"]);
+/** Destination Cycle + XGRID (Dealer Spike query-string VDPs). */
+const PAGE_PATH_QS_CLIENT_IDS = new Set(["1421445735", "7231326744"]);
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const todayUTC = () => new Date().toISOString().split("T")[0];
@@ -85,7 +86,7 @@ serve(async (req) => {
         ? `Group ${groupId}`
         : "ALL DEALERS";
 
-    log(`=== GA4 PAGE SYNC V31 (page_path_q_s for opted-in dealers) — ${modeLabel} ===`);
+    log(`=== GA4 PAGE SYNC V32 (page_path_q_s: Destination Cycle + XGRID) — ${modeLabel} ===`);
     log(`Window: ${dateFrom} → ${dateTo}`);
 
     let q = supabase

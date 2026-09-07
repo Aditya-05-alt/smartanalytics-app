@@ -27,37 +27,56 @@ BEGIN
     AND public.ga4_property_scope_matches(g.ga4_property_id, h.ga4_property_id)
     AND (p_client_id IS NULL OR g.client_id = p_client_id);
 
+  -- Match on ga4_effective_page_path (page_path_q_s when set) — same as cron Step 2.
   RETURN QUERY
   WITH updated_data AS (
     UPDATE smart_ga4_page_data g
     SET
-      vdp_conditions = public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic),
+      vdp_conditions = public.page_path_matches_vdp_logic(
+        public.ga4_effective_page_path(g.page_path, g.page_path_q_s),
+        sl.vdp_logic
+      ),
 
       ga4_page_type = CASE
-        WHEN public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic) THEN 'VDP'
+        WHEN public.page_path_matches_vdp_logic(
+          public.ga4_effective_page_path(g.page_path, g.page_path_q_s),
+          sl.vdp_logic
+        ) THEN 'VDP'
         WHEN sl.home_page_logic IS NOT NULL AND sl.home_page_logic <> ''
              AND LOWER(sl.home_page_logic) NOT IN ('true','false')
              AND g.page_path ~* sl.home_page_logic THEN 'Home page'
         WHEN sl.srp_logic IS NOT NULL AND sl.srp_logic <> ''
              AND LOWER(sl.srp_logic) NOT IN ('true','false')
-             AND g.page_path ~* sl.srp_logic THEN 'SRP'
+             AND (
+               g.page_path ~* sl.srp_logic
+               OR public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ~* sl.srp_logic
+             ) THEN 'SRP'
         ELSE 'Other Page'
       END,
 
       vdp_vehicle_condition = CASE
-        WHEN public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic) THEN
+        WHEN public.page_path_matches_vdp_logic(
+          public.ga4_effective_page_path(g.page_path, g.page_path_q_s),
+          sl.vdp_logic
+        ) THEN
           CASE
-            WHEN g.page_path ILIKE '%new%'  THEN 'New'
-            WHEN g.page_path ILIKE '%used%' THEN 'Used'
+            WHEN public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%new%' THEN 'New'
+            WHEN public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%used%'
+              OR public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%preowned%' THEN 'Used'
             ELSE NULL
           END
         ELSE NULL
       END,
 
       year = CASE
-        WHEN public.page_path_matches_vdp_logic(g.page_path, sl.vdp_logic)
-             AND g.page_path ~* '\d{4}'
-        THEN SUBSTRING(g.page_path FROM '(\d{4})')::INTEGER
+        WHEN public.page_path_matches_vdp_logic(
+          public.ga4_effective_page_path(g.page_path, g.page_path_q_s),
+          sl.vdp_logic
+        )
+             AND public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ~* '\d{4}'
+        THEN SUBSTRING(
+          public.ga4_effective_page_path(g.page_path, g.page_path_q_s) FROM '(\d{4})'
+        )::INTEGER
         ELSE NULL
       END
 

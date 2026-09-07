@@ -133,7 +133,19 @@ AS $$
     JOIN public.smart_ga4_page_data p
       ON p.client_id = f.client_id
      AND p.report_date = f.report_date
-     AND p.page_path = f.page_path
+     -- QS dealers (Destination Cycle): match Final to page_path_q_s when present;
+     -- all others keep normal page_path (page_path_q_s is null).
+     -- Prefer direct column compare so indexes can be used (faster than wrapping in a function).
+     AND (
+       (
+         NULLIF(TRIM(p.page_path_q_s), '') IS NOT NULL
+         AND f.page_path = p.page_path_q_s
+       )
+       OR (
+         NULLIF(TRIM(p.page_path_q_s), '') IS NULL
+         AND f.page_path = p.page_path
+       )
+     )
      AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
      AND (p.vdp_conditions IS TRUE OR p.ga4_page_type ILIKE 'VDP%')
      AND (
@@ -189,8 +201,8 @@ AS $$
           WHERE b.ga4_page_title IS NOT NULL
             AND b.ga4_page_title !~ '^https?://'
             AND b.ga4_page_title NOT LIKE '/%'
-            -- ASCII only → drops Chinese / Greek / Cyrillic / Arabic / …
-            AND b.ga4_page_title !~ '[^[:ascii:]]'
+            -- ASCII + common trademark marks (®™©); still drops CJK / Cyrillic / …
+            AND translate(b.ga4_page_title, '®™©', '') !~ '[^[:ascii:]]'
         )
       )[1] AS ga4_page_title,
       SUM(b.views) FILTER (WHERE b.bucket = 'organic_search')::bigint AS organic_search,
@@ -220,7 +232,7 @@ AS $$
           WHEN m.final_page_title IS NOT NULL
            AND m.final_page_title !~ '^https?://'
            AND m.final_page_title NOT LIKE '/%'
-           AND m.final_page_title !~ '[^[:ascii:]]'
+           AND translate(m.final_page_title, '®™©', '') !~ '[^[:ascii:]]'
           THEN m.final_page_title
           ELSE NULL
         END,

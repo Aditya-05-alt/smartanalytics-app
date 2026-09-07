@@ -9,7 +9,8 @@ const corsHeaders = {
 };
 
 const GLOBAL_BUDGET_MS = 140_000;
-const DEFAULT_GROUP_COUNT = 4;
+/** More groups = smaller batches so scrap dealers are not skipped on budget. */
+const DEFAULT_GROUP_COUNT = 6;
 
 type RpcRow = Record<string, unknown>;
 
@@ -78,7 +79,7 @@ async function loadScrapClientIds(
 
 /**
  * Scrap Step 3 ONLY — build_smart_final_data_scrap for scrap_link=on dealers.
- * Independent of Hoot / QS. Cron should pass group_id 1..4 + group_count 4.
+ * Independent of Hoot / QS. Cron should pass group_id 1..6 + group_count 6.
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -104,6 +105,8 @@ serve(async (req) => {
     body?.group_count != null
       ? Math.max(1, Number(body.group_count))
       : DEFAULT_GROUP_COUNT;
+  /** Default true — Step 2 for same days before scrap Step 3. */
+  const runStep2 = body?.run_step2 !== false;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -124,7 +127,7 @@ serve(async (req) => {
         : `${clientIds.length} scrap dealer(s)`;
 
     console.log(
-      `🧹 Scrap Step 3 (build_smart_final_data_scrap) for ${scope} (days_back=${daysBack})`,
+      `🧹 Scrap Step 3 (build_smart_final_data_scrap) for ${scope} (days_back=${daysBack}, run_step2=${runStep2})`,
     );
 
     if (!clientIds.length) {
@@ -148,12 +151,15 @@ serve(async (req) => {
     const processed: RpcRow[] = [];
     const failures: { clientId: string; customerName: string; error: string }[] =
       [];
+    const skippedBudget: string[] = [];
     let cutoffReached = false;
 
-    for (const clientId of clientIds) {
+    for (let i = 0; i < clientIds.length; i++) {
+      const clientId = clientIds[i];
       if (Date.now() - startTime > GLOBAL_BUDGET_MS - 5_000) {
         console.log(`⏱️ Budget reached — stopping before ${clientId}`);
         cutoffReached = true;
+        skippedBudget.push(...clientIds.slice(i));
         break;
       }
 
@@ -164,6 +170,13 @@ serve(async (req) => {
 
       try {
         console.log(`  ▶ ${label} (${clientId})`);
+        if (runStep2) {
+          const { error: filtErr } = await supabase.rpc("apply_vdp_filtration", {
+            p_client_id: clientId,
+            p_days_back: daysBack,
+          });
+          if (filtErr) throw new Error(`Step2: ${filtErr.message}`);
+        }
         const { data, error } = await supabase.rpc(
           "build_smart_final_data_scrap",
           {
@@ -202,9 +215,11 @@ serve(async (req) => {
         rpc: "build_smart_final_data_scrap",
         scope,
         days_back: daysBack,
+        run_step2: runStep2,
         group_id: groupId,
         group_count: groupCount,
         cutoff_reached: cutoffReached,
+        skipped_budget_client_ids: skippedBudget,
         dealerCount: allIds.length,
         batch_dealers: clientIds.length,
         dealersSucceeded: clientIds.length - failures.length,
