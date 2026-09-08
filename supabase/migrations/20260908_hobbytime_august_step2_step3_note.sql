@@ -1,0 +1,10 @@
+-- Hobbytime Bolivar (7928680699) + Clinton (8846906688) — August 2026 backfill
+-- 1) logic_2 (+ live VDP): ^/.+-(Bolivar|Clinton)-MO-{uuid}G?
+-- 2) apply_vdp_filtration_range 2026-08-01..08-31
+-- 3) build_smart_final_data with DX1 UUID match + trailing-G path normalize
+--    (extract_dx1_listing_id_from_page_path; Final vdp_conditions follows GA4 VDP)
+-- 4) URL-parse leftovers: /{Type}-{Make}-{Model}-{Year}-{City}-MO-{uuid}
+--    location/type filled from path city + type prefix
+-- 5) Condition fill for URL-only rows: GA4 title (New/Used) → MMY inventory →
+--    year heuristic (2026/2027=New; <=2025=Used)
+-- Verified: Final VDP views = GA4 (4420 / 5578); unknowns = 0; blank condition = 0

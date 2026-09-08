@@ -1,0 +1,10 @@
+-- Johnson Bros Ford (2113544353) + Lincoln (2072369251) — August 2026 backfill
+-- 1) logic_2 = live VDP patterns (DealerOn Johnson+Brothers / Temple)
+-- 2) apply_vdp_filtration_range 2026-08-01..08-31
+-- 3) build_smart_final_data (Final VDP follows GA4)
+-- 4) Leftover parse from path: /(new|used)-{dealer}-{year}-{make}-{model}-{vin}
+-- 5) Location: Ford=Johnson Brothers Ford; Lincoln=Temple
+-- Verified: Final=GA4 (23755 / 1465); unknowns=0; blank loc/cond=0
+-- Type fix (Ford): Hoot type_ had numeric junk; correct label is raw_data->>'Type'.
+-- Inventory type_ already corrected; Final Aug backfilled via VIN (6635 rows).
+-- Type chart now Truck/SUV/Sedan/... (still_numeric=0).

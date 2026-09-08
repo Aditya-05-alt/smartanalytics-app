@@ -6,7 +6,11 @@ import { loadGcpServiceAccountCredentials } from '@/lib/pipeline/gcpCredentials'
 const DEFAULT_PAGE_TABLE = 'smart_ga4_page_data';
 const CONFIG_TABLE = 'smart_ga4_config';
 /** Dealers that store pathname+query in page_path_q_s (page_path stays pathname-only). */
-const PAGE_PATH_QS_CLIENT_IDS = new Set(['1421445735']);
+const PAGE_PATH_QS_CLIENT_IDS = new Set([
+  '1421445735',
+  '7231326744',
+  '7543766464', // Jay's Power Center
+]);
 const CHUNK_SIZE = 500;
 const GLOBAL_BUDGET_MS = 130_000;
 const DEALER_BUDGET_MS = 100_000;

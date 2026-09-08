@@ -1,0 +1,11 @@
+-- BP Greenville (3244269598), Longview (5100919895), Tyler (3787010900) — August 2026 backfill
+-- 1) smart_vdp_logic_2 city UUID patterns (optional trailing G):
+--    ^/.+-Greenville-TX-{uuid}G?
+--    ^/.+-Longview-TX-{uuid}G?
+--    ^/.+-Tyler-TX-{uuid}G?
+-- 2) apply_vdp_filtration_range 2026-08-01..08-31
+-- 3) build_smart_final_data (DX1 UUID/G match; Final VDP follows GA4)
+-- 4) URL-parse leftovers + location/type from path
+-- 5) Condition fill: title → MMY inventory → year heuristic
+-- 6) Overwrite inv_year '0' from path year (-YYYY-City-TX-)
+-- Verified: Final VDP = GA4; unknowns = 0; year 0 = 0

@@ -1,0 +1,5 @@
+-- Camp-A-Rama (8182570850) August 2026 redo:
+-- 1) Tightened vdp_logic to SEO unit paths only (removed inventory? SRP OR clause)
+-- 2) apply_vdp_filtration_range 2026-08-01..08-31 (uses page_path_q_s when set)
+-- 3) build_smart_final_data_scrap 2026-08-01..08-31
+-- Applied 2026-09-08 via MCP.

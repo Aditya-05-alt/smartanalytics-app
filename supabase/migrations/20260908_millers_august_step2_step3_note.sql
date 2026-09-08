@@ -1,0 +1,8 @@
+-- Millers RV (7816421446) — August 2026 backfill
+-- 1) smart_vdp_logic_2: ^/inventory/[0-9]{4}-.+
+-- 2) apply_vdp_filtration_range 2026-08-01..08-31
+-- 3) build_smart_final_data (Final VDP follows GA4)
+-- 4) URL-parse leftovers: /inventory/{year}-{make}-{model}-{stock}
+-- 5) Location = Millers; condition from year when blank
+-- 6) Partial type fill via Interact RV fillers
+-- Verified: Final VDP = GA4 40645; unknowns = 0; blank loc/cond = 0

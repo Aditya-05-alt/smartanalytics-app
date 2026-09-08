@@ -6,7 +6,10 @@ export const FINAL_RPC_HOOT_QS = 'build_smart_final_data_qs';
 export const FINAL_RPC_SCRAP = 'build_smart_final_data_scrap';
 
 /** Dealers that must use build_smart_final_data_qs (pathname+query matching). */
-export const PAGE_PATH_QS_CLIENT_IDS = new Set(['1421445735']);
+export const PAGE_PATH_QS_CLIENT_IDS = new Set([
+  '1421445735', // Destination Cycle
+  '7543766464', // Jay's Power Center — Spike InventoryDetail query VDPs
+]);
 
 /**
  * GA4 sync stores page_path_q_s for these dealers (Step 2/3 can use query string).
@@ -15,6 +18,7 @@ export const PAGE_PATH_QS_CLIENT_IDS = new Set(['1421445735']);
 export const GA4_PAGE_PATH_QS_CLIENT_IDS = new Set([
   '1421445735',
   '7231326744', // XGRID — Dealer Spike default.asp?page=…InventoryDetail
+  '7543766464', // Jay's Power Center — Spike InventoryDetail query VDPs
 ]);
 
 export function resolveHootFinalRpcName(clientId) {

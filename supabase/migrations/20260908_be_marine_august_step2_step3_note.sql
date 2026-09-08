@@ -1,0 +1,9 @@
+-- B&E Marine (9990551793) August 2026:
+-- 1) smart_vdp_logic_2 = ^/inventory/\d{4}-.+
+-- 2) apply_vdp_filtration_range 2026-08-01..08-31 (4782 GA4 rows)
+-- 3) build_smart_final_data_scrap 2026-08-01..08-31 (1322 Final VDP rows, 3421 views)
+-- 4) URL-parse 9 leftover sold/order paths (14 views) → inv_year/make/model
+-- 5) Condition Other: blank inv_condition ← vdp_vehicle_condition (Used→Pre-Owned)
+-- 6) Location Other: blank inv_location ← Michigan City, IN (scrap also blank)
+-- Result: August unknowns 0; Final VDP = GA4 3421; no Other in condition/location
+-- Applied 2026-09-08 via MCP. August only.

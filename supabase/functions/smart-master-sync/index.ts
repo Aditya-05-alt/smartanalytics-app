@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,8 +13,11 @@ const GLOBAL_BUDGET_MS = 140_000;
 /** Smaller batches so every dealer is covered across parallel cron posts. */
 const DEFAULT_GROUP_COUNT = 15;
 
-/** Destination Cycle — handled only by smart-master-sync-qs. */
-const PAGE_PATH_QS_CLIENT_IDS = new Set(["1421445735"]);
+/** Destination Cycle + Jay's — handled only by smart-master-sync-qs. */
+const PAGE_PATH_QS_CLIENT_IDS = new Set([
+  "1421445735",
+  "7543766464", // Jay's Power Center — QS Step 3
+]);
 
 function pickDealerGroup(
   clientIds: string[],

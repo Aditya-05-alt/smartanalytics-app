@@ -1,0 +1,9 @@
+-- BC - McKibben Boating Center (7979377615) August 2026:
+-- 1) smart_vdp_logic_2 = ^/units/info/\d{10}
+-- 2) scrap Step 3: extract_mng_unit_id_from_page_path + by_mng match
+--    (SEO slug paths → short scrap /units/info/{10id})
+-- 3) apply_vdp_filtration_range 2026-08-01..08-31 (6199 GA4 rows)
+-- 4) build_smart_final_data_scrap 2026-08-01..08-31 (2373 Final VDP rows)
+-- 5) URL-parse / page_title / unit-id propagate leftovers; 11 orphan short IDs → make Unknown
+-- Result: unknowns 0; Final VDP = GA4 7410
+-- Applied 2026-09-08 via MCP. August only.

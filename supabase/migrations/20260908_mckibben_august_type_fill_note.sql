@@ -1,0 +1,7 @@
+-- BC - McKibben Boating Center (7979377615) August 2026 type fill:
+-- 1) Seed smart_custom_unknown_fillers cms='McKibben' from scrap + typed Final
+-- 2) Apply make+model → type (exact / fuzzy / make-level / keyword)
+-- 3) Insert heuristic make+model types back into fillers (same cms)
+-- Types: Boats, Golf Carts, Trailers, Outboards, Cars, Powersports
+-- Result: August blank inv_type = 0
+-- Applied 2026-09-08 via MCP.

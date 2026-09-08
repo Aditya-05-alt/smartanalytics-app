@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,11 +8,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-/** Destination Cycle — page_path_q_s Step 3 (independent of Hoot / Scrap). */
-const QS_CLIENT_IDS = ["1421445735"];
+/** Destination Cycle + Jay's Power Center — page_path_q_s Step 3. */
+const QS_CLIENT_IDS = ["1421445735", "7543766464"];
 
 /**
- * QS Step 3 ONLY — build_smart_final_data_qs for Destination Cycle.
+ * QS Step 3 ONLY — build_smart_final_data_qs for Destination Cycle + Jay's.
  * Does not touch other dealers. Independent cron/edge from Hoot and Scrap.
  */
 serve(async (req) => {

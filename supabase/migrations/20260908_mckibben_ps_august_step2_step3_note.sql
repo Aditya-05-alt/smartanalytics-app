@@ -1,0 +1,10 @@
+-- McKibben Powersports (except BC) August 2026:
+-- Dealers: LB 2097350174, LW 9713006747, SB 7725571478
+-- 1) smart_vdp_logic_2 = ^/units/info/\d{10}
+-- 2) apply_vdp_filtration_range Aug (LB 11475 / LW 28761 / SB 25337 GA4 rows)
+-- 3) build_smart_final_data_scrap Aug (MNG by_mng unit-id match)
+-- 4) URL-parse / unit-id propagate / cross-McKibben scrap / title / Unknown orphans
+-- 5) Fill blank inv_condition + inv_location (modal per dealer)
+-- 6) Type fill via smart_custom_unknown_fillers cms=McKibben (+ keyword)
+-- Result: unknowns 0; Final VDP = GA4 (9298 / 29134 / 26884); blank type 0
+-- Applied 2026-09-08 via MCP. August only.

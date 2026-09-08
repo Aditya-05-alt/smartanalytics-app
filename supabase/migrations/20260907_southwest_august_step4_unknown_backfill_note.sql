@@ -1,0 +1,6 @@
+-- Step 4: SouthWest Nissan (1992343311) + SouthWest Volkswagen (9052006098)
+-- August 2026 unknown → inv_* write-back via smart_vdp_logic_2.
+-- Applied 2026-09-07 via MCP.
+-- Parse DealerOn /{condition}-{city}-{year}-{make}-{model...}-{vin}
+-- Prefer Hoot VIN match when present; else URL parse.
+-- Result: Final unknown_strict → 0 for both dealers (Aug 2026).

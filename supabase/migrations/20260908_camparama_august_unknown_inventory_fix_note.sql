@@ -1,0 +1,7 @@
+-- Camp-A-Rama (8182570850) August 2026 unknown / inventory-gap fix.
+-- Applied 2026-09-08 via MCP.
+--
+-- 1) smart_vdp_logic_2.vdp_logic = ^/inventory/.+/\d{4}-.+/
+-- 2) Matched Final unknowns to scrap via Benton-KY listing id (24-hex),
+--    because GA4 paths use literal () while scrap URLs use %28%29.
+-- 3) Filled inv_* + vdp_conditions on 135 Final row-days / 10 paths.

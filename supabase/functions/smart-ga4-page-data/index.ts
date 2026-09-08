@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { JWT } from "https://esm.sh/google-auth-library@9.0.0";
+import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { JWT } from "npm:google-auth-library@9.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,8 +17,12 @@ const DEALER_BUDGET_MS = 100_000;
 const PAGE_SIZE = 1500;
 
 /** Dealers that store pathname+query in page_path_q_s (page_path stays pathname-only). */
-/** Destination Cycle + XGRID (Dealer Spike query-string VDPs). */
-const PAGE_PATH_QS_CLIENT_IDS = new Set(["1421445735", "7231326744"]);
+/** Destination Cycle + XGRID + Jay's Power Center (Dealer Spike query VDPs). */
+const PAGE_PATH_QS_CLIENT_IDS = new Set([
+  "1421445735",
+  "7231326744",
+  "7543766464",
+]);
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const todayUTC = () => new Date().toISOString().split("T")[0];
@@ -86,7 +90,7 @@ serve(async (req) => {
         ? `Group ${groupId}`
         : "ALL DEALERS";
 
-    log(`=== GA4 PAGE SYNC V32 (page_path_q_s: Destination Cycle + XGRID) — ${modeLabel} ===`);
+    log(`=== GA4 PAGE SYNC V33 (page_path_q_s: Dest Cycle + XGRID + Jay's) — ${modeLabel} ===`);
     log(`Window: ${dateFrom} → ${dateTo}`);
 
     let q = supabase

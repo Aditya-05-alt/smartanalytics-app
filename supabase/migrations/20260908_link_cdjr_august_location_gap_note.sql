@@ -1,0 +1,5 @@
+-- Link CDJR Rice Lake (3166555059) — August 2026
+-- 1) Flipped 18 Final rows (22 views) to vdp_conditions=true to match GA4 VDP
+--    (paths existed in Final but flagged non-VDP; filled make/year/model/url from Dealer.com path)
+-- 2) inv_location = 'Rice Lake' for all blank August VDP rows
+-- Verified: Final=GA4 9529; unknowns=0; blank loc=0

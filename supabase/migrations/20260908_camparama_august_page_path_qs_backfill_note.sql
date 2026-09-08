@@ -1,0 +1,3 @@
+-- Camp-A-Rama (8182570850) August 2026 only: backfill page_path_q_s from page_location.
+-- Analysis-only; dealer NOT added to permanent PAGE_PATH_QS allow-lists.
+-- Applied 2026-09-08 via MCP: 6063 rows updated, 2560 with query string.

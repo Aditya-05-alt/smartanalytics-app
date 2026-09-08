@@ -1,0 +1,5 @@
+-- Kokomo type fill (cms = 'Kokomo' in smart_custom_unknown_fillers).
+-- Applied 2026-09-08 via MCP.
+-- 1) Updated all 100 filler rows from type=Unknown → SUV/Sedan/Truck/Van/Hatchback/Coupe
+-- 2) Pushed types to smart_final_data Aug 2026 (Honda+Toyota) inv_type + inv_custom_type
+-- 3) Pushed types to smart_hoot_inventory type_ for Kokomo Honda + Toyota

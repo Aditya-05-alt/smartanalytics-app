@@ -1,0 +1,4 @@
+-- Kokomo Honda + Toyota → smart_custom_unknown_fillers
+-- cms = 'Kokomo'; make/model from Hoot inventory + Final Aug 2026;
+-- type seeded as 'Unknown' so it can be edited, then used to fill inv_type.
+-- Applied 2026-09-08 via MCP.

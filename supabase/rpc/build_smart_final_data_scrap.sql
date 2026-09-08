@@ -1,7 +1,16 @@
 -- Scrap Step 3 — independent of Hoot / QS.
 -- Fast path: dealer-scoped scrap (+ optional same-dealer hoot) inventory,
--- path equality / VIN / Dealer Spike id= (no full-table LIKE over 77k rows).
+-- path equality / VIN / Dealer Spike id= / MNG Pro Tech /units/info/{10-digit}
+-- (no full-table LIKE over 77k rows).
 -- Includes inv_custom_type (Destination Cycle / smart_final_data column).
+
+CREATE OR REPLACE FUNCTION public.extract_mng_unit_id_from_page_path(p_page_path text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT (regexp_match(lower(btrim(COALESCE(p_page_path, ''))), '/units/info/([0-9]{10})'))[1];
+$$;
 
 CREATE OR REPLACE FUNCTION public.build_smart_final_data_scrap(
   p_client_id text DEFAULT NULL,
@@ -94,6 +103,9 @@ BEGIN
       public.extract_dealer_spike_listing_id_from_page_path(
         public.ga4_effective_page_path(g.page_path, g.page_path_q_s)
       ) AS spike_id,
+      public.extract_mng_unit_id_from_page_path(
+        public.ga4_effective_page_path(g.page_path, g.page_path_q_s)
+      ) AS mng_unit_id,
       MAX(g.page_location)                 AS page_location,
       MAX(g.page_title)                    AS page_title,
       MAX(g.ga4_page_type)                 AS ga4_page_type,
@@ -126,6 +138,7 @@ BEGIN
       NULLIF(TRIM(i.customer_id), '')::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
       lower(split_part(regexp_replace(lower(btrim(i.url)), '^https?://[^/]+', ''), '?', 1)) AS url_path,
+      public.extract_mng_unit_id_from_page_path(i.url) AS mng_unit_id,
       COALESCE(
         NULLIF(upper(btrim(i.vin)), ''),
         public.extract_vin_from_text(i.url)
@@ -169,6 +182,7 @@ BEGIN
       NULL::text AS ga4_customer_id,
       LOWER(TRIM(i.url)) AS url_lower,
       lower(split_part(regexp_replace(lower(btrim(i.url)), '^https?://[^/]+', ''), '?', 1)) AS url_path,
+      public.extract_mng_unit_id_from_page_path(i.url::text) AS mng_unit_id,
       COALESCE(
         NULLIF(upper(btrim(i.vin::text)), ''),
         public.extract_vin_from_text(i.url::text)
@@ -281,24 +295,44 @@ BEGIN
       ORDER BY x.match_priority ASC
       LIMIT 1
     ) by_spike ON TRUE
+    -- MNG Pro Tech: GA4 may use /units/info/{10id}/SEO-slug while scrap is /units/info/{10id}
+    LEFT JOIN LATERAL (
+      SELECT x.*
+      FROM inv_norm x
+      WHERE by_path.sk IS NULL
+        AND by_vin.sk IS NULL
+        AND by_spike.sk IS NULL
+        AND u.mng_unit_id IS NOT NULL
+        AND x.mng_unit_id IS NOT NULL
+        AND x.mng_unit_id = u.mng_unit_id
+        AND (
+          x.ga4_customer_id = trim(u.client_id)
+          OR (
+            c.customer_name IS NOT NULL
+            AND x.customer_name_key = LOWER(TRIM(c.customer_name))
+          )
+        )
+      ORDER BY x.match_priority ASC, LENGTH(x.url_lower) DESC NULLS LAST
+      LIMIT 1
+    ) by_mng ON TRUE
     CROSS JOIN LATERAL (
       SELECT
-        COALESCE(by_path.sk, by_vin.sk, by_spike.sk) AS sk,
-        COALESCE(by_path.vin, by_vin.vin, by_spike.vin) AS vin,
-        COALESCE(by_path.url, by_vin.url, by_spike.url) AS url,
-        COALESCE(by_path.make, by_vin.make, by_spike.make) AS make,
-        COALESCE(by_path.model, by_vin.model, by_spike.model) AS model,
-        COALESCE(by_path.year, by_vin.year, by_spike.year) AS year,
-        COALESCE(by_path.trim, by_vin.trim, by_spike.trim) AS trim,
-        COALESCE(by_path.price, by_vin.price, by_spike.price) AS price,
-        COALESCE(by_path.msrp, by_vin.msrp, by_spike.msrp) AS msrp,
-        COALESCE(by_path.condition, by_vin.condition, by_spike.condition) AS condition,
-        COALESCE(by_path.type_, by_vin.type_, by_spike.type_) AS type_,
-        COALESCE(by_path.stock_number, by_vin.stock_number, by_spike.stock_number) AS stock_number,
-        COALESCE(by_path.location, by_vin.location, by_spike.location) AS location,
-        COALESCE(by_path.first_seen, by_vin.first_seen, by_spike.first_seen) AS first_seen,
-        COALESCE(by_path.last_seen, by_vin.last_seen, by_spike.last_seen) AS last_seen,
-        COALESCE(by_path.raw_data, by_vin.raw_data, by_spike.raw_data) AS raw_data
+        COALESCE(by_path.sk, by_vin.sk, by_spike.sk, by_mng.sk) AS sk,
+        COALESCE(by_path.vin, by_vin.vin, by_spike.vin, by_mng.vin) AS vin,
+        COALESCE(by_path.url, by_vin.url, by_spike.url, by_mng.url) AS url,
+        COALESCE(by_path.make, by_vin.make, by_spike.make, by_mng.make) AS make,
+        COALESCE(by_path.model, by_vin.model, by_spike.model, by_mng.model) AS model,
+        COALESCE(by_path.year, by_vin.year, by_spike.year, by_mng.year) AS year,
+        COALESCE(by_path.trim, by_vin.trim, by_spike.trim, by_mng.trim) AS trim,
+        COALESCE(by_path.price, by_vin.price, by_spike.price, by_mng.price) AS price,
+        COALESCE(by_path.msrp, by_vin.msrp, by_spike.msrp, by_mng.msrp) AS msrp,
+        COALESCE(by_path.condition, by_vin.condition, by_spike.condition, by_mng.condition) AS condition,
+        COALESCE(by_path.type_, by_vin.type_, by_spike.type_, by_mng.type_) AS type_,
+        COALESCE(by_path.stock_number, by_vin.stock_number, by_spike.stock_number, by_mng.stock_number) AS stock_number,
+        COALESCE(by_path.location, by_vin.location, by_spike.location, by_mng.location) AS location,
+        COALESCE(by_path.first_seen, by_vin.first_seen, by_spike.first_seen, by_mng.first_seen) AS first_seen,
+        COALESCE(by_path.last_seen, by_vin.last_seen, by_spike.last_seen, by_mng.last_seen) AS last_seen,
+        COALESCE(by_path.raw_data, by_vin.raw_data, by_spike.raw_data, by_mng.raw_data) AS raw_data
     ) iu
   )
   SELECT
@@ -376,7 +410,10 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.build_smart_final_data_scrap(text, integer, date, date) IS
-  'Scrap Step 3 only — dealer-scoped fast match (path/VIN/Dealer Spike). Independent of Hoot/QS.';
+  'Scrap Step 3 only — dealer-scoped fast match (path/VIN/Dealer Spike/MNG unit id). Independent of Hoot/QS.';
+
+COMMENT ON FUNCTION public.extract_mng_unit_id_from_page_path(text) IS
+  'Extract 10-digit MNG Pro Tech unit id from /units/info/{id} paths.';
 
 GRANT EXECUTE ON FUNCTION public.build_smart_final_data_scrap(text, integer, date, date)
   TO service_role;

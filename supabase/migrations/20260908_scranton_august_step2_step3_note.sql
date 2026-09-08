@@ -1,0 +1,7 @@
+-- Scranton Powersports (1037529590) — August 2026 backfill
+-- 1) smart_vdp_logic_2: ^/en/(new|used)/[a-z0-9-]+/inventory/[0-9]{4}-.+
+-- 2) apply_vdp_filtration_range 2026-08-01..08-31
+-- 3) build_smart_final_data (Final VDP follows GA4)
+-- 4) URL-parse 9 leftovers: /en/{new|used}/{type}/inventory/{year}-{make}-...-for-sale-{stock}/
+-- 5) Location = Scranton; type from path segment; condition from /new|/used
+-- Verified: Final VDP = GA4 11780; unknowns = 0

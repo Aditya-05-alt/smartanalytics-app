@@ -1,0 +1,10 @@
+-- Gainesville Harley-Davidson (9153783749) — Aug–Sep 2026 backfill
+-- 1) smart_vdp_logic_2 kept CURRENT logic (not tightened): ^/inventory/.*
+-- 2) apply_vdp_filtration_range 2026-08-01..2026-09-07
+-- 3) build_smart_final_data (Final VDP follows GA4)
+-- 4) Leftover parse: match Hoot by /inventory/{id}/; VIN-style + slug paths
+-- 5) Location = Gainesville; type = Motorcycles when make present
+-- 6) Exception cleanup: SRP new/used-vehicles filled; type Motorcycles; SRP years 2026/2025
+-- 7) Type from smart_custom_unknown_fillers (cms=Room 58, make+model→Motorcycles)
+--    also cleared inv_custom_type Other/Wagon/Truck/SUV
+-- Verified: Final VDP = GA4 15869; unknowns/cond/loc/type/year blank = 0; custom_type=Motorcycles
