@@ -257,7 +257,9 @@ export default function TopBar() {
   const pathname = usePathname();
   const { pending: navPending } = useNavigationLoading();
   const hideDealerPicker =
-    pathname?.startsWith('/dashboard/admin') || pathname?.startsWith('/reports');
+    pathname?.startsWith('/dashboard/admin') ||
+    pathname?.startsWith('/reports') ||
+    pathname?.startsWith('/dashboard/compare');
 
   return (
     <header className="topbar">

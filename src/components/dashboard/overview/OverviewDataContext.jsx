@@ -64,24 +64,30 @@ const EMPTY_VDP_FILTER_OPTIONS = {
   channels: ['All'],
 };
 
+function asSelectedList(value) {
+  if (Array.isArray(value)) return value.filter((v) => v && v !== 'All');
+  if (value && value !== 'All' && value !== 'Used + New') return [value];
+  return [];
+}
+
 function pruneInvalidFilterSelections(filters, options) {
   const next = { ...filters };
-  const singleKeys = ['year', 'make', 'model', 'type'];
-  for (const key of singleKeys) {
-    const list = options[`${key}s`] || options[key] || ['All'];
-    if (next[key] !== 'All' && !list.includes(next[key])) {
-      next[key] = 'All';
-    }
+  const multiKeys = ['year', 'make', 'model', 'type'];
+  for (const key of multiKeys) {
+    const list = (options[`${key}s`] || options[key] || ['All']).map(String);
+    next[key] = asSelectedList(next[key])
+      .map(String)
+      .filter((v) => list.includes(v));
   }
+
+  // Condition: only New / Used
+  const condAllowed = new Set(['New', 'Used']);
+  next.condition = asSelectedList(next.condition).filter((c) => condAllowed.has(c));
+
   // Location is multi-select (string[]); drop names no longer in options.
   // Match by identity so "Fresno CA" maps to canonical "Fresno, CA".
   const locList = options.locations || ['All'];
-  const selected = Array.isArray(next.location)
-    ? next.location
-    : next.location && next.location !== 'All'
-      ? [next.location]
-      : [];
-  next.location = selected
+  next.location = asSelectedList(next.location)
     .map((loc) => {
       if (locList.includes(loc)) return loc;
       const key = locationIdentityKey(loc);
@@ -93,12 +99,7 @@ function pruneInvalidFilterSelections(filters, options) {
 
   // Channel is multi-select (bundle labels + solos).
   const chList = options.channels || ['All'];
-  const chSelected = Array.isArray(next.channel)
-    ? next.channel
-    : next.channel && next.channel !== 'All'
-      ? [next.channel]
-      : [];
-  next.channel = chSelected.filter((c) => chList.includes(c));
+  next.channel = asSelectedList(next.channel).filter((c) => chList.includes(c));
   return next;
 }
 

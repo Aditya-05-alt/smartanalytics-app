@@ -14,7 +14,10 @@ BEGIN
       'refresh-mv-ga4-channel-daily',
       'mv_ga4_channel_daily_refresh',
       'refresh-mv-ga4-channel-monthly',
-      'refresh-mv-ga4-channel-yearly'
+      'refresh-mv-ga4-channel-yearly',
+      'refresh-mv-ga4-vdp-channel-daily',
+      'refresh-mv-ga4-vdp-channel-monthly',
+      'refresh-mv-ga4-vdp-channel-yearly'
     )
   LOOP
     PERFORM cron.unschedule(r.jobname);
@@ -45,5 +48,33 @@ SELECT cron.schedule(
   $cron$
   SET statement_timeout TO '900000';
   REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_yearly;
+  $cron$
+);
+
+-- VDP KPI-aligned MVs (vdp_conditions)
+SELECT cron.schedule(
+  'refresh-mv-ga4-vdp-channel-daily',
+  '15 3 * * *',
+  $cron$
+  SET statement_timeout TO '900000';
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_vdp_channel_daily;
+  $cron$
+);
+
+SELECT cron.schedule(
+  'refresh-mv-ga4-vdp-channel-monthly',
+  '20 3 * * *',
+  $cron$
+  SET statement_timeout TO '900000';
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_vdp_channel_monthly;
+  $cron$
+);
+
+SELECT cron.schedule(
+  'refresh-mv-ga4-vdp-channel-yearly',
+  '25 3 * * *',
+  $cron$
+  SET statement_timeout TO '900000';
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_vdp_channel_yearly;
   $cron$
 );

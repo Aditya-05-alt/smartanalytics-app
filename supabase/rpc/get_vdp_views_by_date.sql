@@ -68,7 +68,11 @@ BEGIN
           WHERE f.client_id::text = v_client
             AND f.report_date = p.report_date
             AND f.page_path = public.ga4_effective_page_path(p.page_path, p.page_path_q_s)
-            AND (COALESCE(array_length(p_types, 1), 0) = 0 OR f.inv_type = ANY(p_types))
+            AND (
+              COALESCE(array_length(p_types, 1), 0) = 0
+              OR f.inv_type = ANY(p_types)
+              OR NULLIF(TRIM(f.inv_custom_type), '') = ANY(p_types)
+            )
             AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR f.inv_make = ANY(p_makes))
             AND (COALESCE(array_length(p_models, 1), 0) = 0 OR f.inv_model = ANY(p_models))
             AND (
@@ -108,7 +112,11 @@ BEGIN
   FROM public.smart_final_data f
   WHERE f.client_id::text = v_client
     AND f.report_date BETWEEN p_from AND p_to
-    AND (COALESCE(array_length(p_types, 1), 0) = 0 OR f.inv_type = ANY(p_types))
+    AND (
+      COALESCE(array_length(p_types, 1), 0) = 0
+      OR f.inv_type = ANY(p_types)
+      OR NULLIF(TRIM(f.inv_custom_type), '') = ANY(p_types)
+    )
     AND (COALESCE(array_length(p_makes, 1), 0) = 0 OR f.inv_make = ANY(p_makes))
     AND (COALESCE(array_length(p_models, 1), 0) = 0 OR f.inv_model = ANY(p_models))
     AND (

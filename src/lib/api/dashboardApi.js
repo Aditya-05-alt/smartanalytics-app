@@ -168,7 +168,9 @@ export async function fetchVdpFilterOptions({
   const row = Array.isArray(data) ? data[0] : data;
   const asList = (key) => {
     const raw = row?.[key];
-    return Array.isArray(raw) ? raw.filter(Boolean) : [];
+    return Array.isArray(raw)
+      ? raw.map((v) => String(v)).filter(Boolean)
+      : [];
   };
 
   return {

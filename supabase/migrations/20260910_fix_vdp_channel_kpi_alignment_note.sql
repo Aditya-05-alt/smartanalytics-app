@@ -1,0 +1,8 @@
+-- 2026-09-10: Filtered VDP channel donut total must match VDP KPI for all dealers.
+-- Root cause: KPI used SUM(smart_final_data.views); channel used SUM(GA4.views) on
+-- Final path whitelist → Moix Brinkley showed 2086 vs 2258.
+-- Fix: get_ga4_channel_breakdown scales GA4 channel mix to Final KPI when
+-- VDP + inventory filters + no channel filter. Also align type filter to
+-- inv_type OR inv_custom_type on get_vdp_views_total / get_vdp_views_by_date.
+-- Applied via MCP apply_migration (fix_vdp_channel_breakdown_match_final_kpi,
+-- align_vdp_kpi_type_filter_custom_type, align_vdp_views_by_date_custom_type).

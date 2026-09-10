@@ -115,23 +115,34 @@ export function applyChannelGroupsToDonutItems(items) {
 /** Comparison table rows → rollup headers + member rows. */
 export function applyChannelGroupsToComparisonRows(rows) {
   const list = rows || [];
-  const ungrouped = list.filter(
-    (row) => !GROUPED_MEMBER_KEYS.has(normalizeChannelKey(row.ch))
+  const bundledLabelKeys = new Set(
+    CHANNEL_GROUP_DEFS.map((g) => normalizeChannelKey(g.label))
   );
+
+  // Exclude member channels AND pre-rolled bundle labels (e.g. from all-dealers matrix).
+  const ungrouped = list.filter((row) => {
+    const key = normalizeChannelKey(row.ch);
+    return !GROUPED_MEMBER_KEYS.has(key) && !bundledLabelKeys.has(key);
+  });
 
   const blocks = CHANNEL_GROUP_DEFS.map((group) => {
     const members = list
       .filter((row) => isMemberOfGroup(row.ch, group))
       .sort((a, b) => b.cur - a.cur || b.cmp - a.cmp || a.ch.localeCompare(b.ch));
 
-    if (members.length === 0) return null;
+    // Matrix / legacy data may already ship the rollup label as its own row.
+    const preBundled = list.filter(
+      (row) => normalizeChannelKey(row.ch) === normalizeChannelKey(group.label)
+    );
 
-    const cur = sumField(members, 'cur');
-    const cmp = sumField(members, 'cmp');
-    const ly = sumField(members, 'ly');
+    if (members.length === 0 && preBundled.length === 0) return null;
+
+    const cur = sumField(members, 'cur') + sumField(preBundled, 'cur');
+    const cmp = sumField(members, 'cmp') + sumField(preBundled, 'cmp');
+    const ly = sumField(members, 'ly') + sumField(preBundled, 'ly');
 
     return {
-      sortValue: cur,
+      sortValue: cur || cmp,
       rollup: {
         ch: group.label,
         rowKey: `${group.key}-rollup`,

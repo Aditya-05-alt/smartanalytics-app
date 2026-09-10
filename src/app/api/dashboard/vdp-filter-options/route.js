@@ -6,7 +6,9 @@ import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 function normalizeFilterOptionsRow(row) {
   const asList = (key) => {
     const raw = row?.[key];
-    return Array.isArray(raw) ? raw.filter(Boolean) : [];
+    return Array.isArray(raw)
+      ? raw.map((v) => String(v)).filter(Boolean)
+      : [];
   };
 
   return {

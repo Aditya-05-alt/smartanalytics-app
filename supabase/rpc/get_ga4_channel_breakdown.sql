@@ -1,11 +1,15 @@
 -- Channel breakdown: one row per GA4 session channel (no "Other" rollup).
--- Fast path when no inventory filters; filtered path = path equality +
--- vdp_location_filter_match (same approach as Lab — location included).
--- Deploy in Supabase SQL editor.
+-- Fast path when no inventory filters.
+-- Filtered VDP path: channel mix from GA4 path whitelist, but TOTAL scaled to
+-- match get_vdp_views_total (smart_final_data) so KPI and donut never diverge.
+-- Deploy via migration / Supabase SQL.
 
 DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(text, date, date, text);
 DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
   text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
+);
+DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
 );
 
 CREATE OR REPLACE FUNCTION public.get_ga4_channel_breakdown(
@@ -38,6 +42,8 @@ DECLARE
   v_filter_active boolean;
   v_page_type     text := UPPER(COALESCE(p_page_type, 'ALL'));
   v_condition     text := UPPER(COALESCE(p_condition, 'BOTH'));
+  v_client        text := trim(p_client_id);
+  v_scale_to_final boolean;
 BEGIN
   v_filter_active :=
        COALESCE(array_length(p_types, 1), 0)     > 0
@@ -48,19 +54,24 @@ BEGIN
     OR COALESCE(array_length(p_years, 1), 0)     > 0
     OR COALESCE(array_length(p_locations, 1), 0) > 0;
 
+  -- Scale only when VDP inventory filters are on and no channel filter
+  -- (KPI then uses Final; with channel selected KPI uses GA4 path join).
+  v_scale_to_final :=
+    v_page_type = 'VDP'
+    AND v_filter_active
+    AND (p_channels IS NULL OR COALESCE(array_length(p_channels, 1), 0) = 0);
+
   -- Fast path: no inventory filters — aggregate smart_ga4_page_data only.
   IF NOT v_filter_active THEN
     RETURN QUERY
     WITH base AS (
       SELECT p.channel, p.views::bigint AS views
       FROM smart_ga4_page_data p
-      WHERE p.client_id::text = trim(p_client_id)
+      WHERE p.client_id::text = v_client
         AND p.report_date BETWEEN p_from AND p_to
         AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
         AND (
           v_page_type = 'ALL'
-          -- VDP tab: use vdp_conditions (same as Step 3 / location charts).
-          -- page_type alone can stay stale (e.g. /inventory/ listing labeled VDP).
           OR (v_page_type = 'VDP'   AND p.vdp_conditions IS TRUE)
           OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
           OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
@@ -115,40 +126,18 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Filtered path: path equality join + location match (no LIKE — avoids timeout).
+  -- Filtered path.
+  -- VDP: scale GA4 channel mix so Σ channels = Final KPI (get_vdp_views_total).
+  -- Other page types: keep prior path-whitelist on GA4 views.
   RETURN QUERY
-  WITH pages AS (
+  WITH filtered_final AS (
     SELECT
-      p.channel,
-      p.views,
-      p.client_id,
-      p.report_date,
-      TRIM(p.page_path) AS page_path,
-      p.ga4_page_type,
-      p.vdp_conditions
-    FROM smart_ga4_page_data p
-    WHERE p.client_id::text = trim(p_client_id)
-      AND p.report_date BETWEEN p_from AND p_to
-      AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
-      AND (
-        v_page_type = 'ALL'
-        OR (v_page_type = 'VDP'   AND p.vdp_conditions IS TRUE)
-        OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
-        OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
-        OR (v_page_type = 'OTHER' AND p.vdp_conditions IS NOT TRUE
-                                  AND p.ga4_page_type <> 'SRP'
-                                  AND p.ga4_page_type NOT ILIKE 'home%')
-      )
-      AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
-           OR public.vdp_channel_matches(p.channel, p_channels))
-  ),
-  filtered_paths AS (
-    SELECT DISTINCT
       s.client_id::text AS client_id,
       s.report_date,
-      TRIM(s.page_path) AS page_path
+      TRIM(s.page_path) AS page_path,
+      SUM(COALESCE(s.views, 0))::bigint AS views
     FROM smart_final_data s
-    WHERE s.client_id::text = trim(p_client_id)
+    WHERE s.client_id::text = v_client
       AND s.report_date BETWEEN p_from AND p_to
       AND (
         COALESCE(array_length(p_types, 1), 0) = 0
@@ -159,7 +148,7 @@ BEGIN
       AND (COALESCE(array_length(p_models, 1), 0) = 0 OR s.inv_model = ANY(p_models))
       AND (
         COALESCE(array_length(p_locations, 1), 0) = 0
-        OR public.vdp_location_filter_match(trim(p_client_id), s.inv_location, p_locations)
+        OR public.vdp_location_filter_match(v_client, s.inv_location, p_locations)
       )
       AND (
         COALESCE(array_length(p_years, 1), 0) = 0
@@ -179,18 +168,51 @@ BEGIN
            OR s.inv_type ILIKE '%pop-up%'))
         )
       )
+    GROUP BY s.client_id, s.report_date, TRIM(s.page_path)
+  ),
+  final_kpi AS (
+    -- Same grain as get_vdp_views_total inventory branch (no vdp_conditions gate).
+    SELECT COALESCE(SUM(f.views), 0)::bigint AS total
+    FROM filtered_final f
+  ),
+  pages AS (
+    SELECT
+      p.channel,
+      p.views::bigint AS views,
+      p.client_id::text AS client_id,
+      p.report_date,
+      TRIM(p.page_path) AS page_path,
+      p.vdp_conditions
+    FROM smart_ga4_page_data p
+    WHERE p.client_id::text = v_client
+      AND p.report_date BETWEEN p_from AND p_to
+      AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
+      AND (
+        v_page_type = 'ALL'
+        OR (v_page_type = 'VDP'   AND p.vdp_conditions IS TRUE)
+        OR (v_page_type = 'SRP'   AND p.ga4_page_type = 'SRP')
+        OR (v_page_type = 'HOME'  AND p.ga4_page_type ILIKE 'home%')
+        OR (v_page_type = 'OTHER' AND p.vdp_conditions IS NOT TRUE
+                                  AND p.ga4_page_type <> 'SRP'
+                                  AND p.ga4_page_type NOT ILIKE 'home%')
+      )
+      AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
+           OR public.vdp_channel_matches(p.channel, p_channels))
   ),
   combined AS (
+    -- Non-VDP pages (ALL/OTHER tabs): keep unfiltered GA4 rows.
     SELECT p.channel, p.views
     FROM pages p
-    WHERE p.vdp_conditions IS NOT TRUE
+    WHERE v_page_type <> 'VDP'
+      AND p.vdp_conditions IS NOT TRUE
 
     UNION ALL
 
+    -- VDP (or VDP rows inside ALL): path must exist in filtered Final.
     SELECT p.channel, p.views
     FROM pages p
-    INNER JOIN filtered_paths f
-      ON f.client_id = p.client_id::text
+    INNER JOIN filtered_final f
+      ON f.client_id = p.client_id
      AND f.report_date = p.report_date
      AND f.page_path = p.page_path
     WHERE p.vdp_conditions IS TRUE
@@ -220,10 +242,64 @@ BEGIN
       c.views
     FROM combined c
   ),
-  agg AS (
+  raw_agg AS (
     SELECT m.channel_bucket, SUM(m.views)::bigint AS views
     FROM mapped m
     GROUP BY m.channel_bucket
+  ),
+  raw_total AS (
+    SELECT COALESCE(SUM(r.views), 0)::bigint AS total FROM raw_agg r
+  ),
+  -- VDP + inventory: scale channel mix to Final KPI total (exact match with top card).
+  scaled AS (
+    SELECT
+      r.channel_bucket,
+      CASE
+        WHEN v_scale_to_final AND (SELECT total FROM raw_total) > 0 THEN
+          ROUND(
+            r.views::numeric * (SELECT total FROM final_kpi)::numeric
+              / (SELECT total FROM raw_total)::numeric
+          )::bigint
+        ELSE
+          r.views
+      END AS views
+    FROM raw_agg r
+  ),
+  -- If VDP Final has views but no GA4 channel rows matched, emit Unassigned.
+  with_fallback AS (
+    SELECT s.channel_bucket, s.views FROM scaled s
+    WHERE s.views > 0
+
+    UNION ALL
+
+    SELECT 'Unassigned'::text, (SELECT total FROM final_kpi)
+    WHERE v_scale_to_final
+      AND (SELECT total FROM final_kpi) > 0
+      AND NOT EXISTS (SELECT 1 FROM scaled s WHERE s.views > 0)
+  ),
+  -- Fix ROUND drift so Σ channels == Final KPI on VDP.
+  drift_fixed AS (
+    SELECT
+      w.channel_bucket,
+      CASE
+        WHEN v_scale_to_final
+          AND w.channel_bucket = (
+            SELECT w2.channel_bucket
+            FROM with_fallback w2
+            ORDER BY w2.views DESC, w2.channel_bucket
+            LIMIT 1
+          )
+        THEN w.views
+             + (SELECT total FROM final_kpi)
+             - (SELECT COALESCE(SUM(w3.views), 0)::bigint FROM with_fallback w3)
+        ELSE w.views
+      END AS views
+    FROM with_fallback w
+  ),
+  agg AS (
+    SELECT d.channel_bucket, d.views
+    FROM drift_fixed d
+    WHERE d.views > 0
   ),
   grand AS (
     SELECT NULLIF(SUM(a.views), 0)::numeric AS total FROM agg a
@@ -239,14 +315,10 @@ BEGIN
 END;
 $$;
 
-DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[]
-);
-
 COMMENT ON FUNCTION public.get_ga4_channel_breakdown(
   text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
 ) IS
-  'Live channel breakdown — location-aware (same fast filtered join as Lab). Chunk on API.';
+  'Channel breakdown. Unfiltered = GA4. Filtered VDP = GA4 channel mix scaled to Final KPI total.';
 
 REVOKE ALL ON FUNCTION public.get_ga4_channel_breakdown(
   text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text

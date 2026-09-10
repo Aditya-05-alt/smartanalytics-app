@@ -9,6 +9,10 @@ import {
 } from '@/lib/inventory/inventoryReportFilters';
 import { useInventoryReport } from './InventoryReportContext';
 
+function asMulti(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function CompareDateSwitch({ enabled, onChange }) {
   return (
     <label className="compare-period-switch">
@@ -62,28 +66,32 @@ export default function InventoryReportFilters() {
         </button>
       )}
       <FilterDropdown
+        multi
         clearable
         options={INVENTORY_CONDITION_OPTIONS}
-        value={filters.condition}
+        value={asMulti(filters.condition)}
         onChange={(v) => setFilter('condition', v)}
       />
       <FilterDropdown
+        multi
         clearable
         options={toFilterOpts(filterOptions.makes, 'All Makes')}
-        value={filters.make}
+        value={asMulti(filters.make)}
         onChange={(v) => setFilter('make', v)}
       />
       <FilterDropdown
+        multi
         clearable
         options={toFilterOpts(filterOptions.types, `All ${typeHeader}`)}
-        value={filters.type}
+        value={asMulti(filters.type)}
         onChange={(v) => setFilter('type', v)}
       />
       {showLocationFilter && (
         <FilterDropdown
+          multi
           clearable
           options={toFilterOpts(filterOptions.locations, 'All Locations')}
-          value={filters.location}
+          value={asMulti(filters.location)}
           onChange={(v) => setFilter('location', v)}
         />
       )}

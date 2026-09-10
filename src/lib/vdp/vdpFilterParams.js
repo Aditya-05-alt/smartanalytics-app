@@ -137,18 +137,35 @@ export function collapseChannelsToFilterLabels(rawChannels) {
   return migrateLegacyChannelFilterLabels(labels);
 }
 
-/** Default VDP tab inventory filters (All = no restriction). */
+/** Default VDP tab inventory filters (empty array = All / no restriction). */
 export const DEFAULT_VDP_FILTERS = {
-  year: 'All',
-  condition: 'All',
-  make: 'All',
-  model: 'All',
-  type: 'All',
+  year: [],
+  condition: [],
+  make: [],
+  model: [],
+  type: [],
   /** Empty array = all locations; otherwise selected location names. */
   location: [],
   /** Empty array = all channels; otherwise selected filter labels (may be bundles). */
   channel: [],
 };
+
+/** Normalize a multi-select filter to string[] (empty = All). Accepts legacy 'All' / single string. */
+export function selectedFilterValues(value) {
+  if (value == null || value === 'All' || value === '') return [];
+  if (Array.isArray(value)) {
+    return [
+      ...new Set(
+        value
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => v && v !== 'All' && v !== 'Used + New')
+      ),
+    ];
+  }
+  const one = String(value).trim();
+  if (!one || one === 'All' || one === 'Used + New') return [];
+  return [one];
+}
 
 /** Normalize location filter to a string[] (empty = All). Accepts legacy 'All' / single string. */
 export function selectedLocations(value) {
@@ -189,13 +206,21 @@ export function selectedChannels(value) {
 
 export function normalizeVdpFilters(input) {
   const merged = { ...DEFAULT_VDP_FILTERS, ...(input || {}) };
-  const condition =
-    merged.condition === 'Used + New' || !merged.condition
-      ? 'All'
-      : merged.condition;
+  // Legacy single condition / "Used + New" → multi array
+  let condition = selectedFilterValues(merged.condition);
+  if (
+    !Array.isArray(merged.condition) &&
+    (merged.condition === 'Used + New' || merged.condition === 'All')
+  ) {
+    condition = [];
+  }
   return {
     ...merged,
+    year: selectedFilterValues(merged.year),
     condition,
+    make: selectedFilterValues(merged.make),
+    model: selectedFilterValues(merged.model),
+    type: selectedFilterValues(merged.type),
     location: selectedLocations(merged.location),
     channel: migrateLegacyChannelFilterLabels(selectedChannels(merged.channel)),
   };
@@ -205,16 +230,30 @@ function slugPart(value) {
   return encodeURIComponent(String(value)).replace(/%/g, '_').slice(0, 48);
 }
 
+function hasMultiSelection(values) {
+  return Array.isArray(values) && values.length > 0;
+}
+
+/** Map condition multi-select → RPC p_condition. */
+export function conditionSelectionToRpc(condition) {
+  const list = selectedFilterValues(condition).map((c) => c.toLowerCase());
+  const wantsNew = list.some((c) => c === 'new');
+  const wantsUsed = list.some((c) => c === 'used' || c === 'pre-owned' || c === 'preowned');
+  if (wantsNew && !wantsUsed) return 'NEW';
+  if (wantsUsed && !wantsNew) return 'USED';
+  return 'BOTH';
+}
+
 /** Any non-default VDP inventory / channel filter selected. */
 export function vdpFiltersActive(vdpFilters, tab) {
   if (tab !== 'vdp') return false;
   const f = normalizeVdpFilters(vdpFilters);
   return (
-    f.year !== 'All' ||
-    (f.condition !== 'All' && f.condition !== 'Used + New') ||
-    f.make !== 'All' ||
-    f.model !== 'All' ||
-    f.type !== 'All' ||
+    hasMultiSelection(f.year) ||
+    hasMultiSelection(f.condition) ||
+    hasMultiSelection(f.make) ||
+    hasMultiSelection(f.model) ||
+    hasMultiSelection(f.type) ||
     f.location.length > 0 ||
     f.channel.length > 0
   );
@@ -237,17 +276,7 @@ export function channelBreakdownLabVdpFilters(vdpFilters) {
 
 /** True when any inventory / channel filter is active for channel breakdown. */
 export function channelFiltersActive(vdpFilters, tab) {
-  if (tab !== 'vdp') return false;
-  const f = channelBreakdownVdpFilters(vdpFilters);
-  return (
-    f.year !== 'All' ||
-    (f.condition !== 'All' && f.condition !== 'Used + New') ||
-    f.make !== 'All' ||
-    f.model !== 'All' ||
-    f.type !== 'All' ||
-    f.location.length > 0 ||
-    f.channel.length > 0
-  );
+  return vdpFiltersActive(vdpFilters, tab);
 }
 
 /** Channel Breakdown rollups — skip when a channel filter is selected (show flat names). */
@@ -275,24 +304,20 @@ export function channelFilterLabCacheSuffix(vdpFilters, tab) {
 export function vdpFiltersToRpcParams(vdpFilters, tab) {
   if (tab !== 'vdp') return {};
   const f = normalizeVdpFilters(vdpFilters);
-  const params = { p_condition: 'BOTH' };
+  const params = { p_condition: conditionSelectionToRpc(f.condition) };
 
-  if (f.year && f.year !== 'All') {
-    const y = parseInt(String(f.year), 10);
-    if (Number.isFinite(y) && y >= 1900 && y <= 2100) params.p_years = [y];
-  }
-  if (f.make && f.make !== 'All') params.p_makes = [f.make];
-  if (f.model && f.model !== 'All') params.p_models = [f.model];
-  if (f.type && f.type !== 'All') params.p_types = [f.type];
-  if (f.location && f.location !== 'All') {
+  const years = f.year
+    .map((y) => parseInt(String(y), 10))
+    .filter((y) => Number.isFinite(y) && y >= 1900 && y <= 2100);
+  if (years.length) params.p_years = years;
+  if (f.make.length) params.p_makes = f.make;
+  if (f.model.length) params.p_models = f.model;
+  if (f.type.length) params.p_types = f.type;
+  if (f.location.length) {
     // Include comma / accent spellings so inventory rows still match.
     // SQL also soft-matches via vdp_location_identity (City, ST ≡ City ST).
     params.p_locations = expandLocationsForRpc(f.location);
   }
-
-  if (f.condition === 'Used') params.p_condition = 'USED';
-  else if (f.condition === 'New') params.p_condition = 'NEW';
-  else params.p_condition = 'BOTH';
 
   const channels = expandChannelsForRpc(f.channel);
   if (channels?.length) params.p_channels = channels;
@@ -309,13 +334,21 @@ export function vdpFilterCacheSuffix(vdpFilters, tab) {
   if (tab !== 'vdp') return '';
   const f = normalizeVdpFilters(vdpFilters);
   const parts = [];
-  if (f.year !== 'All') parts.push(`y${f.year}`);
-  if (f.condition !== 'All' && f.condition !== 'Used + New') {
-    parts.push(`c${slugPart(f.condition)}`);
+  if (f.year.length) {
+    parts.push(`y${[...f.year].sort().map((y) => slugPart(y)).join('~')}`);
   }
-  if (f.make !== 'All') parts.push(`mk${slugPart(f.make)}`);
-  if (f.model !== 'All') parts.push(`md${slugPart(f.model)}`);
-  if (f.type !== 'All') parts.push(`t${slugPart(f.type)}`);
+  if (f.condition.length) {
+    parts.push(`c${[...f.condition].sort().map((c) => slugPart(c)).join('~')}`);
+  }
+  if (f.make.length) {
+    parts.push(`mk${[...f.make].sort().map((m) => slugPart(m)).join('~')}`);
+  }
+  if (f.model.length) {
+    parts.push(`md${[...f.model].sort().map((m) => slugPart(m)).join('~')}`);
+  }
+  if (f.type.length) {
+    parts.push(`t${[...f.type].sort().map((t) => slugPart(t)).join('~')}`);
+  }
   if (f.location.length > 0) {
     parts.push(
       `l${[...f.location]
@@ -332,7 +365,7 @@ export function vdpFilterCacheSuffix(vdpFilters, tab) {
         .join('~')}`
     );
   }
-  return parts.length ? `|${parts.join('-')}` : '';
+  return parts.length ? `|ms1-${parts.join('-')}` : '';
 }
 
 /** @deprecated use vdpFilterCacheSuffix */
@@ -383,13 +416,22 @@ export function parseVdpFiltersFromSearchParams(searchParams) {
   const condition = searchParams.get('condition')?.trim()?.toUpperCase();
 
   const filters = { ...DEFAULT_VDP_FILTERS };
-  if (years?.length) filters.year = String(years[0]);
-  if (makes?.length) filters.make = makes[0];
-  if (models?.length) filters.model = models[0];
-  if (types?.length) filters.type = types[0];
+  if (years?.length) filters.year = years.map(String);
+  if (makes?.length) filters.make = makes;
+  if (models?.length) filters.model = models;
+  if (types?.length) filters.type = types;
   if (locations?.length) filters.location = locations;
-  if (condition === 'USED') filters.condition = 'Used';
-  else if (condition === 'NEW') filters.condition = 'New';
+  if (condition === 'USED') filters.condition = ['Used'];
+  else if (condition === 'NEW') filters.condition = ['New'];
+  else if (condition === 'BOTH' || !condition) filters.condition = [];
+  else {
+    // Multi: NEW|USED
+    const parts = condition.split(/[|,]/).map((s) => s.trim().toUpperCase()).filter(Boolean);
+    const cond = [];
+    if (parts.includes('NEW')) cond.push('New');
+    if (parts.includes('USED')) cond.push('Used');
+    filters.condition = cond;
+  }
 
   const channelsRaw = searchParams.get('channels')?.trim();
   if (channelsRaw) {

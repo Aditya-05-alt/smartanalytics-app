@@ -11,7 +11,7 @@ export function aggregateLocationBuckets(rawRows) {
   for (const row of rawRows) {
     const label =
       row.inv_location == null || String(row.inv_location).trim() === ''
-        ? 'Unknown'
+        ? 'Other'
         : String(row.inv_location).trim();
     const views = Number(row.views ?? row.view_count ?? 0) || 0;
     if (views <= 0) continue;

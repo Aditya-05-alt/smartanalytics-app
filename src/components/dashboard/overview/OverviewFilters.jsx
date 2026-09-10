@@ -9,7 +9,11 @@ import { useClient } from '../ClientContext';
 import { useOverview } from './OverviewDataContext';
 import { vdpFiltersActive, VDP_CHANNEL_FILTER_OPTIONS } from '@/lib/vdp/vdpFilterParams';
 
-const CONDITION_OPTIONS = ['All', 'Used + New', 'Used', 'New'];
+const CONDITION_OPTIONS = [
+  { value: 'All', label: 'All Conditions' },
+  { value: 'Used', label: 'Used' },
+  { value: 'New', label: 'New' },
+];
 
 function toOpts(values, allLabel) {
   return (values || ['All']).map((v) => ({
@@ -18,10 +22,8 @@ function toOpts(values, allLabel) {
   }));
 }
 
-function normalizeConditionSelection(value) {
-  // Used + New is the same as All (BOTH) — store as All so UI/cache stay consistent.
-  if (value === 'Used + New' || value == null || value === '') return 'All';
-  return value;
+function asMulti(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function ComparePeriodSwitch({ enabled, onChange }) {
@@ -64,11 +66,6 @@ export default function OverviewFilters() {
   const typeValues = vdpFilterOptions.types?.length > 1
     ? vdpFilterOptions.types
     : ['All', ...(config.types || [])];
-
-  const conditionOpts = CONDITION_OPTIONS.map((v) => ({
-    value: v,
-    label: v === 'All' ? 'All Conditions' : v,
-  }));
 
   const comparePickerValue = compareDateRange ?? {
     start: compareFrom,
@@ -119,42 +116,45 @@ export default function OverviewFilters() {
             </button>
           )}
           <FilterDropdown
+            multi
             clearable
-            options={conditionOpts}
-            value={
-              vdpFilters.condition === 'Used + New' ? 'All' : vdpFilters.condition
-            }
-            onChange={(v) => setVdpFilter('condition', normalizeConditionSelection(v))}
+            options={CONDITION_OPTIONS}
+            value={asMulti(vdpFilters.condition)}
+            onChange={(v) => setVdpFilter('condition', v)}
           />
           <FilterDropdown
+            multi
             clearable
             options={toOpts(vdpFilterOptions.years, 'All Years')}
-            value={vdpFilters.year}
+            value={asMulti(vdpFilters.year)}
             onChange={(v) => setVdpFilter('year', v)}
           />
           <FilterDropdown
+            multi
             clearable
             options={toOpts(vdpFilterOptions.makes, 'All Makes')}
-            value={vdpFilters.make}
+            value={asMulti(vdpFilters.make)}
             onChange={(v) => setVdpFilter('make', v)}
           />
           <FilterDropdown
+            multi
             clearable
             options={toOpts(vdpFilterOptions.models, 'All Models')}
-            value={vdpFilters.model}
+            value={asMulti(vdpFilters.model)}
             onChange={(v) => setVdpFilter('model', v)}
           />
           <FilterDropdown
+            multi
             clearable
             options={toOpts(typeValues, `All ${config.typeH || 'Types'}`)}
-            value={vdpFilters.type}
+            value={asMulti(vdpFilters.type)}
             onChange={(v) => setVdpFilter('type', v)}
           />
           <FilterDropdown
             multi
             clearable
             options={toOpts(VDP_CHANNEL_FILTER_OPTIONS, 'All Channels')}
-            value={Array.isArray(vdpFilters.channel) ? vdpFilters.channel : []}
+            value={asMulti(vdpFilters.channel)}
             onChange={(v) => setVdpFilter('channel', v)}
           />
           {config.showLoc !== false && (
@@ -162,7 +162,7 @@ export default function OverviewFilters() {
               multi
               clearable
               options={toOpts(vdpFilterOptions.locations, 'All Locations')}
-              value={Array.isArray(vdpFilters.location) ? vdpFilters.location : []}
+              value={asMulti(vdpFilters.location)}
               onChange={(v) => setVdpFilter('location', v)}
             />
           )}

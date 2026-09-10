@@ -2295,6 +2295,41 @@ body {
 .pipeline-step4-logic2 .vdp-logics-vdp-patterns-head {
   margin-bottom: 0.35rem;
 }
+.pipeline-step4-custom-fix {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: var(--s2);
+  color: var(--t2);
+}
+.pipeline-step4-custom-fix-title {
+  margin: 0 0 0.4rem;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--t3);
+}
+.pipeline-step4-custom-fix-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--t2);
+}
+.pipeline-step4-custom-fix-list strong {
+  color: var(--t);
+  font-weight: 650;
+}
+.pipeline-step4-custom-fix-note {
+  color: var(--t3);
+}
+.pipeline-step4-clean {
+  color: var(--green);
+}
 .pipeline-badge {
   margin-left: auto;
   padding: 2px 8px;
@@ -3976,6 +4011,182 @@ body {
 }
 .compare-page-filters .compare-page-cap-note strong {
   color: var(--t2);
+}
+
+/* Dealer vs dealer Compare page — single filter row */
+.dealer-compare-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.dealer-compare-page--busy {
+  cursor: wait;
+}
+.dealer-compare-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.dealer-compare-filters--busy {
+  pointer-events: none;
+  opacity: 0.72;
+  user-select: none;
+}
+.dealer-compare-table-stage {
+  position: relative;
+  min-height: 220px;
+  overflow: hidden;
+}
+.dealer-compare-table-stage .adc-table-overlay {
+  border-radius: 0 0 10px 10px;
+}
+.dealer-compare-filters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+  overflow: visible;
+}
+.dealer-compare-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+  max-width: 260px;
+  flex: 1 1 200px;
+  position: relative;
+  z-index: 1;
+}
+.dealer-compare-side-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.dealer-compare-category-bar {
+  min-width: 160px;
+  max-width: 220px;
+  flex: 0 1 200px;
+  position: relative;
+  z-index: 2;
+}
+.dealer-compare-category-bar .dm {
+  min-width: 220px;
+  max-width: 280px;
+  width: max-content;
+}
+.dealer-compare-channel-filter,
+.dealer-compare-date-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+.dealer-compare-filters .dm,
+.dealer-compare-filters .client-dropdown {
+  z-index: 250;
+}
+.dealer-compare-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.dealer-compare-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.dealer-compare-pick {
+  width: 100%;
+  min-width: 0;
+}
+.dealer-compare-pick--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.dealer-compare-empty {
+  padding: 28px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--t3);
+}
+.dealer-compare-pick.on {
+  border-color: var(--acc);
+}
+.dealer-compare-clear {
+  margin-left: 4px;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+.dealer-compare-dropdown {
+  min-width: min(360px, 90vw);
+  max-width: 420px;
+}
+.dealer-compare-section {
+  padding: 8px 12px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t3);
+  border-top: 1px solid var(--b);
+  margin-top: 4px;
+}
+.dealer-compare-section:first-of-type {
+  border-top: none;
+  margin-top: 0;
+}
+.dealer-compare-check {
+  display: inline-flex;
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--acc);
+  justify-content: center;
+}
+.dealer-compare-meta {
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.85;
+}
+.dealer-compare-dropdown-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--b);
+  font-size: 11px;
+  color: var(--t3);
+}
+.dealer-compare-done {
+  border: none;
+  background: var(--acc-soft);
+  color: var(--acc);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dealer-compare-done:hover {
+  filter: brightness(1.05);
+}
+@media (max-width: 1100px) {
+  .dealer-compare-filters {
+    flex-wrap: wrap;
+  }
+  .dealer-compare-side {
+    max-width: none;
+  }
 }
 .vdp-bq-compare-body {
   padding-top: 0.75rem;

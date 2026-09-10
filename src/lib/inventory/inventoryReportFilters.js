@@ -1,15 +1,14 @@
 export const DEFAULT_INVENTORY_FILTERS = {
-  year: 'All',
-  condition: 'All',
-  make: 'All',
-  model: 'All',
-  type: 'All',
-  location: 'All',
+  year: [],
+  condition: [],
+  make: [],
+  model: [],
+  type: [],
+  location: [],
 };
 
 export const INVENTORY_CONDITION_OPTIONS = [
   { value: 'All', label: 'All Conditions' },
-  { value: 'Used + New', label: 'Used + New' },
   { value: 'Used', label: 'Used' },
   { value: 'New', label: 'New' },
 ];
@@ -33,18 +32,54 @@ const STATIC_MODELS = [
 ];
 const STATIC_LOCATIONS = ['Main Lot', 'Remote Lot', 'Showroom'];
 
+function selectedValues(value) {
+  if (value == null || value === 'All' || value === '' || value === 'Used + New') {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return [
+      ...new Set(
+        value
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => v && v !== 'All' && v !== 'Used + New')
+      ),
+    ];
+  }
+  const one = String(value).trim();
+  if (!one || one === 'All' || one === 'Used + New') return [];
+  return [one];
+}
+
+function conditionToRpc(condition) {
+  const list = selectedValues(condition).map((c) => c.toLowerCase());
+  const wantsNew = list.some((c) => c === 'new');
+  const wantsUsed = list.some((c) => c === 'used');
+  if (wantsNew && !wantsUsed) return 'NEW';
+  if (wantsUsed && !wantsNew) return 'USED';
+  return 'BOTH';
+}
+
 export function normalizeInventoryFilters(input) {
   const merged = { ...DEFAULT_INVENTORY_FILTERS, ...(input || {}) };
-  return { ...merged, year: 'All', model: 'All' };
+  return {
+    ...merged,
+    // Year / model not exposed in inventory UI yet — keep cleared.
+    year: [],
+    model: [],
+    condition: selectedValues(merged.condition),
+    make: selectedValues(merged.make),
+    type: selectedValues(merged.type),
+    location: selectedValues(merged.location),
+  };
 }
 
 export function inventoryFiltersActive(filters) {
   const f = normalizeInventoryFilters(filters);
   return (
-    (f.condition !== 'All' && f.condition !== 'Used + New')
-    || f.make !== 'All'
-    || f.type !== 'All'
-    || f.location !== 'All'
+    f.condition.length > 0
+    || f.make.length > 0
+    || f.type.length > 0
+    || f.location.length > 0
   );
 }
 
@@ -58,20 +93,11 @@ export function toFilterOpts(values, allLabel) {
 /** Map inventory UI filters → con_inv_breakdown RPC params. */
 export function inventoryFiltersToRpcParams(filters) {
   const f = normalizeInventoryFilters(filters);
-  const params = { p_condition: 'BOTH' };
+  const params = { p_condition: conditionToRpc(f.condition) };
 
-  if (f.year && f.year !== 'All') {
-    const y = parseInt(String(f.year), 10);
-    if (Number.isFinite(y) && y >= 1900 && y <= 2100) params.p_years = [y];
-  }
-  if (f.make && f.make !== 'All') params.p_makes = [f.make];
-  if (f.model && f.model !== 'All') params.p_models = [f.model];
-  if (f.type && f.type !== 'All') params.p_types = [f.type];
-  if (f.location && f.location !== 'All') params.p_locations = [f.location];
-
-  if (f.condition === 'Used') params.p_condition = 'USED';
-  else if (f.condition === 'New') params.p_condition = 'NEW';
-  else params.p_condition = 'BOTH';
+  if (f.make.length) params.p_makes = f.make;
+  if (f.type.length) params.p_types = f.type;
+  if (f.location.length) params.p_locations = f.location;
 
   return params;
 }
@@ -118,9 +144,10 @@ export function mergeInventoryFilterOptions(rpcOptions, config = {}) {
   if (!rpcOptions) return fallback;
 
   const merge = (rpcList, fallbackList) => {
-    const rpc = Array.isArray(rpcList) ? rpcList : [];
-    if (rpc.length <= 1) return fallbackList;
-    return rpc;
+    const set = new Set(
+      [...(rpcList || []), ...(fallbackList || [])].filter((v) => v && v !== 'All')
+    );
+    return ['All', ...[...set].sort()];
   };
 
   return {

@@ -1,0 +1,5 @@
+-- 2026-09-10: Align VDP inventory breakdown totals to get_vdp_views_total for all dealers.
+-- Cause: Channel/KPI used GA4; Location/Year/Condition/Make/Model/Type used Final →
+-- different totals especially for 2025 and early-2026 when Final lagged GA4 VDP.
+-- Fix: vdp_scale_breakdown_to_kpi + scale each inventory breakdown to KPI target.
+-- Applied via MCP migrations.

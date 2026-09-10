@@ -1,5 +1,6 @@
 -- Per-dealer smart_final_data status for daily email (Step 3).
--- p_days_back: rolling report_date window (default 7, matches master sync).
+-- Optimized: join active dealers first, no trim() on fact-table client_id,
+-- rebuilt_today from MAX(created_at) instead of per-row timezone cast.
 
 CREATE OR REPLACE FUNCTION public.get_smart_final_daily_status(
   p_days_back integer DEFAULT 7
@@ -18,11 +19,15 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
+SET statement_timeout = '60s'
 AS $$
   WITH bounds AS (
     SELECT
       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date AS today_ist,
-      GREATEST(COALESCE(p_days_back, 7), 1) AS days_back
+      GREATEST(COALESCE(p_days_back, 7), 1) AS days_back,
+      -- Start of "today" IST as timestamptz for rebuilt_today compare
+      ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date::timestamp
+        AT TIME ZONE 'Asia/Kolkata') AS today_ist_start
   ),
   active AS (
     SELECT
@@ -36,21 +41,20 @@ AS $$
   ),
   agg AS (
     SELECT
-      trim(f.client_id) AS client_id,
+      f.client_id,
       MAX(f.account_name)::text AS account_name,
       MAX(f.cms)::text AS cms,
       COUNT(*)::bigint AS total_rows,
       COUNT(*) FILTER (WHERE f.vdp_conditions IS TRUE)::bigint AS matched_rows,
       MIN(f.report_date) AS min_report_date,
       MAX(f.report_date) AS max_report_date,
-      BOOL_OR(
-        (f.created_at AT TIME ZONE 'Asia/Kolkata')::date =
-          (SELECT today_ist FROM bounds)
-      ) AS rebuilt_today
+      (MAX(f.created_at) >= (SELECT today_ist_start FROM bounds)) AS rebuilt_today
     FROM public.smart_final_data f
+    INNER JOIN active a ON a.client_id = f.client_id
     CROSS JOIN bounds b
     WHERE f.report_date >= b.today_ist - b.days_back
-    GROUP BY trim(f.client_id)
+      AND f.report_date <= b.today_ist
+    GROUP BY f.client_id
   )
   SELECT
     a.client_id,

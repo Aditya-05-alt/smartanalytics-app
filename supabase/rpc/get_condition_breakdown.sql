@@ -115,18 +115,28 @@ AS $$
     UNION ALL
     SELECT * FROM other_bucket
   ),
-  grand AS (
-    SELECT NULLIF(SUM(views), 0)::numeric AS total
-    FROM combined
+  kpi AS (
+    SELECT public.get_vdp_views_total(
+      trim(p_client_id), p_from, p_to,
+      p_types, p_makes, p_models, p_locations, p_years, p_condition, p_channels
+    ) AS target
+  ),
+  arrays AS (
+    SELECT
+      COALESCE(array_agg(c.condition_bucket ORDER BY c.rank, c.condition_bucket), ARRAY[]::text[]) AS buckets,
+      COALESCE(array_agg(c.views ORDER BY c.rank, c.condition_bucket), ARRAY[]::bigint[]) AS view_arr,
+      COALESCE(array_agg(c.rank ORDER BY c.rank, c.condition_bucket), ARRAY[]::int[]) AS ranks
+    FROM combined c
   )
   SELECT
-    c.condition_bucket,
-    c.views,
-    ROUND(100.0 * c.views / g.total, 2) AS pct,
-    c.rank
-  FROM combined c
-  CROSS JOIN grand g
-  ORDER BY c.rank;
+    s.bucket AS condition_bucket,
+    s.views,
+    s.pct,
+    s.rank
+  FROM arrays a
+  CROSS JOIN kpi k
+  CROSS JOIN LATERAL public.vdp_scale_breakdown_to_kpi(a.buckets, a.view_arr, a.ranks, k.target) s
+  ORDER BY s.rank;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_condition_breakdown(

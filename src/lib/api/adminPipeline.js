@@ -129,3 +129,33 @@ export async function fetchPipelineExceptionUrls({ clientId, from, to, signal })
   if (!res.ok) throw new Error(json.error || 'Failed to load exception URLs.');
   return json;
 }
+
+/**
+ * Step 4 full run — sync logic_2 → Step 2+3 → apply logic_2 path fill → report/exceptions.
+ * Prefer Next.js API (same as Steps 1–3); not an Edge Function.
+ */
+export async function runPipelineStep4({
+  clientId,
+  from,
+  to,
+  syncLogic2FromLive = true,
+  runSteps23 = true,
+  applyLogic2Fill = true,
+}) {
+  const res = await fetch('/api/admin/pipeline/step4-run', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientId,
+      from,
+      to,
+      syncLogic2FromLive,
+      runSteps23,
+      applyLogic2Fill,
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Step 4 run failed.');
+  return json;
+}

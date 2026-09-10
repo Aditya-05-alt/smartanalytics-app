@@ -11,6 +11,7 @@ import {
   runPipelineFiltration,
   runPipelineFinalSync,
   runPipelinePageSync,
+  runPipelineStep4,
   savePipelineVdpLogic2,
 } from '@/lib/api/adminPipeline';
 import { chunkDates, coerceDateRange } from '@/lib/pipeline/dates';
@@ -157,6 +158,7 @@ export default function DealerPipelineCard({ dealer, from, to }) {
   const [step2Result, setStep2Result] = useState(null);
   const [step3Result, setStep3Result] = useState(null);
   const [step4Result, setStep4Result] = useState(null);
+  const [step4RunResult, setStep4RunResult] = useState(null);
   const [exceptionResult, setExceptionResult] = useState(null);
   const [stepLogs, setStepLogs] = useState({ 1: [], 2: [], 3: [], 4: [], E: [] });
   const [logic2Patterns, setLogic2Patterns] = useState(['']);
@@ -601,6 +603,67 @@ export default function DealerPipelineCard({ dealer, from, to }) {
     loadLogic2();
   }, [loadLogic2]);
 
+  const runStep4Full = async () => {
+    if (!clientId) return;
+    setBusyStep(4);
+    setError(null);
+    setMessage(null);
+    setStep4RunResult(null);
+    setStepLog(4, [
+      logLine(`Step 4 RUN · ${from} → ${to}`),
+      logLine(
+        'Sync logic_2 → Step 2 → Step 3 → logic_2 path fill → report leftovers…'
+      ),
+    ]);
+    try {
+      const res = await runPipelineStep4({ clientId, from, to });
+      const lines = (res.log || []).map((line) =>
+        typeof line === 'string' && /^\d{4}-\d{2}-\d{2}/.test(line)
+          ? line
+          : logLine(line)
+      );
+      setStepLog(4, lines.length ? lines : [logLine('Step 4 finished (empty log).')]);
+      setStep4RunResult(res);
+      if (res.report?.unknowns) {
+        setStep4Result(res.report.unknowns);
+      }
+      if (res.report?.exceptions) {
+        setExceptionResult(res.report.exceptions);
+        const exLines = [
+          logLine(
+            `Exception leftovers after logic_2 fill · ${from} → ${to}`
+          ),
+          logLine(
+            `${res.report.exceptions.uniqueUrls || 0} path(s) · ${(res.report.exceptions.totalViews || 0).toLocaleString()} view(s) still do not match logic_2`
+          ),
+          logLine('—'.repeat(36)),
+        ];
+        for (const u of res.report.exceptions.urls || []) {
+          const views = Number(u.views) || 0;
+          const rows = Number(u.rows) || 0;
+          exLines.push(
+            `${views.toLocaleString().padStart(8)} views · ${String(rows).padStart(4)} rows  ${u.page_path}`
+          );
+        }
+        if (!(res.report.exceptions.urls || []).length) {
+          exLines.push(logLine('No exceptions — all unknowns matched logic_2 (or none left).'));
+        }
+        setStepLog('E', exLines);
+      }
+      await loadLogic2();
+      const exCount = res.report?.exceptions?.uniqueUrls ?? 0;
+      const filled = res.logic2Fill?.matchedPaths ?? 0;
+      setMessage(
+        `Step 4 done — filled ${filled} logic_2 path(s); ${exCount} exception path(s) left.`
+      );
+    } catch (e) {
+      appendStepLog(4, logLine(`Error: ${e?.message || 'Step 4 run failed.'}`));
+      setError(e?.message || 'Step 4 run failed.');
+    } finally {
+      setBusyStep(null);
+    }
+  };
+
   const runStep4LoadUnknowns = async () => {
     if (!clientId) return;
     setBusyStep(4);
@@ -936,12 +999,32 @@ export default function DealerPipelineCard({ dealer, from, to }) {
             </span>
           </div>
           <p className="pipeline-step-desc">
-            Lists Unknown / Other URLs from smart_final_data for the selected From → To
-            range (blank or Other make, blank inv_url, or unmatched VDP). Upload alternate
-            patterns to <code className="pipeline-step-code">smart_vdp_logic_2</code> only
-            — live <code className="pipeline-step-code">smart_vdp_logic</code> is unchanged.
+            <strong>Run Step 4</strong> syncs blank logic_2 from live, runs Step 2 + 3,
+            then applies <code className="pipeline-step-code">smart_vdp_logic_2</code> to
+            path-fill matching Unknown/Other rows (same approach as manual cleanups).
+            Leftovers that still do not match logic_2 show under Exception (E). Live{' '}
+            <code className="pipeline-step-code">smart_vdp_logic</code> is not overwritten.
           </p>
-          {step4Result && (
+          {step4RunResult?.report && (
+            <p className="pipeline-step-meta">
+              Filled {step4RunResult.logic2Fill?.matchedPaths ?? 0} path(s)
+              {step4RunResult.logic2Fill?.updatedFinalRows != null
+                ? ` · ${Number(step4RunResult.logic2Fill.updatedFinalRows).toLocaleString()} final row(s)`
+                : ''}
+              {' · '}
+              Final {(step4RunResult.report.finalVdp || 0).toLocaleString()} views
+              {step4RunResult.report.ga4Vdp != null
+                ? ` · GA4 ${(step4RunResult.report.ga4Vdp || 0).toLocaleString()}`
+                : ''}
+              {step4RunResult.report.gap != null
+                ? ` · gap ${Number(step4RunResult.report.gap).toLocaleString()}`
+                : ''}
+              {' · '}
+              exceptions{' '}
+              {(step4RunResult.report.exceptions?.uniqueUrls || 0).toLocaleString()}
+            </p>
+          )}
+          {step4Result && !step4RunResult && (
             <p className="pipeline-step-meta">
               {(step4Result.uniqueUrls || 0).toLocaleString()} unique URL(s) ·{' '}
               {(step4Result.totalRows || 0).toLocaleString()} row(s) ·{' '}
@@ -1011,9 +1094,17 @@ export default function DealerPipelineCard({ dealer, from, to }) {
               type="button"
               className="ga4-count-export-btn"
               disabled={!clientId || busyStep != null}
+              onClick={runStep4Full}
+            >
+              {busyStep === 4 ? 'Running Step 4…' : 'Run Step 4'}
+            </button>
+            <button
+              type="button"
+              className="ga4-count-page-btn"
+              disabled={!clientId || busyStep != null}
               onClick={runStep4LoadUnknowns}
             >
-              {busyStep === 4 ? 'Working…' : 'Load Unknown / Other URLs'}
+              Load Unknown / Other URLs
             </button>
             <button
               type="button"
@@ -1021,7 +1112,7 @@ export default function DealerPipelineCard({ dealer, from, to }) {
               disabled={!clientId || busyStep != null || !logic2Meta?.found}
               onClick={runStep4SaveLogic2}
             >
-              {busyStep === 4 ? 'Working…' : 'Upload VDP logic 2'}
+              Upload VDP logic 2
             </button>
             <button
               type="button"
@@ -1036,8 +1127,30 @@ export default function DealerPipelineCard({ dealer, from, to }) {
             step={4}
             busyStep={busyStep}
             lines={stepLogs[4] || []}
-            forceOpen={Boolean(step4Result)}
+            forceOpen={Boolean(step4Result || step4RunResult)}
           />
+          {step4RunResult?.customFix?.length > 0 && (
+            <div className="pipeline-step4-custom-fix">
+              <h3 className="pipeline-step4-custom-fix-title">
+                Remaining issues after logic_2 fill
+              </h3>
+              <ul className="pipeline-step4-custom-fix-list">
+                {step4RunResult.customFix.map((fix) => (
+                  <li key={fix.area}>
+                    <strong>{fix.area}</strong>
+                    {' — '}
+                    {(fix.views || 0).toLocaleString()} views
+                    <span className="pipeline-step4-custom-fix-note"> · {fix.note}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {step4RunResult && !(step4RunResult.customFix?.length > 0) && (
+            <p className="pipeline-step-meta pipeline-step4-clean">
+              Clean for this range — no exception leftovers and no Other/blank gaps left.
+            </p>
+          )}
         </div>
 
         <div className="pipeline-step">
@@ -1059,10 +1172,9 @@ export default function DealerPipelineCard({ dealer, from, to }) {
             </span>
           </div>
           <p className="pipeline-step-desc">
-            After uploading VDP logic 2, some Unknown / Other URLs may still not match.
-            This exception list shows only those leftover paths (still unknown after
-            filtering against <code className="pipeline-step-code">smart_vdp_logic_2</code>
-            ).
+            After Run Step 4, paths that still do not match{' '}
+            <code className="pipeline-step-code">smart_vdp_logic_2</code> land here — that
+            is the real leftover issue list. Widen logic_2 or fix those URLs manually.
           </p>
           {exceptionResult && (
             <p className="pipeline-step-meta">

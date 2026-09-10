@@ -2,7 +2,10 @@ import { colorForChannel } from '@/lib/ga4/channelDisplay';
 
 /** Parallel chunks from the start — avoids one huge cold first RPC. */
 const CHUNK_SIZE = 12;
+/** VDP live scans are heavy; smaller chunks reduce 55s timeouts. */
+const VDP_CHUNK_SIZE = 4;
 const CHUNK_CONCURRENCY = 6;
+const VDP_CHUNK_CONCURRENCY = 3;
 
 function buildColumnOrder(results) {
   const totals = new Map();
@@ -32,6 +35,10 @@ function chunkClientIds(dealers, chunkSize = CHUNK_SIZE) {
     chunks.push(ids.slice(i, i + chunkSize));
   }
   return chunks;
+}
+
+function isVdpPageType(pageTypeFilter) {
+  return String(pageTypeFilter || '').trim().toUpperCase() === 'VDP';
 }
 
 function isTimeoutError(message) {
@@ -229,7 +236,8 @@ export async function fetchAllDealersChannelMatrix({
 
   const failedClientIds = new Set();
   const chunkErrors = [];
-  const chunks = chunkClientIds(dealers);
+  const vdpMode = isVdpPageType(pageTypeFilter);
+  const chunks = chunkClientIds(dealers, vdpMode ? VDP_CHUNK_SIZE : CHUNK_SIZE);
   const total = chunks.length;
   let completed = 0;
   const rpcRows = [];
@@ -262,7 +270,7 @@ export async function fetchAllDealersChannelMatrix({
       completed += 1;
       onProgress?.({ completed, total });
     },
-    CHUNK_CONCURRENCY,
+    vdpMode ? VDP_CHUNK_CONCURRENCY : CHUNK_CONCURRENCY,
     onCancelCheck
   );
 

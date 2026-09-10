@@ -5,9 +5,9 @@ import { useDropdown } from './useDropdown';
 const DEFAULT_PAGE_SIZE = 10;
 
 function isPinnedOption(option, defaultAll) {
+  // Only the true "All" sentinel is pinned — do NOT match labels like "All RV".
   return (
     option.value === defaultAll ||
-    option.label?.startsWith?.('All') ||
     option.value === 'Used + New' ||
     option.label === 'Used + New'
   );
@@ -50,7 +50,6 @@ export default function FilterDropdown({
   const isAll = multi
     ? selectedList.length === 0
     : current.value === defaultAll ||
-      current.label?.startsWith?.('All') ||
       current.label === 'Used + New';
 
   const chipLabel = useMemo(() => {
@@ -62,8 +61,8 @@ export default function FilterDropdown({
     if (selectedList.length === 1) return selectedList[0];
     const allOpt = options.find((o) => o.value === defaultAll);
     const allLabel = allOpt?.label || '';
-    if (/location/i.test(allLabel)) return `${selectedList.length} Locations`;
-    if (/channel/i.test(allLabel)) return `${selectedList.length} Channels`;
+    const afterAll = allLabel.match(/^All\s+(.+)$/i)?.[1];
+    if (afterAll) return `${selectedList.length} ${afterAll}`;
     return `${selectedList.length} selected`;
   }, [multi, current, selectedList, options, defaultAll]);
 

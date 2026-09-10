@@ -1,20 +1,10 @@
 -- All-dealer portfolio channel matrix (VDP / All tabs + date range).
--- Uses MATERIALIZED VIEWS only (fast). No live smart_ga4_page_data scan.
 --
--- Grain:
---   yearly  → mv_ga4_channel_yearly   (full calendar year Jan 1 → Dec 31 only)
---   monthly → mv_ga4_channel_monthly  (Last Month / month-aligned + long ranges)
---   daily   → mv_ga4_channel_daily    (Current Month MTD / short mid-month ranges)
+-- VDP monthly: ga4_vdp_channel_monthly (vdp_conditions aggregates — KPI-aligned, fast)
+-- VDP other grains: live smart_ga4_page_data + vdp_conditions (chunked by API)
+-- Other page types: MATERIALIZED VIEWS (yearly / monthly / daily) with live fallback.
 --
 -- Optional p_client_ids for chunked fetches.
--- Deploy in Supabase SQL editor AFTER/AFTER MVs exist.
---
--- Prerequisite MVs:
---   mv_ga4_channel_daily
---   mv_ga4_channel_monthly
---   mv_ga4_channel_yearly
---
--- After GA4 sync / Step 2 filtration, refresh all three (see cron).
 
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text);
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text, text[]);
@@ -48,6 +38,7 @@ DECLARE
   v_month_to   date;
   v_month_last date;
   v_daily_max  date;
+  v_vdp_months_ready boolean := false;
 BEGIN
   IF p_from IS NULL OR p_to IS NULL OR p_from > p_to THEN
     RAISE EXCEPTION 'Invalid date range: % .. %', p_from, p_to;
@@ -58,11 +49,8 @@ BEGIN
   v_year_end  := make_date(v_year_from, 12, 31);
   v_month_from := date_trunc('month', p_from)::date;
   v_month_to   := date_trunc('month', p_to)::date;
-  -- Last calendar day of p_to's month (for "Last Month" / full-month detection)
   v_month_last := (v_month_to + INTERVAL '1 month' - INTERVAL '1 day')::date;
 
-  -- Full calendar year only → yearly MV
-  -- (Do not use yearly for YTD — that over-counted vs dealer Overview.)
   IF v_year_from = v_year_to
      AND EXTRACT(MONTH FROM p_from)::int = 1
      AND EXTRACT(DAY FROM p_from)::int = 1
@@ -70,25 +58,54 @@ BEGIN
   THEN
     v_grain := 'yearly';
 
-  -- Last Month / any full month (1st → last day) → monthly MV (fast)
   ELSIF EXTRACT(DAY FROM p_from)::int = 1
      AND p_to = v_month_last
   THEN
     v_grain := 'monthly';
 
-  -- Long multi-month spans → monthly MV
   ELSIF (p_to - p_from) >= 60 THEN
     v_grain := 'monthly';
 
-  -- Current Month MTD / short custom ranges → daily MV
   ELSE
     v_grain := 'daily';
   END IF;
 
-  -- Daily MV: use it whenever it covers p_from. Clamp to mv max when p_to is ahead
-  -- (e.g. Current Month MTD includes "today" before GA4 sync / cron refresh).
-  -- Only fall back to live when the MV is empty or completely misses the range.
-  IF v_grain = 'daily' THEN
+  -- VDP: prefer pre-agg monthly table for full months AND same-month MTD
+  -- (Current Month). Refresh ga4_vdp_channel_monthly after GA4 sync.
+  IF v_page_type = 'VDP'
+     AND EXTRACT(DAY FROM p_from)::int = 1
+     AND v_month_from = v_month_to
+  THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.ga4_vdp_channel_monthly g
+      WHERE g.month_start = v_month_from
+    ) INTO v_vdp_months_ready;
+
+    IF COALESCE(v_vdp_months_ready, false) THEN
+      v_grain := 'vdp_monthly_agg';
+    ELSE
+      v_grain := 'vdp_live';
+    END IF;
+
+  ELSIF v_page_type = 'VDP' AND v_grain = 'monthly' THEN
+    SELECT bool_and(EXISTS (
+      SELECT 1 FROM public.ga4_vdp_channel_monthly g
+      WHERE g.month_start = m
+    ))
+    INTO v_vdp_months_ready
+    FROM generate_series(v_month_from, v_month_to, INTERVAL '1 month') AS s(m);
+
+    IF COALESCE(v_vdp_months_ready, false) THEN
+      v_grain := 'vdp_monthly_agg';
+    ELSE
+      v_grain := 'vdp_live';
+    END IF;
+
+  ELSIF v_page_type = 'VDP' THEN
+    -- Other custom ranges: live vdp_conditions (API chunks this)
+    v_grain := 'vdp_live';
+
+  ELSIF v_grain = 'daily' THEN
     SELECT MAX(d.report_date) INTO v_daily_max FROM public.mv_ga4_channel_daily d;
     IF v_daily_max IS NULL OR v_daily_max < p_from THEN
       v_grain := 'live';
@@ -111,6 +128,40 @@ BEGIN
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
   base AS (
+    -- Fast VDP full-month aggregate (vdp_conditions)
+    SELECT
+      g.client_id,
+      g.channel,
+      'VDP'::text AS ga4_page_type,
+      g.views
+    FROM public.ga4_vdp_channel_monthly g
+    WHERE v_grain = 'vdp_monthly_agg'
+      AND g.month_start BETWEEN v_month_from AND v_month_to
+      AND (
+        NOT v_chunked
+        OR g.client_id = ANY (p_client_ids)
+      )
+
+    UNION ALL
+
+    -- Live VDP (KPI-aligned) for MTD / missing months
+    SELECT
+      p.client_id,
+      p.channel,
+      'VDP'::text,
+      SUM(COALESCE(p.views, 0))::bigint AS views
+    FROM public.smart_ga4_page_data p
+    WHERE v_grain = 'vdp_live'
+      AND p.report_date BETWEEN p_from AND p_to
+      AND p.vdp_conditions IS TRUE
+      AND (
+        NOT v_chunked
+        OR p.client_id = ANY (p_client_ids)
+      )
+    GROUP BY p.client_id, p.channel
+
+    UNION ALL
+
     SELECT
       y.client_id,
       y.channel,
@@ -156,7 +207,6 @@ BEGIN
 
     UNION ALL
 
-    -- Live fallback only when daily MV is empty / does not cover p_from at all
     SELECT
       p.client_id,
       p.channel,
@@ -179,7 +229,7 @@ BEGIN
     FROM base b
     WHERE
       v_page_type = 'ALL'
-      OR (v_page_type = 'VDP' AND b.ga4_page_type ILIKE 'VDP%')
+      OR v_page_type = 'VDP'
       OR (v_page_type = 'SRP' AND b.ga4_page_type = 'SRP')
       OR (v_page_type IN ('HOME', 'HOMEPAGE') AND b.ga4_page_type ILIKE 'home%')
       OR (
@@ -215,28 +265,17 @@ BEGIN
       END AS norm_channel,
       pg.page_views
     FROM pages pg
-  ),
-  rolled AS (
-    SELECT
-      n.dealer_client_id,
-      CASE
-        WHEN n.norm_channel IN ('Paid Social', 'Organic Social')
-        THEN 'Paid Social + Organic Social'
-        ELSE n.norm_channel
-      END AS rolled_channel,
-      SUM(n.page_views)::bigint AS channel_views
-    FROM normalized n
-    GROUP BY n.dealer_client_id, 2
   )
   SELECT
-    r.dealer_client_id,
+    n.dealer_client_id,
     d.dealer_label,
-    r.rolled_channel,
-    r.channel_views
-  FROM rolled r
-  INNER JOIN dealers d ON d.dealer_client_id = r.dealer_client_id
-  WHERE r.channel_views > 0
-  ORDER BY d.dealer_label, r.channel_views DESC, r.rolled_channel;
+    n.norm_channel,
+    SUM(n.page_views)::bigint AS channel_views
+  FROM normalized n
+  INNER JOIN dealers d ON d.dealer_client_id = n.dealer_client_id
+  GROUP BY n.dealer_client_id, d.dealer_label, n.norm_channel
+  HAVING SUM(n.page_views) > 0
+  ORDER BY d.dealer_label, channel_views DESC, n.norm_channel;
 END;
 $$;
 
@@ -245,8 +284,3 @@ REVOKE ALL ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, t
 
 GRANT EXECUTE ON FUNCTION public.get_all_dealers_channel_matrix(date, date, text, text[])
   TO anon, authenticated, service_role;
-
--- Keep MVs fresh after GA4 sync / filtration:
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_daily;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_monthly;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_ga4_channel_yearly;

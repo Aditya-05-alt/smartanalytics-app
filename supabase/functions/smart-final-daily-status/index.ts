@@ -21,7 +21,10 @@ const BRAND_SUBJECT = "Smart Analytics Data Update";
 
 const SMTP_USER = "devops@brandmirchi.com";
 const SMTP_PASS = "";
-const DEFAULT_EMAIL_TO = ["adity@brandmirchi.com", "lisa@brandmirchi.com"];
+const DEFAULT_EMAIL_TO = [
+  "aditya@brandmirchi.com",
+  "lisa@brandmirchi.com",
+];
 const DEFAULT_EMAIL_CC = ["aditya@brandmirchi.com"];
 
 const SMTP_HOST = "smtp.gmail.com";
@@ -192,14 +195,14 @@ function formatReport(
     `Rebuilt today (created_at IST): ${rebuilt}`,
     `Final rows / matched : ${totalRows.toLocaleString("en-IN")} / ${matched.toLocaleString("en-IN")}`,
     "============================================================",
-    "PIPELINE BY DAY (Step 1 GA4 · Step 2 VDP · Step 3 Final)",
-    `${pad("Date", 12)}  ${pad("GA4 dlrs", 9, "right")}  ${pad("VDP dlrs", 9, "right")}  ${pad("Final dlrs", 10, "right")}  ${pad("Final rows", 11, "right")}`,
+    "PIPELINE BY DAY (dealer coverage — Step 1 GA4 · Step 2 VDP · Step 3 Final)",
+    `${pad("Date", 12)}  ${pad("GA4 dlrs", 9, "right")}  ${pad("VDP dlrs", 9, "right")}  ${pad("Final dlrs", 10, "right")}`,
     "------------------------------------------------------------",
   ];
 
   for (const d of pipeline) {
     lines.push(
-      `${pad(d.report_date, 12)}  ${pad(d.ga4_dealers, 9, "right")}  ${pad(d.vdp_dealers, 9, "right")}  ${pad(d.final_dealers, 10, "right")}  ${pad(d.final_rows, 11, "right")}`,
+      `${pad(d.report_date, 12)}  ${pad(d.ga4_dealers, 9, "right")}  ${pad(d.vdp_dealers, 9, "right")}  ${pad(d.final_dealers, 10, "right")}`,
     );
   }
 
@@ -287,7 +290,6 @@ function buildHtmlEmail(opts: {
           <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;">${d.ga4_dealers}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;">${d.vdp_dealers}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;">${d.final_dealers}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;">${d.final_rows.toLocaleString("en-IN")}</td>
         </tr>`,
     )
     .join("");
@@ -396,16 +398,15 @@ function buildHtmlEmail(opts: {
                 Rebuilt today: <strong style="color:#0f172a;">${rebuilt.length.toLocaleString("en-IN")}</strong> dealer(s)
               </p>
 
-              <h2 style="margin:0 0 10px;font-size:15px;font-weight:600;color:#0f172a;">Pipeline by day</h2>
+              <h2 style="margin:0 0 10px;font-size:15px;font-weight:600;color:#0f172a;">Pipeline by day (dealer coverage)</h2>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin:0 0 22px;">
                 <tr style="background:#f8fafc;">
                   <th align="left" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Date</th>
                   <th align="right" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Step 1 dealers</th>
                   <th align="right" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Step 2 VDP</th>
                   <th align="right" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Step 3 dealers</th>
-                  <th align="right" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Final rows</th>
                 </tr>
-                ${pipelineHtml || `<tr><td colspan="5" style="padding:12px;font-size:13px;color:#64748b;">No pipeline rows</td></tr>`}
+                ${pipelineHtml || `<tr><td colspan="4" style="padding:12px;font-size:13px;color:#64748b;">No pipeline rows</td></tr>`}
               </table>
 
               <h2 style="margin:0 0 10px;font-size:15px;font-weight:600;color:#0f172a;">All dealers (Step 3)</h2>
