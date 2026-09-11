@@ -5,12 +5,12 @@ import FilterDropdown from '@/components/dashboard/FilterDropdown';
 import { categoriesPresentInDealers } from '@/lib/compare/compareSelection';
 
 /**
- * Single Category dropdown for Compare (All RV, All Powersports, …).
- * value: category string or null/All
+ * Multi Category dropdown for Compare (All RV, All Powersports, …).
+ * value: string[] of categories (empty = All / none selected)
  */
 export default function CompareCategorySelect({
   dealers = [],
-  value = null,
+  value = [],
   onChange,
   disabled = false,
   label = 'Category',
@@ -36,7 +36,11 @@ export default function CompareCategorySelect({
     [categories, dealers]
   );
 
-  const selected = value || 'All';
+  const selected = useMemo(() => {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (value) return [value];
+    return [];
+  }, [value]);
 
   return (
     <div className="dealer-compare-field dealer-compare-category-bar">
@@ -44,13 +48,18 @@ export default function CompareCategorySelect({
         <span className="dealer-compare-side-title">{label}</span>
       ) : null}
       <FilterDropdown
+        multi
         clearable
         disabled={disabled || categories.length === 0}
         options={options}
         value={selected}
         onChange={(next) => {
-          if (!next || next === 'All') onChange?.(null);
-          else onChange?.(next);
+          const list = Array.isArray(next)
+            ? next.filter((v) => v && v !== 'All')
+            : next && next !== 'All'
+              ? [next]
+              : [];
+          onChange?.(list);
         }}
       />
     </div>

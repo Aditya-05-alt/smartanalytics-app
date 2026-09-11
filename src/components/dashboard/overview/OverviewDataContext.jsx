@@ -27,7 +27,8 @@ import {
   setOverviewCache,
 } from '@/lib/data/overviewCache';
 import { normalizeReportDate } from '@/lib/ga4/aggregatePageDataRows';
-import { enumerateDatesInclusive, toCalendarISO } from '@/lib/ga4/dateRange';
+import { enumerateDatesInclusive } from '@/lib/ga4/dateRange';
+import { resolveDashboardDateRange } from '@/lib/dashboard/resolveDateRange';
 import {
   analyticsCacheKey,
   clientGa4PropertyId,
@@ -106,86 +107,9 @@ function pruneInvalidFilterSelections(filters, options) {
 const TAB_IDS = ['vdp', 'srp', 'home', 'all', 'other'];
 const DEFAULT_RANGE = 'current_month';
 
-function daysAgo(base, n) {
-  const d = new Date(base);
-  d.setDate(d.getDate() - n);
-  return d;
-}
-
 /** Resolve the DateRange value into ISO date strings (inclusive). */
 function resolveRange(value) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Any object that carries an explicit start/end wins — whatever the picker emits.
-  if (value && typeof value === 'object' && value.start && value.end) {
-    return { from: value.start, to: value.end };
-  }
-
-  const v = typeof value === 'string' ? value : DEFAULT_RANGE;
-  let from = today;
-  let to = today;
-
-  switch (v) {
-    case 'today':
-      break;
-    case 'yesterday':
-      from = daysAgo(today, 1);
-      to = daysAgo(today, 1);
-      break;
-    case '7d':
-      from = daysAgo(today, 6);
-      break;
-    case '14d':
-      from = daysAgo(today, 13);
-      break;
-    case '30d':
-      from = daysAgo(today, 29);
-      break;
-    case '90d':
-      from = daysAgo(today, 89);
-      break;
-    case '12m':
-      from = daysAgo(today, 364);
-      break;
-    case 'current_month':
-    case 'mtd':
-      from = new Date(today.getFullYear(), today.getMonth(), 1);
-      break;
-    case 'last_mtd': {
-      const end = new Date(today.getFullYear(), today.getMonth(), 0);
-      from = new Date(end.getFullYear(), end.getMonth(), 1);
-      to = end;
-      break;
-    }
-    case 'qtd': {
-      const q = Math.floor(today.getMonth() / 3);
-      from = new Date(today.getFullYear(), q * 3, 1);
-      break;
-    }
-    case 'ytd':
-      from = new Date(today.getFullYear(), 0, 1);
-      break;
-    case 'last_year': {
-      const y = today.getFullYear() - 1;
-      from = new Date(y, 0, 1);
-      to = new Date(y, 11, 31);
-      break;
-    }
-    case 'all':
-      from = new Date(2020, 0, 1);
-      break;
-    default:
-      if (typeof v === 'string' && /^year_\d{4}$/.test(v)) {
-        const y = Number(v.slice(5));
-        from = new Date(y, 0, 1);
-        to = y === today.getFullYear() ? today : new Date(y, 11, 31);
-      } else {
-        from = daysAgo(today, 29);
-      }
-  }
-
-  return { from: toCalendarISO(from), to: toCalendarISO(to) };
+  return resolveDashboardDateRange(value);
 }
 
 /** Normalize `ga4_page_type` from Supabase to our tab id.

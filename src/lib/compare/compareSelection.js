@@ -5,35 +5,64 @@ import { ALL_DEALER_ID } from '@/lib/dashboard/allDealers';
 export const EMPTY_COMPARE_SELECTION = Object.freeze({
   type: 'none', // 'none' | 'all' | 'category' | 'dealers'
   category: null,
+  categories: [],
   dealerIds: [],
 });
 
 export function createDealerSelection(dealerIds) {
   const ids = [...new Set((dealerIds || []).filter(Boolean).map(String))];
   if (!ids.length) return { ...EMPTY_COMPARE_SELECTION };
-  return { type: 'dealers', category: null, dealerIds: ids };
+  return { type: 'dealers', category: null, categories: [], dealerIds: ids };
 }
 
 export function createAllSelection() {
-  return { type: 'all', category: null, dealerIds: [] };
+  return { type: 'all', category: null, categories: [], dealerIds: [] };
 }
 
-export function createCategorySelection(category) {
-  const cat = String(category || '').trim();
-  if (!cat) return { ...EMPTY_COMPARE_SELECTION };
-  return { type: 'category', category: cat, dealerIds: [] };
+/** Normalize one or many category labels → unique non-empty list. */
+export function normalizeCategoryList(categoryOrList) {
+  const raw = Array.isArray(categoryOrList)
+    ? categoryOrList
+    : categoryOrList
+      ? [categoryOrList]
+      : [];
+  return [...new Set(raw.map((c) => String(c || '').trim()).filter(Boolean))];
+}
+
+/** Categories stored on a category selection (supports legacy single `category`). */
+export function selectionCategories(selection) {
+  if (!selection || selection.type !== 'category') return [];
+  if (Array.isArray(selection.categories) && selection.categories.length) {
+    return normalizeCategoryList(selection.categories);
+  }
+  if (selection.category) return normalizeCategoryList(selection.category);
+  return [];
+}
+
+export function createCategorySelection(categoryOrList) {
+  const cats = normalizeCategoryList(categoryOrList);
+  if (!cats.length) return { ...EMPTY_COMPARE_SELECTION };
+  return {
+    type: 'category',
+    category: cats.length === 1 ? cats[0] : null,
+    categories: cats,
+    dealerIds: [],
+  };
 }
 
 export function isSelectionReady(selection) {
   if (!selection || selection.type === 'none') return false;
-  if (selection.type === 'all' || selection.type === 'category') return true;
+  if (selection.type === 'all') return true;
+  if (selection.type === 'category') return selectionCategories(selection).length > 0;
   return selection.type === 'dealers' && selection.dealerIds?.length > 0;
 }
 
 export function selectionKey(selection) {
   if (!selection || selection.type === 'none') return 'none';
   if (selection.type === 'all') return 'all';
-  if (selection.type === 'category') return `cat:${selection.category || ''}`;
+  if (selection.type === 'category') {
+    return `cat:${selectionCategories(selection).slice().sort().join(',')}`;
+  }
   return `d:${[...(selection.dealerIds || [])].sort().join(',')}`;
 }
 
@@ -44,7 +73,7 @@ export function dealersWithGa4(dealers) {
 
 /**
  * Resolve a compare selection to concrete dealer objects.
- * @param {{ type: string, category?: string|null, dealerIds?: string[] }} selection
+ * @param {{ type: string, category?: string|null, categories?: string[], dealerIds?: string[] }} selection
  * @param {object[]} dealers — full selectable list (not All Dealers sentinel)
  * @param {{ pageType?: string }} [opts] — when pageType is VDP, All Dealers respects showAllDealersVdp
  */
@@ -66,8 +95,9 @@ export function resolveSelectionDealers(selection, dealers, opts = {}) {
   if (!selection || selection.type === 'none') return [];
   if (selection.type === 'all') return list;
   if (selection.type === 'category') {
-    const cat = selection.category;
-    return list.filter((d) => d.dealerCategory === cat);
+    const catSet = new Set(selectionCategories(selection));
+    if (!catSet.size) return [];
+    return list.filter((d) => catSet.has(d.dealerCategory));
   }
   if (selection.type === 'dealers') {
     const idSet = new Set((selection.dealerIds || []).map(String));
@@ -80,9 +110,18 @@ export function selectionLabel(selection, dealers = [], opts = {}) {
   if (!selection || selection.type === 'none') return '';
   if (selection.type === 'all') return 'All Dealers';
   if (selection.type === 'category') {
+    const cats = selectionCategories(selection);
     const resolved = resolveSelectionDealers(selection, dealers, opts);
     const n = resolved.length;
-    return n > 0 ? `All ${selection.category} (${n})` : `All ${selection.category}`;
+    if (cats.length === 1) {
+      return n > 0 ? `All ${cats[0]} (${n})` : `All ${cats[0]}`;
+    }
+    if (cats.length > 1) {
+      return n > 0
+        ? `${cats.length} categories (${n})`
+        : `${cats.length} categories`;
+    }
+    return '';
   }
   const ids = selection.dealerIds || [];
   if (ids.length === 1) {
@@ -91,6 +130,48 @@ export function selectionLabel(selection, dealers = [], opts = {}) {
   }
   if (ids.length > 1) return `${ids.length} dealers`;
   return '';
+}
+
+/** Dealer display names for a selection (All / Category stay as one label). */
+export function selectionDealerNames(selection, dealers = []) {
+  if (!selection || selection.type === 'none') return [];
+  if (selection.type === 'all') return ['All Dealers'];
+  if (selection.type === 'category') {
+    const cats = selectionCategories(selection);
+    if (!cats.length) return ['Category'];
+    if (cats.length === 1) return [`All ${cats[0]}`];
+    return cats.map((c) => `All ${c}`);
+  }
+  if (selection.type !== 'dealers') return [];
+  return (selection.dealerIds || [])
+    .map((id) => {
+      const d = (dealers || []).find((x) => String(x.id) === String(id));
+      return d?.name || null;
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Header summary: "Moix Rv vs Sky River, Gerzeny's, Southland…"
+ * @param {number} [maxRightNames=5]
+ */
+export function compareVsSummary(
+  leftSelection,
+  rightSelection,
+  dealers = [],
+  maxRightNames = 5
+) {
+  const leftNames = selectionDealerNames(leftSelection, dealers);
+  const rightNames = selectionDealerNames(rightSelection, dealers);
+  if (!leftNames.length || !rightNames.length) return '';
+
+  const leftStr = leftNames.join(', ');
+  let rightStr = rightNames.join(', ');
+  if (rightNames.length > maxRightNames) {
+    const shown = rightNames.slice(0, maxRightNames).join(', ');
+    rightStr = `${shown} +${rightNames.length - maxRightNames} more`;
+  }
+  return `${leftStr} vs ${rightStr}`;
 }
 
 /** Categories that appear in the current dealer list (stable order). */

@@ -13,7 +13,8 @@ import {
 
 /**
  * Multi-select dealer picker for Compare.
- * All Dealers + individual dealers only.
+ * Individual dealers only (All Dealers disabled).
+ * Dealers in excludeDealerIds are hidden (no self-compare).
  */
 export default function DealerSelect({
   dealers = [],

@@ -147,10 +147,18 @@ export function resolveRangePickerValue(value) {
   }
 
   if (typeof value === 'object' && value?.start && value?.end) {
+    const preset = value.preset || findMatchingPreset(presets, value.start, value.end) || 'custom';
+    // Rolling presets: always use live dates (don't freeze yesterday's MTD end).
+    if (preset && preset !== 'custom') {
+      const live = presets.find((x) => x.id === preset);
+      if (live?.from && live?.to) {
+        return { start: live.from, end: live.to, preset };
+      }
+    }
     return {
       start: value.start,
       end: value.end,
-      preset: value.preset || findMatchingPreset(presets, value.start, value.end) || 'custom',
+      preset,
     };
   }
 

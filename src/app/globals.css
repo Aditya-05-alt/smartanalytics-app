@@ -960,6 +960,12 @@ body {
   animation: nav-progress-slide 1.05s ease-in-out infinite;
 }
 
+.dealer-compare-loader .adc-table-loader-text {
+  font-variant-numeric: tabular-nums;
+  min-width: 6.5em;
+  text-align: center;
+}
+
 .adc-table--loading .adc-td-total,
 .adc-table--loading .adc-td-channel {
   opacity: 0.55;
@@ -4086,6 +4092,29 @@ body {
   position: relative;
   z-index: 1;
 }
+.dealer-compare-dealers-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+  max-width: min(360px, 32vw);
+  flex: 1 1 200px;
+  position: relative;
+  z-index: 1;
+}
+.dealer-compare-dealers-summary .dealer-compare-vs-label {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dealer-compare-filters .dm,
 .dealer-compare-filters .client-dropdown {
   z-index: 250;
@@ -4186,6 +4215,13 @@ body {
   }
   .dealer-compare-side {
     max-width: none;
+  }
+  .dealer-compare-dealers-summary {
+    max-width: 100%;
+    flex-basis: 100%;
+  }
+  .dealer-compare-dealers-summary .dealer-compare-vs-label {
+    white-space: normal;
   }
 }
 .vdp-bq-compare-body {
@@ -6142,6 +6178,47 @@ body {
   font-weight: 600;
   color: var(--t);
   background: var(--s3);
+}
+.cmp-tbl-total-row .cmp-channel-cell {
+  font-weight: 600;
+}
+.cmp-tbl-row--total-member td {
+  background: transparent;
+  vertical-align: top;
+}
+.cmp-dealer-total-label {
+  color: var(--t3);
+  font-size: 11px;
+  font-weight: 500;
+}
+.cmp-dealer-total-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.cmp-dealer-total-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  line-height: 1.35;
+}
+.cmp-dealer-total-name {
+  color: var(--t2);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+.cmp-dealer-total-val {
+  color: var(--t);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 .cmp-tbl-na {
   color: var(--t3);

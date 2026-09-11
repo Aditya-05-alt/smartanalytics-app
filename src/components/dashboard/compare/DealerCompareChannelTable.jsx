@@ -29,6 +29,7 @@ import {
 /**
  * Channel comparison table.
  * Columns: Channel | Dealer | Compare with | Diff
+ * Total VDP expands to per-dealer totals (channel rows unchanged).
  */
 export default function DealerCompareChannelTable({
   leftSelection,
@@ -42,10 +43,15 @@ export default function DealerCompareChannelTable({
 }) {
   const [curRows, setCurRows] = useState([]);
   const [cmpRows, setCmpRows] = useState([]);
+  const [leftDealerTotals, setLeftDealerTotals] = useState([]);
+  const [rightDealerTotals, setRightDealerTotals] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadPct, setLoadPct] = useState(0);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const { expanded, isExpanded, toggle } = useChannelGroupExpansion(false);
+  /** Total VDP → dealer-wise totals under the total row. */
+  const [totalExpanded, setTotalExpanded] = useState(false);
 
   const notifyLoading = useCallback(
     (busy) => {
@@ -103,7 +109,10 @@ export default function DealerCompareChannelTable({
     if (!ready) {
       setCurRows([]);
       setCmpRows([]);
+      setLeftDealerTotals([]);
+      setRightDealerTotals([]);
       setLoading(false);
+      setLoadPct(0);
       notifyLoading(false);
       setError(null);
       return undefined;
@@ -111,6 +120,7 @@ export default function DealerCompareChannelTable({
 
     let cancelled = false;
     setLoading(true);
+    setLoadPct(0);
     notifyLoading(true);
     setError(null);
 
@@ -120,6 +130,23 @@ export default function DealerCompareChannelTable({
     const right = resolveSelectionDealers(rightSelection, dealers, {
       pageType: pageTypeFilter,
     });
+
+    const sideProg = {
+      left: { completed: 0, total: 1 },
+      right: { completed: 0, total: 1 },
+    };
+    const emitProgress = () => {
+      if (cancelled) return;
+      const completed =
+        (Number(sideProg.left.completed) || 0) +
+        (Number(sideProg.right.completed) || 0);
+      const total = Math.max(
+        1,
+        (Number(sideProg.left.total) || 1) + (Number(sideProg.right.total) || 1)
+      );
+      const pct = Math.min(99, Math.round((completed / total) * 100));
+      setLoadPct(pct);
+    };
 
     const load = async () => {
       try {
@@ -131,6 +158,13 @@ export default function DealerCompareChannelTable({
             pageTypeFilter,
             channelFilter: channels,
             onCancelCheck: () => cancelled,
+            onProgress: (p) => {
+              sideProg.left = {
+                completed: p?.completed ?? 0,
+                total: Math.max(1, p?.total ?? 1),
+              };
+              emitProgress();
+            },
           }),
           fetchCompareSideChannels({
             dealers: right,
@@ -139,17 +173,29 @@ export default function DealerCompareChannelTable({
             pageTypeFilter,
             channelFilter: channels,
             onCancelCheck: () => cancelled,
+            onProgress: (p) => {
+              sideProg.right = {
+                completed: p?.completed ?? 0,
+                total: Math.max(1, p?.total ?? 1),
+              };
+              emitProgress();
+            },
           }),
         ]);
 
         if (cancelled) return;
-        setCurRows(cur || []);
-        setCmpRows(cmp || []);
+        setLoadPct(100);
+        setCurRows(cur?.channels || []);
+        setCmpRows(cmp?.channels || []);
+        setLeftDealerTotals(cur?.dealerTotals || []);
+        setRightDealerTotals(cmp?.dealerTotals || []);
       } catch (err) {
         if (!cancelled) {
           setError(err?.message || 'Failed to load channel comparison');
           setCurRows([]);
           setCmpRows([]);
+          setLeftDealerTotals([]);
+          setRightDealerTotals([]);
         }
       } finally {
         if (!cancelled) {
@@ -210,6 +256,32 @@ export default function DealerCompareChannelTable({
     [visibleRows]
   );
 
+  /** Per-side dealer lists for the Total VDP expand row (one line / column). */
+  const leftBreakdownDealers = useMemo(() => {
+    return [...(leftDealerTotals || [])]
+      .map((d) => ({
+        dealerId: String(d.dealerId),
+        name: d.name || 'Dealer',
+        total: Number(d.total) || 0,
+      }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  }, [leftDealerTotals]);
+
+  const rightBreakdownDealers = useMemo(() => {
+    return [...(rightDealerTotals || [])]
+      .map((d) => ({
+        dealerId: String(d.dealerId),
+        name: d.name || 'Dealer',
+        total: Number(d.total) || 0,
+      }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  }, [rightDealerTotals]);
+
+  const canExpandTotal =
+    leftBreakdownDealers.length > 0 || rightBreakdownDealers.length > 0;
+  const showToggleCol = showGroupColumn || canExpandTotal;
+  const totalLabel = pageTypeFilter === 'VDP' ? 'Total VDP' : 'Total';
+
   const onCopy = useCallback(() => {
     const lines = [['Channel', dealerLabel, compareLabel, 'Diff'].join('\t')];
     visibleRows.forEach((r) => {
@@ -224,12 +296,21 @@ export default function DealerCompareChannelTable({
     });
     lines.push(
       [
-        'Total',
+        totalLabel,
         totals.cur,
         totals.cmp,
         `${totals.delta >= 0 ? '+' : ''}${totals.delta}%`,
       ].join('\t')
     );
+    if (totalExpanded && canExpandTotal) {
+      const leftTxt = leftBreakdownDealers
+        .map((d) => `${d.name}: ${d.total}`)
+        .join(' | ');
+      const rightTxt = rightBreakdownDealers
+        .map((d) => `${d.name}: ${d.total}`)
+        .join(' | ');
+      lines.push(['Dealers', leftTxt, rightTxt, ''].join('\t'));
+    }
     navigator.clipboard
       .writeText(lines.join('\n'))
       .then(() => {
@@ -237,7 +318,17 @@ export default function DealerCompareChannelTable({
         setTimeout(() => setCopied(false), 1800);
       })
       .catch(() => {});
-  }, [visibleRows, totals, dealerLabel, compareLabel]);
+  }, [
+    visibleRows,
+    totals,
+    dealerLabel,
+    compareLabel,
+    totalLabel,
+    totalExpanded,
+    canExpandTotal,
+    leftBreakdownDealers,
+    rightBreakdownDealers,
+  ]);
 
   if (!isSelectionReady(leftSelection) || !isSelectionReady(rightSelection)) {
     return (
@@ -277,6 +368,24 @@ export default function DealerCompareChannelTable({
     </button>
   );
 
+  const renderDealerStack = (list) => {
+    if (!list.length) return <span className="cmp-tbl-na">—</span>;
+    return (
+      <div className="cmp-dealer-total-stack">
+        {list.map((d) => (
+          <div key={d.dealerId} className="cmp-dealer-total-line">
+            <span className="cmp-dealer-total-name" title={d.name}>
+              {d.name}
+            </span>
+            <span className="cmp-dealer-total-val">
+              {d.total.toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <Panel className="cmp-table-panel">
       <PanelHeader
@@ -288,17 +397,6 @@ export default function DealerCompareChannelTable({
         </span>
         {copyButton}
       </PanelHeader>
-
-      {loading && (
-        <div
-          className="adc-nav-progress adc-nav-progress--table-top"
-          role="progressbar"
-          aria-label="Loading"
-          aria-busy="true"
-        >
-          <div className="adc-nav-progress-bar" />
-        </div>
-      )}
 
       {error ? (
         <div className="cmp-table-error">{error}</div>
@@ -337,7 +435,7 @@ export default function DealerCompareChannelTable({
                         <div
                           className={`cmp-channel-cell${r.isGroupMember ? ' cmp-channel-cell--member' : ''}`}
                         >
-                          {showGroupColumn && (
+                          {showToggleCol && (
                             r.isGroupRollup && r.collapsible ? (
                               <ChannelGroupToggle
                                 expanded={isExpanded(r.groupKey)}
@@ -364,12 +462,42 @@ export default function DealerCompareChannelTable({
                   ))
                 )}
                 {visibleRows.length > 0 && (
-                  <tr className="cmp-tbl-total-row">
-                    <td>Total {pageTypeFilter === 'VDP' ? 'VDP' : ''}</td>
+                  <tr className="cmp-tbl-total-row cmp-tbl-row--group-rollup">
+                    <td>
+                      <div className="cmp-channel-cell">
+                        {canExpandTotal ? (
+                          <ChannelGroupToggle
+                            expanded={totalExpanded}
+                            onToggle={() => setTotalExpanded((v) => !v)}
+                            label={totalLabel}
+                          />
+                        ) : showToggleCol ? (
+                          <span className="cmp-channel-toggle-spacer" aria-hidden />
+                        ) : null}
+                        <span>{totalLabel}</span>
+                      </div>
+                    </td>
                     <td className="col-cur">{totals.cur.toLocaleString()}</td>
                     <td className="col-prev">{totals.cmp.toLocaleString()}</td>
                     <td className="col-mom">
                       <Delta value={totals.delta} />
+                    </td>
+                  </tr>
+                )}
+                {totalExpanded && canExpandTotal && (
+                  <tr className="cmp-tbl-row--group-member cmp-tbl-row--total-member">
+                    <td>
+                      <div className="cmp-channel-cell cmp-channel-cell--member">
+                        {showToggleCol ? (
+                          <span className="cmp-channel-toggle-spacer" aria-hidden />
+                        ) : null}
+                        <span className="cmp-dealer-total-label">Dealers</span>
+                      </div>
+                    </td>
+                    <td className="col-cur">{renderDealerStack(leftBreakdownDealers)}</td>
+                    <td className="col-prev">{renderDealerStack(rightBreakdownDealers)}</td>
+                    <td className="col-mom">
+                      <span className="cmp-tbl-na">—</span>
                     </td>
                   </tr>
                 )}
@@ -378,9 +506,11 @@ export default function DealerCompareChannelTable({
           </div>
           {loading && (
             <div className="adc-table-overlay" role="status" aria-live="polite" aria-busy="true">
-              <div className="adc-table-loader">
+              <div className="adc-table-loader dealer-compare-loader">
                 <span className="adc-table-spinner" aria-hidden />
-                <span className="adc-table-loader-text">Loading…</span>
+                <span className="adc-table-loader-text">
+                  Loading {loadPct}%
+                </span>
               </div>
             </div>
           )}

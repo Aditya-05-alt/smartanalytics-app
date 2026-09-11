@@ -1,7 +1,6 @@
--- Compare page ONLY — VDP channel matrix from ga4_compare_vdp_channel_daily.
--- Does not change Overview / All Dealers RPCs.
-
-DROP FUNCTION IF EXISTS public.get_compare_vdp_channel_matrix(date, date, text[]);
+-- Compare matrix: only use ga4_compare_vdp_channel_daily when coverage
+-- extends past p_to (last covered day is often a partial GA4 sync).
+-- Also refresh Sep 9–10 agg rows from live page_data.
 
 CREATE OR REPLACE FUNCTION public.get_compare_vdp_channel_matrix(
   p_from date,
@@ -34,9 +33,6 @@ BEGIN
   INTO v_cov_from, v_cov_to
   FROM public.ga4_compare_vdp_channel_daily;
 
-  -- Use pre-agg only when coverage extends PAST the requested end date.
-  -- The last covered day is often a partial sync (MTD), so requiring
-  -- cov_to > p_to keeps Compare totals aligned with Overview / live page_data.
   v_ready := v_cov_from IS NOT NULL
     AND v_cov_to IS NOT NULL
     AND v_cov_from <= p_from
@@ -110,7 +106,3 @@ BEGIN
   ORDER BY d.dealer_label, channel_views DESC, n.norm_channel;
 END;
 $$;
-
-REVOKE ALL ON FUNCTION public.get_compare_vdp_channel_matrix(date, date, text[]) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_compare_vdp_channel_matrix(date, date, text[])
-  TO anon, authenticated, service_role;
