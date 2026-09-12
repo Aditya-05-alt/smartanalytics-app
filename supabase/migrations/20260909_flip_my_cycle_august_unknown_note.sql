@@ -1,0 +1,9 @@
+-- Flip My Cycle (6478055275) — August 2026 unknown cleanup
+-- 1) smart_vdp_logic_2 synced from live: ^/inventory/\d{4}-.*$ + website https://www.flipmycycle.com/
+-- 2) Step 2 apply_vdp_filtration_range Aug 1–31 (closed 725-view Final vs GA4 gap)
+-- 3) Step 3 build_smart_final_data Aug 1–31 → Final VDP = GA4 VDP = 26920
+-- 4) Path-parse fill for blank inv_url/inv_make (make slug match + stock tail); 5 junk/rare-make paths hand-filled
+-- 5) inv_location → Yadkin Rd Fayetteville, NC (smart_dealer_locations)
+-- 6) Type: Hoot raw Vehicle Type where URL matched; path heuristics + Motorcycle default for leftover Other
+-- 7) Condition: blank inv_condition (chart Other) filled — year>=2025→New else Pre-Owned (+ sparse Hoot stock match)
+-- Verified: unknown_views=0; blank location=0; type Other=0; year 0=0; blank condition=0

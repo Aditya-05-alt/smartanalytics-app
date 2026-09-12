@@ -1,6 +1,6 @@
--- Fast All Dealers VDP monthly aggregates (vdp_conditions — KPI-aligned).
--- Used by get_all_dealers_channel_matrix for full-month VDP and Current Month MTD.
--- Refresh after GA4 sync / Step 2 filtration (per month or rolling).
+-- Legacy plain-table VDP monthly aggregates (superseded for All Dealers reads).
+-- Prefer mv_ga4_vdp_channel_* + daily cron (see 20260911_all_dealers_vdp_mvs_daily_refresh.sql).
+-- Table may still exist for one-off backfills; get_all_dealers_channel_matrix no longer reads it.
 
 CREATE TABLE IF NOT EXISTS public.ga4_vdp_channel_monthly (
   client_id text NOT NULL,

@@ -1,0 +1,5 @@
+-- Tipton Motorsports (4311838303) — August 2026 gap close
+-- 1) logic_2 = live Overfuel: ^\/inventory\/(?:new|used)-\d{4}-.+
+-- 2) Step 2 + Step 3 Aug 1–31 → Final=GA4 4919 (was 4742; 177-view gap)
+-- 3) Path-parse leftovers + location Brownsville, TX
+-- Verified: unknowns=0; blank loc=0

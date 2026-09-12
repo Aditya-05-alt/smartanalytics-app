@@ -1,0 +1,10 @@
+-- Tallahassee Harley-Davidson (3403433847) — August 2026 unknown cleanup
+-- 1) website_url set https://www.tallahasseeharley.com/; smart_vdp_logic_2 synced from live
+--    logic: ^/inventory/\d+/[^/]*-\d{4}-
+-- 2) Step 2 apply_vdp_filtration_range Aug 1–31 (closed 117-view gap)
+-- 3) Step 3 build_smart_final_data Aug 1–31 → Final VDP = GA4 VDP = 10910
+-- 4) Unknown fill: copy inv_* from base VDP twin for /366/form/17 paths; path-parse leftovers
+--    (make Harley-Davidson / Suzuki / Honda from slug; year/model from path)
+-- 5) inv_location → TALLAHASSEE, FL
+-- 6) Type: Motorcycle / Trike; remapped Other + Hoot Truck/Wagon/SUV junk
+-- Verified: unknown=0; blank loc/cond/type Other=0

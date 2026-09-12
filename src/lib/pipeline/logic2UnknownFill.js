@@ -24,6 +24,148 @@ function coalesceText(existing, next) {
   return next ?? existing ?? null;
 }
 
+function normalizeStockKey(stock) {
+  return String(stock || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Resolve inv_* from inventory / prior final rows by stock number.
+ */
+async function lookupByStock(supabase, clientId, stock, dealerName) {
+  const key = normalizeStockKey(stock);
+  if (!key || key.length < 3) return null;
+
+  const variants = Array.from(
+    new Set(
+      [
+        stock,
+        stock.toUpperCase(),
+        stock.toLowerCase(),
+        key,
+        key.toUpperCase(),
+        stock.includes('-')
+          ? stock
+          : stock.replace(/^([A-Za-z]+)(\d)/, '$1-$2'),
+      ]
+        .map((s) => String(s || '').trim())
+        .filter(Boolean)
+    )
+  );
+
+  // 1) Prior final rows for this dealer with same stock
+  for (const variant of variants) {
+    const { data: prior } = await supabase
+      .from('smart_final_data')
+      .select(
+        'inv_make, inv_model, inv_year, inv_condition, inv_type, inv_custom_type, inv_stock_number'
+      )
+      .eq('client_id', clientId)
+      .eq('inv_stock_number', variant)
+      .not('inv_make', 'is', null)
+      .limit(20);
+    const hit = (prior || []).find(
+      (r) =>
+        normalizeStockKey(r.inv_stock_number) === key &&
+        !isBlankOrOther(r.inv_make)
+    );
+    if (hit) {
+      return {
+        make: hit.inv_make,
+        model: hit.inv_model,
+        year:
+          hit.inv_year && String(hit.inv_year) !== '0'
+            ? String(hit.inv_year)
+            : null,
+        condition: hit.inv_condition,
+        type: hit.inv_type || hit.inv_custom_type,
+        stock: hit.inv_stock_number || stock,
+        source: 'final_prior',
+      };
+    }
+  }
+
+  // Also match via sibling stock-only page paths
+  const stockSlug = String(stock || '').toLowerCase();
+  const { data: pathHits } = await supabase
+    .from('smart_final_data')
+    .select(
+      'inv_make, inv_model, inv_year, inv_condition, inv_type, inv_custom_type, inv_stock_number, page_path'
+    )
+    .eq('client_id', clientId)
+    .or(
+      `page_path.eq./inventory/new/${stockSlug},page_path.eq./inventory/used/${stockSlug}`
+    )
+    .not('inv_make', 'is', null)
+    .limit(30);
+  const pathHit = (pathHits || []).find((r) => !isBlankOrOther(r.inv_make));
+  if (pathHit) {
+    return {
+      make: pathHit.inv_make,
+      model: pathHit.inv_model,
+      year:
+        pathHit.inv_year && String(pathHit.inv_year) !== '0'
+          ? String(pathHit.inv_year)
+          : null,
+      condition: pathHit.inv_condition,
+      type: pathHit.inv_type || pathHit.inv_custom_type,
+      stock: pathHit.inv_stock_number || stock,
+      source: 'final_path',
+    };
+  }
+
+  // 2) Scrap inventory
+  const { data: scrap } = await supabase
+    .from('smart_scrap_inventory')
+    .select('stock_number, make, model, year, condition, type_')
+    .eq('customer_id', clientId)
+    .limit(8000);
+  const scrapHit = (scrap || []).find(
+    (r) => normalizeStockKey(r.stock_number) === key && !blank(r.make)
+  );
+  if (scrapHit) {
+    return {
+      make: scrapHit.make,
+      model: scrapHit.model,
+      year: scrapHit.year != null ? String(scrapHit.year) : null,
+      condition: scrapHit.condition,
+      type: scrapHit.type_,
+      stock: scrapHit.stock_number || stock,
+      source: 'scrap',
+    };
+  }
+
+  // 3) Hoot inventory (name token match)
+  if (dealerName) {
+    const nameTok = String(dealerName).split(/\s+/)[0];
+    if (nameTok && nameTok.length >= 3) {
+      const { data: hoot } = await supabase
+        .from('smart_hoot_inventory')
+        .select('stock_number, make, model, year, condition, type_, customer_name')
+        .ilike('customer_name', `%${nameTok}%`)
+        .limit(8000);
+      const hootHit = (hoot || []).find(
+        (r) => normalizeStockKey(r.stock_number) === key && !blank(r.make)
+      );
+      if (hootHit) {
+        return {
+          make: hootHit.make,
+          model: hootHit.model,
+          year: hootHit.year != null ? String(hootHit.year) : null,
+          condition: hootHit.condition,
+          type: hootHit.type_,
+          stock: hootHit.stock_number || stock,
+          source: 'hoot',
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
  * Apply smart_vdp_logic_2 to Unknown/Other final rows for one dealer/range:
  * match logic_2 → path-parse inv_* → set inv_url + vdp_conditions.
@@ -90,8 +232,17 @@ export async function applyLogic2UnknownFill(supabase, clientId, from, to, optio
   for (const u of unknowns) {
     const path = String(u.page_path || '').trim();
     if (!path) continue;
-    if (pagePathMatchesVdpLogic(path, vdpLogic)) matched.push(u);
-    else exceptions.push(u);
+    const preview = parseVdpPath(path, { makeSlugs: [] });
+    if (
+      pagePathMatchesVdpLogic(path, vdpLogic) ||
+      preview.parser === 'inventory_scout_stock_only' ||
+      preview.parser === 'inventory_scout_type_year' ||
+      preview.parser === 'inventory_cond_year'
+    ) {
+      matched.push(u);
+    } else {
+      exceptions.push(u);
+    }
   }
 
   log.push(
@@ -109,6 +260,16 @@ export async function applyLogic2UnknownFill(supabase, clientId, from, to, optio
     makeSlugs = buildMakeSlugs(makes || []);
     log.push(`Make catalog (${cms}): ${makeSlugs.length} slug(s)`);
   }
+  // Scout / platforms with no smart_make rows: reuse Interact RV makes as fallback
+  if (!makeSlugs.length) {
+    const { data: fallbackMakes } = await supabase
+      .from('smart_make')
+      .select('make')
+      .eq('cms', 'Interact RV')
+      .limit(5000);
+    makeSlugs = buildMakeSlugs(fallbackMakes || []);
+    log.push(`Make catalog fallback (Interact RV): ${makeSlugs.length} slug(s)`);
+  }
 
   let updatedFinalRows = 0;
   let updatedGa4Rows = 0;
@@ -119,8 +280,33 @@ export async function applyLogic2UnknownFill(supabase, clientId, from, to, optio
     const chunk = matched.slice(i, i + PATH_CHUNK);
     for (const u of chunk) {
       const path = String(u.page_path || '').trim();
-      const parsed = parseVdpPath(path, { makeSlugs });
+      let parsed = parseVdpPath(path, { makeSlugs });
       parserCounts.set(parsed.parser || 'url_only', (parserCounts.get(parsed.parser) || 0) + 1);
+
+      // Stock-only / incomplete parse → enrich from inventory or prior final rows
+      if (parsed.stock && (isBlankOrOther(parsed.make) || blank(parsed.model))) {
+        const inv = await lookupByStock(
+          supabase,
+          clientId,
+          parsed.stock,
+          logic2.dealer_name
+        );
+        if (inv) {
+          parsed = {
+            ...parsed,
+            make: parsed.make || inv.make,
+            model: parsed.model || inv.model,
+            year: parsed.year || inv.year,
+            // Prefer URL condition (used/new in path) over inventory condition
+            condition: parsed.condition || inv.condition,
+            type: parsed.type || inv.type,
+            stock: inv.stock || parsed.stock,
+          };
+          log.push(
+            `Stock match ${parsed.stock} → ${inv.make || '?'} / ${inv.model || '?'} (${inv.source})`
+          );
+        }
+      }
 
       const invUrl =
         String(u.page_location || '').trim() ||
@@ -165,6 +351,8 @@ export async function applyLogic2UnknownFill(supabase, clientId, from, to, optio
           ),
           inv_make: coalesceText(row.inv_make, parsed.make),
           inv_model: coalesceText(row.inv_model, parsed.model),
+          inv_type: coalesceText(row.inv_type, parsed.type),
+          inv_custom_type: coalesceText(row.inv_custom_type, parsed.type),
           inv_stock_number: coalesceText(row.inv_stock_number, parsed.stock),
         };
 
@@ -184,6 +372,13 @@ export async function applyLogic2UnknownFill(supabase, clientId, from, to, optio
         }
         if (isBlankOrOther(row.inv_condition) && patch.inv_condition) {
           changed.inv_condition = patch.inv_condition;
+        }
+        if (
+          (blank(row.inv_type) || isBlankOrOther(row.inv_type)) &&
+          patch.inv_type
+        ) {
+          changed.inv_type = patch.inv_type;
+          changed.inv_custom_type = patch.inv_custom_type || patch.inv_type;
         }
         if (blank(row.inv_stock_number) && patch.inv_stock_number) {
           changed.inv_stock_number = patch.inv_stock_number;

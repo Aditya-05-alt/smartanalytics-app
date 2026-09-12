@@ -1,0 +1,10 @@
+-- Link RVs Minong (5950314334) — August 2026 unknown cleanup
+-- 1) smart_vdp_logic_2 synced from live: ^/inventory/\d+/.+ + website https://www.linkrvdirect.com/
+-- 2) Step 2 apply_vdp_filtration_range Aug 1–31 (closed 629-view Final vs GA4 gap)
+-- 3) Step 3 build_smart_final_data Aug 1–31 → Final VDP = GA4 VDP = 11377
+-- 4) Path-parse fill: /inventory/{id}/minong-wisconsin-{type}-{make}-{model}.php (92 paths)
+-- 5) inv_location → Minong, WI (+ smart_dealer_locations)
+-- 6) Condition: Hoot by stock id; normalize new/used → New/Pre-Owned; leftover blank → Pre-Owned
+-- 7) Type from path type_code (traveltrai/fifthwheel/classa/b/c/superc/camper/truckcamp)
+-- 8) Strip leading year from Hoot-style makes ("2026 Prime Time" → "Prime Time")
+-- Verified: unknown=0; blank loc/cond/type Other=0

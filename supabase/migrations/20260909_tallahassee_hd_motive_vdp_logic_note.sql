@@ -1,0 +1,13 @@
+-- Tallahassee Harley-Davidson (3403433847) — Made by Motive VDP Logic 1 (Sept 2026)
+-- Site migrated from old /inventory/{id}/{code}-{year}-… to Motive:
+--   /inventory/{New|Used}-{year}-{Make}-{Model}-{Type?}-{VIN17}
+--
+-- 1) smart_vdp_logic (live / Logic 1):
+--    cms = Made by Motive
+--    website = https://www.tallahasseeharley.com/
+--    vdp_logic = ^/inventory/(?:(?:New|Used)-[0-9]{4}-.+-[A-Za-z0-9]{17}|(?:[0-9]+)/[^/]*-[0-9]{4}-)(?:[&/?].*)?
+--    (Motive VIN paths + legacy numeric id paths during transition)
+-- 2) smart_hoot_config.website_platform = Made by Motive
+-- 3) smart_vdp_logic_2 synced to same
+-- 4) Step 2+3 Sept 1–8: Final VDP = GA4 VDP = 2195 (was ~121 under old regex)
+-- 5) Sept unknown fill via Motive + legacy path parse; location TALLAHASSEE, FL; type Motorcycle/Trike

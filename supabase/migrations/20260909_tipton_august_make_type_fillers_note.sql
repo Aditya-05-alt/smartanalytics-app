@@ -1,0 +1,7 @@
+-- Tipton Motorsports (4311838303) — August make/type Other cleanup
+-- 1) smart_make cms=overfuel.com seeded from Hoot/Final makes; Final make casing normalized
+-- 2) smart_custom_unknown_fillers cms=overfuel.com from Hoot raw Type / Vehicle Type
+-- 3) Applied fillers + path heuristics for leftover Other custom_type
+-- 4) Hoot type_ backfilled from raw_data for future Step 3
+-- Verified: make casing unified (Honda/Kawasaki/Yamaha); type Other cleared
+-- Year 0 fixed from path /inventory/{cond}-{year}-… (640 views); Hoot year backfilled too

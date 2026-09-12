@@ -1,0 +1,8 @@
+-- Beaver Coach Sales (7293893546) — August 2026 unknown cleanup
+-- 1) smart_vdp_logic_2 synced from live: ^/inventory/\d{4}-.+ + website https://www.beavercoachsales.com/
+-- 2) Step 2 apply_vdp_filtration_range Aug 1–31 (closed ~2476-view Final vs GA4 gap)
+-- 3) Step 3 build_smart_final_data Aug 1–31 → Final VDP = GA4 VDP = 59177
+-- 4) Path-parse fill blank inv_url/inv_make (67 paths); 1 junk concatenated path hand-filled
+-- 5) inv_location → Beaver Coach Sales (smart_dealer_locations)
+-- 6) Condition: Hoot match + year>=2025→New else Pre-Owned
+-- 7) Type: Hoot RV_type/custom_label_0 + path heuristics (Class A/B/C, Fifth Wheel, etc.)

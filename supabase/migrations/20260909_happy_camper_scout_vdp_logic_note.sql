@@ -1,0 +1,9 @@
+-- Happy Camper RV (5152307309) — CMS Interact → Scout
+-- 1) smart_vdp_logic (live):
+--    cms = Scout RV
+--    vdp_logic = ^/(inventory)/(new|used)[/ \-]+.*(\d{4}) OR ^/product/(new|used)-(\d{4})
+-- 2) Step 2 apply_vdp_filtration_range 2026-08-01..2026-09-08 (26932 rows)
+-- 3) Step 3 build_smart_final_data (Final=GA4)
+-- 4) Unmapped fill: scrap by product path (8704) + scrap stock→inventory (1199) + path parse (419)
+-- Verified: Aug 23010=23010; Sep 2796=2796; unknowns=0; location=Lafayette, IN
+-- smart_dealer_locations: single row Lafayette, IN (blank/Other remap)

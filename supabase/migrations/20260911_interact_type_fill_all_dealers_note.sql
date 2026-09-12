@@ -1,0 +1,8 @@
+-- Interact type fill from smart_custom_unknown_fillers (cms = 'Interact RV').
+-- Applied 2026-09-11: synced custom→type + fuzzy make/model fill for all Interact
+-- dealers in smart_vdp_logic_2 (full 2026). Includes blank/Other/Unknown types.
+-- Result: synced_from_custom=1163, rows_type_filled=6424, views_touched=39381.
+--
+-- Follow-up same day: enriched fillers from smart_hoot_inventory (website_platform
+-- Interact%, majority type_ / RV_type per make+model), then re-ran fuzzy fill with
+-- floorplan-token strip. Extra: ~208+ new fillers, +751 rows / 4049 views filled.

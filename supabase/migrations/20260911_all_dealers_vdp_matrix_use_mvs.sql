@@ -1,16 +1,6 @@
--- All-dealer portfolio channel matrix (VDP / All tabs + date range).
---
--- VDP (KPI-aligned, vdp_conditions):
---   yearly  → mv_ga4_vdp_channel_yearly
---   monthly → mv_ga4_vdp_channel_monthly  (full months / long ranges)
---   daily   → mv_ga4_vdp_channel_daily    (Current Month MTD / short ranges)
---   fallback → live smart_ga4_page_data WHERE vdp_conditions IS TRUE
---
--- Other page types:
---   yearly / monthly / daily → mv_ga4_channel_* with live fallback
---
--- Optional p_client_ids for chunked fetches.
--- Refresh VDP MVs daily after GA4 sync (see cron).
+-- Point All Dealers VDP at mv_ga4_vdp_channel_* (fast, daily-refreshed).
+-- Compare and Overview RPCs are unchanged.
+-- Full function body is maintained in supabase/rpc/get_all_dealers_channel_matrix.sql
 
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text);
 DROP FUNCTION IF EXISTS public.get_all_dealers_channel_matrix(date, date, text, text[]);
@@ -129,7 +119,6 @@ BEGIN
     ORDER BY h.ga4_customer_id, h.id DESC
   ),
   base AS (
-    -- VDP yearly MV
     SELECT
       y.client_id,
       y.channel,
@@ -145,7 +134,6 @@ BEGIN
 
     UNION ALL
 
-    -- VDP monthly MV (full months / long ranges)
     SELECT
       m.client_id,
       m.channel,
@@ -161,7 +149,6 @@ BEGIN
 
     UNION ALL
 
-    -- VDP daily MV (Current Month MTD / short ranges)
     SELECT
       d.client_id,
       d.channel,
@@ -177,7 +164,6 @@ BEGIN
 
     UNION ALL
 
-    -- Live VDP fallback (KPI-aligned)
     SELECT
       p.client_id,
       p.channel,
