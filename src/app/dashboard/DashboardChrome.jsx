@@ -19,13 +19,12 @@ function DashboardContent({ children }) {
   const router = useRouter();
   const { access, accessLoading } = useClient();
   const isAdminRoute = pathname?.startsWith('/dashboard/admin');
-  const isVdpLabRoute = pathname?.startsWith('/dashboard/vdp-lab');
   const reportKey = isAdminRoute ? null : reportKeyFromPathname(pathname);
   const denied =
     !isAdminRoute &&
     !accessLoading &&
-    ((isVdpLabRoute && access?.role === 'user') ||
-      (reportKey && !canAccessReport(access, reportKey)));
+    reportKey &&
+    !canAccessReport(access, reportKey);
 
   useEffect(() => {
     if (denied) router.replace(firstAllowedReportHref(access));

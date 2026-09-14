@@ -3970,13 +3970,22 @@ body {
   gap: 1rem;
 }
 
-/* VDP Lab — safe clone of live VDP tab */
+/* VDP Lab — industry channel trends */
+.vdp-lab-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+}
 .vdp-lab-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 1.25rem .25rem;
+  flex-shrink: 0;
+  margin: 0.5rem 1.25rem 0;
   padding: 10px 14px;
   border: 1px solid color-mix(in srgb, var(--acc) 35%, var(--bd));
   border-radius: 8px;
@@ -3989,6 +3998,12 @@ body {
   color: var(--acc);
   margin-right: 4px;
 }
+.vdp-lab-banner-links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
 .vdp-lab-banner-link {
   flex-shrink: 0;
   color: var(--acc);
@@ -3998,6 +4013,327 @@ body {
 }
 .vdp-lab-banner-link:hover {
   text-decoration: underline;
+}
+
+.vdp-lab-ict-wrap {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0.75rem 1.25rem 1.5rem;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: visible;
+}
+.vdp-lab-ict-filters {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  position: relative;
+  z-index: 40;
+}
+.vdp-lab-ict-date-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.vdp-lab-ict-period-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vdp-lab-ict-period-switch .chart-mode {
+  margin-left: 0;
+}
+.vdp-lab-ict-kpis {
+  flex-shrink: 0;
+}
+.vdp-lab-ict-kpis-head {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t2);
+}
+.vdp-lab-ict-kpi-row.kpi-row {
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.vdp-lab-ict-kpi .kpi-l {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.65rem;
+}
+.vdp-lab-ict-kpi .vdp-lab-ict-chips {
+  margin-bottom: 0.65rem;
+}
+.vdp-lab-ict-kpi-prior {
+  margin-left: 4px;
+  color: var(--t3);
+}
+.vdp-lab-ict-kpi-hint {
+  margin-top: 0.5rem;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--t3);
+}
+.vdp-lab-ict-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vdp-lab-ict-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+  background: var(--s3);
+  color: var(--t);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vdp-lab-ict-chip--muted {
+  color: var(--t3);
+  font-weight: 500;
+}
+.vdp-lab-ict-mark {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.vdp-lab-ict-mark--using {
+  background: color-mix(in srgb, var(--acc) 22%, var(--s3));
+  color: var(--acc);
+}
+.vdp-lab-ict-mark--compared {
+  background: color-mix(in srgb, #60a5fa 22%, var(--s3));
+  color: #60a5fa;
+}
+.vdp-lab-ict-mark--compared-soft {
+  background: var(--s3);
+  color: var(--t3);
+}
+.vdp-lab-ict-row--using {
+  background: color-mix(in srgb, var(--acc) 7%, transparent);
+}
+@media (max-width: 900px) {
+  .vdp-lab-ict-kpi-row.kpi-row {
+    grid-template-columns: 1fr;
+  }
+}
+.vdp-lab-ict-panel {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+.vdp-lab-ict-body {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  padding: 1.125rem !important;
+}
+.vdp-lab-ict-note {
+  flex-shrink: 0;
+  margin: 0 0 12px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--t3);
+}
+.vdp-lab-ict-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  width: 100%;
+}
+.vdp-lab-ict-stage {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: visible;
+}
+.vdp-lab-ict-stage.adc-table-stage {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+.vdp-lab-ict-table-wrap,
+.vdp-lab-ict-table-wrap.adc-table-wrap {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  /* Horizontal scroll for channels; vertical uses full page */
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: auto;
+  scrollbar-color: color-mix(in srgb, var(--t3) 70%, transparent) transparent;
+  -ms-overflow-style: auto;
+}
+.vdp-lab-ict-table-wrap::-webkit-scrollbar,
+.vdp-lab-ict-table-wrap.adc-table-wrap::-webkit-scrollbar {
+  display: block !important;
+  width: 12px;
+  height: 12px;
+}
+.vdp-lab-ict-table-wrap::-webkit-scrollbar-track,
+.vdp-lab-ict-table-wrap.adc-table-wrap::-webkit-scrollbar-track {
+  background: var(--s3);
+}
+.vdp-lab-ict-table-wrap::-webkit-scrollbar-thumb,
+.vdp-lab-ict-table-wrap.adc-table-wrap::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t3) 55%, transparent);
+  border-radius: 999px;
+}
+/* Natural table width — scroll sideways for all channels */
+.vdp-lab-ict-table.adc-table {
+  width: max-content !important;
+  min-width: max-content;
+  table-layout: auto;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  --adc-dealer-col-w: 210px;
+  --adc-total-col-w: 136px;
+  --adc-channel-col-w: 128px;
+}
+.vdp-lab-ict-table th,
+.vdp-lab-ict-table td {
+  box-sizing: border-box;
+  padding: 12px 10px;
+  vertical-align: top;
+}
+.vdp-lab-ict-table .adc-th-dealer,
+.vdp-lab-ict-table .adc-td-dealer {
+  min-width: var(--adc-dealer-col-w);
+  width: var(--adc-dealer-col-w);
+  max-width: var(--adc-dealer-col-w);
+  text-align: left;
+}
+.vdp-lab-ict-table .adc-th-total,
+.vdp-lab-ict-table .adc-td-total {
+  min-width: var(--adc-total-col-w);
+  width: var(--adc-total-col-w);
+  max-width: var(--adc-total-col-w);
+  text-align: right;
+}
+.vdp-lab-ict-table .adc-th-channel,
+.vdp-lab-ict-table .adc-td-channel {
+  min-width: var(--adc-channel-col-w);
+  width: var(--adc-channel-col-w);
+  max-width: var(--adc-channel-col-w);
+  text-align: right;
+}
+.vdp-lab-ict-table thead .adc-th-total,
+.vdp-lab-ict-table thead .adc-th-channel {
+  text-align: right;
+}
+.vdp-lab-ict-col-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 2px;
+  width: 100%;
+  text-align: right;
+  line-height: 1.25;
+  word-break: break-word;
+}
+.vdp-lab-ict-row--portfolio {
+  background: color-mix(in srgb, #60a5fa 12%, var(--s1));
+}
+.vdp-lab-ict-row--portfolio td {
+  border-bottom: 1px solid color-mix(in srgb, #60a5fa 28%, var(--bd));
+}
+.vdp-lab-ict-row--portfolio .adc-dealer-name {
+  font-weight: 800;
+}
+.vdp-lab-ict-dealer-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.vdp-lab-ict-empty {
+  color: var(--t3);
+  font-size: 12px;
+}
+.vdp-lab-ict-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: right;
+}
+.vdp-lab-ict-prior {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  line-height: 1.15;
+}
+.vdp-lab-ict-prior-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.vdp-lab-ict-prior-num {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--t3);
+}
+.vdp-lab-ict-current {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--t);
+  line-height: 1.2;
+}
+.vdp-lab-ict-yoy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1px;
+  padding-top: 4px;
+  border-top: 1px solid var(--bd);
+}
+.vdp-lab-ict-yoy-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t3);
 }
 
 .vdp-bq-compare-panel {

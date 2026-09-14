@@ -95,3 +95,6 @@ agent-transcripts/
 test.txt
 *.tmp
 *.temp
+
+# Local data exports / one-off sheets (keep out of git)
+/exports/
