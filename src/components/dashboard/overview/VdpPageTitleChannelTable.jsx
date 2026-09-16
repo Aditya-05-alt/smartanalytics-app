@@ -21,15 +21,23 @@ const ALL_COLS = [
   { key: 'total_views', label: 'Total', type: 'number', thClass: 'vdp-pt-th-num' },
 ];
 
+/** Non-Latin scripts only — trademark/accent marks (Can-Am®, Mule Pro-FXT™) must pass. */
+const NON_LATIN_SCRIPT =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Greek}\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Thai}\p{Script=Devanagari}]/u;
+
 function hasGarbledScript(title) {
-  // Reject non-printable-ASCII letters (Chinese / Greek / Cyrillic / Arabic / …)
-  return /[^\t\n\r\x20-\x7E]/.test(String(title || ''));
+  return NON_LATIN_SCRIPT.test(String(title || ''));
+}
+
+/** Dealer Spike appends the inventory pager position ("… - Page 3") to VDP titles. */
+function stripPagerSuffix(title) {
+  return title.replace(/\s*[-–—|]\s*Page\s*\d+\s*$/i, '').trim();
 }
 
 function normalizeRows(data) {
   const list = Array.isArray(data) ? data : data ? [data] : [];
   return list.map((row) => {
-    let title = String(row.page_title || '').trim();
+    let title = stripPagerSuffix(String(row.page_title || '').trim());
     // Safety: never show raw path/URL or non-English script titles
     if (
       !title ||
@@ -58,8 +66,18 @@ function normalizeRows(data) {
 function humanizePathLabel(path) {
   const raw = String(path || '').trim();
   if (!raw) return '';
-  const segment = raw.replace(/\/+$/, '').split('/').filter(Boolean).pop() || raw;
-  return segment
+
+  // QS dealers (Dealer Spike) serve VDPs from default.asp?page=…&id=…, so the
+  // pathname carries no vehicle info — read the slug-bearing param, never the
+  // raw query string.
+  const [pathname, query = ''] = raw.split('?');
+  const slug =
+    new URLSearchParams(query).get('unit') ||
+    pathname.replace(/\/+$/, '').split('/').filter(Boolean).pop() ||
+    '';
+  if (!slug || /\.(aspx?|php|html?|jsp)$/i.test(slug)) return '';
+
+  return slug
     .replace(/[-_]+/g, ' ')
     .replace(/\s+for sale\s*/gi, ' ')
     .replace(/\b(inventory|product|en|fr|vehicles?)\b/gi, ' ')

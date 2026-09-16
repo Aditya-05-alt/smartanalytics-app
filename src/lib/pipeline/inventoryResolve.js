@@ -9,6 +9,7 @@ export const FINAL_RPC_SCRAP = 'build_smart_final_data_scrap';
 export const PAGE_PATH_QS_CLIENT_IDS = new Set([
   '1421445735', // Destination Cycle
   '7543766464', // Jay's Power Center — Spike InventoryDetail query VDPs
+  '7231326744', // XGRID — VDPs live on default.asp?page=…InventoryDetail
 ]);
 
 /**

@@ -8,11 +8,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-/** Destination Cycle + Jay's Power Center — page_path_q_s Step 3. */
-const QS_CLIENT_IDS = ["1421445735", "7543766464"];
+/** Destination Cycle + Jay's Power Center + XGRID — page_path_q_s Step 3. */
+const QS_CLIENT_IDS = ["1421445735", "7543766464", "7231326744"];
 
 /**
- * QS Step 3 ONLY — build_smart_final_data_qs for Destination Cycle + Jay's.
+ * QS Step 3 ONLY — build_smart_final_data_qs for Destination Cycle + Jay's + XGRID.
  * Does not touch other dealers. Independent cron/edge from Hoot and Scrap.
  */
 serve(async (req) => {
