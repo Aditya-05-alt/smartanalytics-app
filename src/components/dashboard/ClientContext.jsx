@@ -12,6 +12,8 @@ import { usePathname } from 'next/navigation';
 import { CATEGORIES } from '@/lib/data/categories';
 import { createClient } from '@/lib/supabase/client';
 import {
+  DEALER_SCOPE,
+  dealerConstraintsFromPathname,
   dealerScopeFromPathname,
   readStoredDealerIdForScope,
   resolveDealerForScope,
@@ -82,6 +84,10 @@ export function ClientProvider({ children }) {
   const pathname = usePathname();
   const dealerScope = useMemo(
     () => dealerScopeFromPathname(pathname),
+    [pathname],
+  );
+  const dealerConstraints = useMemo(
+    () => dealerConstraintsFromPathname(pathname),
     [pathname],
   );
 
@@ -189,7 +195,12 @@ export function ClientProvider({ children }) {
     }
 
     const storedId = readStoredDealerIdForScope(dealerScope);
-    let resolved = resolveDealerForScope(dealers, dealerScope, storedId);
+    let resolved = resolveDealerForScope(
+      dealers,
+      dealerScope,
+      storedId,
+      dealerConstraints,
+    );
 
     if (canUseAllDealers === false && isAllDealerClient(resolved)) {
       resolved = dealers[0] || allDealers[0] || ALL_DEALER_CLIENT;
@@ -211,6 +222,7 @@ export function ClientProvider({ children }) {
     allDealers,
     dealers,
     dealerScope,
+    dealerConstraints,
     access,
     canUseAllDealers,
     loading,
@@ -219,7 +231,10 @@ export function ClientProvider({ children }) {
 
   const pickClient = useCallback((c) => {
     setClient(c);
-    if (c?.id != null) writeStoredDealerIdForScope(dealerScope, c.id);
+    // Compare has no picker; never let it write over the shared selection.
+    if (c?.id != null && dealerScope !== DEALER_SCOPE.COMPARE) {
+      writeStoredDealerIdForScope(dealerScope, c.id);
+    }
   }, [dealerScope]);
 
   const isAllDealer = isAllDealerClient(client);

@@ -4,6 +4,7 @@ const DEALER_ID_KEY = 'sa_selected_dealer_id';
 const OVERVIEW_DEALER_ID_KEY = 'sa_overview_dealer_id';
 const INVENTORY_DEALER_ID_KEY = 'sa_inventory_dealer_id';
 const CAMPAIGNS_DEALER_ID_KEY = 'sa_campaigns_dealer_id';
+const COMPARE_DEALER_ID_KEY = 'sa_compare_dealer_id';
 const LAST_REAL_DEALER_ID_KEY = 'sa_last_real_dealer_id';
 const OVERVIEW_TAB_KEY = 'sa_overview_tab';
 const OVERVIEW_DATE_RANGE_KEY = 'sa_overview_date_range';
@@ -36,30 +37,56 @@ function parseStoredRangeObject(raw) {
 
 export const OVERVIEW_TAB_IDS = ['vdp', 'srp', 'home', 'all', 'other'];
 
+/**
+ * Every sidebar menu shares a single dealer selection. Compare is industry-wide
+ * and has no picker, so it keeps its own scope — visiting it must never disturb
+ * the shared pick.
+ */
 export const DEALER_SCOPE = {
-  OVERVIEW: 'overview',
-  INVENTORY: 'inventory',
-  CAMPAIGNS: 'campaigns',
+  SHARED: 'shared',
+  COMPARE: 'compare',
 };
 
 const INVENTORY_REPORT_PATH = '/dashboard/inventory';
-const CAMPAIGNS_REPORT_PATH = '/dashboard/campaigns';
+const CAMPAIGNS_REPORT_PATHS = [
+  '/dashboard/campaigns',
+  '/dashboard/campaigns_advance',
+];
+const COMPARE_PATHS = ['/dashboard/compare', '/dashboard/vdp-lab'];
+
+/** Per-page dealer ids written before the sidebar shared one selection. */
+const LEGACY_DEALER_ID_KEYS = [
+  OVERVIEW_DEALER_ID_KEY,
+  CAMPAIGNS_DEALER_ID_KEY,
+  INVENTORY_DEALER_ID_KEY,
+];
+
+function startsWithAny(pathname, prefixes) {
+  return prefixes.some((prefix) => pathname?.startsWith(prefix));
+}
 
 export function dealerScopeFromPathname(pathname) {
-  if (pathname?.startsWith(INVENTORY_REPORT_PATH)) return DEALER_SCOPE.INVENTORY;
-  if (
-    pathname?.startsWith(CAMPAIGNS_REPORT_PATH) ||
-    pathname?.startsWith('/dashboard/campaigns_advance')
-  ) {
-    return DEALER_SCOPE.CAMPAIGNS;
+  return startsWithAny(pathname, COMPARE_PATHS)
+    ? DEALER_SCOPE.COMPARE
+    : DEALER_SCOPE.SHARED;
+}
+
+/**
+ * Pages that cannot render "All Dealers" still need a concrete dealer, but that
+ * substitution is display-only and must not overwrite the shared selection.
+ */
+export function dealerConstraintsFromPathname(pathname) {
+  if (pathname?.startsWith(INVENTORY_REPORT_PATH)) {
+    return { requireRealDealer: true, preferGa4Dealer: false };
   }
-  return DEALER_SCOPE.OVERVIEW;
+  if (startsWithAny(pathname, CAMPAIGNS_REPORT_PATHS)) {
+    return { requireRealDealer: true, preferGa4Dealer: true };
+  }
+  return { requireRealDealer: false, preferGa4Dealer: false };
 }
 
 function dealerStorageKey(scope) {
-  if (scope === DEALER_SCOPE.INVENTORY) return INVENTORY_DEALER_ID_KEY;
-  if (scope === DEALER_SCOPE.CAMPAIGNS) return CAMPAIGNS_DEALER_ID_KEY;
-  return OVERVIEW_DEALER_ID_KEY;
+  return scope === DEALER_SCOPE.COMPARE ? COMPARE_DEALER_ID_KEY : DEALER_ID_KEY;
 }
 
 function canUseStorage() {
@@ -67,29 +94,34 @@ function canUseStorage() {
 }
 
 export function readStoredDealerId() {
-  return readStoredDealerIdForScope(DEALER_SCOPE.OVERVIEW);
+  return readStoredDealerIdForScope(DEALER_SCOPE.SHARED);
 }
 
 export function readStoredDealerIdForScope(scope) {
   if (!canUseStorage()) return null;
   try {
     const key = dealerStorageKey(scope);
-    let raw = localStorage.getItem(key);
-    if (!raw && scope === DEALER_SCOPE.INVENTORY) {
-      const legacy = localStorage.getItem(DEALER_ID_KEY);
-      if (legacy && legacy !== ALL_DEALER_ID) {
-        raw = legacy;
-        localStorage.setItem(INVENTORY_DEALER_ID_KEY, legacy);
+    const raw = localStorage.getItem(key);
+    if (raw) return String(raw);
+    if (scope !== DEALER_SCOPE.SHARED) return null;
+
+    // First load after the sidebar started sharing one selection: adopt whichever
+    // per-page dealer was last picked so nothing looks like it reset.
+    for (const legacyKey of LEGACY_DEALER_ID_KEYS) {
+      const legacy = localStorage.getItem(legacyKey);
+      if (legacy) {
+        localStorage.setItem(key, legacy);
+        return String(legacy);
       }
     }
-    return raw ? String(raw) : null;
+    return null;
   } catch {
     return null;
   }
 }
 
 export function writeStoredDealerId(id) {
-  writeStoredDealerIdForScope(DEALER_SCOPE.OVERVIEW, id);
+  writeStoredDealerIdForScope(DEALER_SCOPE.SHARED, id);
 }
 
 export function writeStoredDealerIdForScope(scope, id) {
@@ -106,9 +138,9 @@ export function resetDealerToAll() {
   if (!canUseStorage()) return;
   try {
     localStorage.removeItem(LAST_REAL_DEALER_ID_KEY);
-    localStorage.setItem(OVERVIEW_DEALER_ID_KEY, ALL_DEALER_ID);
     localStorage.setItem(DEALER_ID_KEY, ALL_DEALER_ID);
-    localStorage.removeItem(INVENTORY_DEALER_ID_KEY);
+    localStorage.removeItem(COMPARE_DEALER_ID_KEY);
+    LEGACY_DEALER_ID_KEYS.forEach((key) => localStorage.removeItem(key));
   } catch {
     /* ignore */
   }
@@ -255,30 +287,34 @@ export function resolveDealerFromList(dealers, storedId) {
   return ALL_DEALER_CLIENT;
 }
 
-/** Resolve picker client per dashboard area (VDP overview vs inventory report). */
-export function resolveDealerForScope(dealers, scope, storedId) {
+/**
+ * Resolve the picker client for the current page from the one shared selection.
+ * `constraints` comes from {@link dealerConstraintsFromPathname} and only kicks in
+ * when the shared pick is "All Dealers" on a page that cannot show it.
+ */
+export function resolveDealerForScope(
+  dealers,
+  scope,
+  storedId,
+  constraints = {},
+) {
   if (!dealers?.length) return ALL_DEALER_CLIENT;
 
-  if (scope === DEALER_SCOPE.INVENTORY) {
-    if (storedId && storedId !== ALL_DEALER_ID) {
-      const match = findDealerById(dealers, storedId);
-      if (match) return match;
-    }
-    return dealers.find((d) => d?.id) ?? ALL_DEALER_CLIENT;
+  const { requireRealDealer = false, preferGa4Dealer = false } = constraints;
+
+  if (storedId && storedId !== ALL_DEALER_ID) {
+    const match = findDealerById(dealers, storedId);
+    if (match) return match;
   }
 
-  if (scope === DEALER_SCOPE.CAMPAIGNS) {
-    if (storedId && storedId !== ALL_DEALER_ID) {
-      const match = findDealerById(dealers, storedId);
-      if (match) return match;
-    }
+  if (!requireRealDealer) return ALL_DEALER_CLIENT;
+
+  if (preferGa4Dealer) {
     return (
       dealers.find((d) => d?.ga4CustomerId) ??
       dealers.find((d) => d?.id) ??
       ALL_DEALER_CLIENT
     );
   }
-
-  if (!storedId || storedId === ALL_DEALER_ID) return ALL_DEALER_CLIENT;
-  return resolveDealerFromList(dealers, storedId);
+  return dealers.find((d) => d?.id) ?? ALL_DEALER_CLIENT;
 }

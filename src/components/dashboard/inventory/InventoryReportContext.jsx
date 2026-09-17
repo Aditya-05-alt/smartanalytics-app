@@ -11,7 +11,6 @@ import {
 import { useClient } from '@/components/dashboard/ClientContext';
 import {
   fetchInventoryReport,
-  inventoryReportExcludesAllDealers,
   isInventoryReportRefreshing,
   resolveInventoryReportClientId,
 } from '@/lib/inventory/inventoryReport';
@@ -36,7 +35,7 @@ import {
 const InventoryReportContext = createContext(null);
 
 export function InventoryReportProvider({ children }) {
-  const { client, config, dealers, pickClient, isAllDealer } = useClient();
+  const { client, config, dealers } = useClient();
 
   const [reportDate, setReportDateState] = useState(
     () => resolveInventoryReportDateOnLoad(),
@@ -126,12 +125,6 @@ export function InventoryReportProvider({ children }) {
     () => formatInventoryDateLabel(compareDate),
     [compareDate],
   );
-
-  useEffect(() => {
-    if (!inventoryReportExcludesAllDealers() || !isAllDealer) return;
-    const first = dealers.find((d) => d?.id);
-    if (first) pickClient(first);
-  }, [isAllDealer, dealers, pickClient]);
 
   useEffect(() => {
     const today = defaultInventoryReportDate();
