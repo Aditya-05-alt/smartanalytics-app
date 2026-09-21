@@ -61,6 +61,12 @@ const ICONS = {
       <path d="M3 20a9 9 0 0 1 18 0" />
     </svg>
   ),
+  traffic: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M3 20a9 9 0 0 1 18 0" />
+    </svg>
+  ),
   settings: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="12" r="3" />
@@ -74,6 +80,7 @@ const ITEMS = [
   { id: 'campaigns', href: '/dashboard/campaigns', title: 'Campaigns' },
   { id: 'compare', href: '/dashboard/compare', title: 'Compare' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
+  { id: 'traffic', href: '/dashboard/traffic', title: 'Traffic' },
   { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
   { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
   { id: 'local', href: '/dashboard/local', title: 'Local Intel' },

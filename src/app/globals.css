@@ -794,6 +794,111 @@ body {
   width: var(--adc-channel-col-w);
 }
 
+/* ── Traffic report: freeze Dealer + metric cols; channels scroll ── */
+.traffic-table {
+  --traffic-dealer-w: 220px;
+  --traffic-metric-w: 104px;
+  --traffic-metric-w-wide: 112px;
+}
+
+.traffic-table--compare {
+  --traffic-metric-w: 118px;
+  --traffic-metric-w-wide: 124px;
+}
+
+.traffic-table .traffic-th-dealer,
+.traffic-table .traffic-td-dealer {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  min-width: var(--traffic-dealer-w);
+  width: var(--traffic-dealer-w);
+  max-width: var(--traffic-dealer-w);
+  background: var(--s2);
+  box-sizing: border-box;
+}
+
+.traffic-table thead .traffic-th-dealer {
+  z-index: 7;
+  background: var(--s3) !important;
+}
+
+.traffic-table .traffic-th-metric,
+.traffic-table .traffic-td-metric {
+  position: sticky;
+  z-index: 3;
+  background: var(--s2);
+  box-sizing: border-box;
+  text-align: right;
+  white-space: normal;
+  vertical-align: middle;
+  min-width: var(--traffic-metric-w);
+  width: var(--traffic-metric-w);
+  max-width: var(--traffic-metric-w);
+}
+
+.traffic-table thead .traffic-th-metric {
+  z-index: 6;
+  background: var(--s3) !important;
+  color: var(--t3);
+  top: 0;
+}
+
+/* Cumulative left offsets: dealer + prior metrics */
+.traffic-table .traffic-th-metric--0,
+.traffic-table .traffic-td-metric--0 {
+  left: var(--traffic-dealer-w);
+}
+
+.traffic-table .traffic-th-metric--1,
+.traffic-table .traffic-td-metric--1 {
+  left: calc(var(--traffic-dealer-w) + var(--traffic-metric-w));
+}
+
+.traffic-table .traffic-th-metric--2,
+.traffic-table .traffic-td-metric--2 {
+  left: calc(var(--traffic-dealer-w) + (2 * var(--traffic-metric-w)));
+}
+
+.traffic-table .traffic-th-metric--3,
+.traffic-table .traffic-td-metric--3 {
+  left: calc(var(--traffic-dealer-w) + (3 * var(--traffic-metric-w)));
+  min-width: var(--traffic-metric-w-wide);
+  width: var(--traffic-metric-w-wide);
+  max-width: var(--traffic-metric-w-wide);
+}
+
+.traffic-table .traffic-th-metric--4,
+.traffic-table .traffic-td-metric--4 {
+  left: calc(
+    var(--traffic-dealer-w) + (3 * var(--traffic-metric-w)) + var(--traffic-metric-w-wide)
+  );
+  min-width: var(--traffic-metric-w-wide);
+  width: var(--traffic-metric-w-wide);
+  max-width: var(--traffic-metric-w-wide);
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.14);
+}
+
+.traffic-table tbody tr:hover .traffic-td-dealer,
+.traffic-table tbody tr:hover .traffic-td-metric {
+  background: var(--s3);
+}
+
+.traffic-table .traffic-td-dealer .adc-dealer-name {
+  display: block;
+  color: var(--t);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.traffic-table .adc-th-channel,
+.traffic-table .adc-td-channel {
+  position: static;
+}
+
 .adc-compare-head-row th {
   padding-top: 0 !important;
   vertical-align: top;

@@ -259,7 +259,8 @@ export default function TopBar() {
   const hideDealerPicker =
     pathname?.startsWith('/dashboard/admin') ||
     pathname?.startsWith('/reports') ||
-    pathname?.startsWith('/dashboard/compare');
+    pathname?.startsWith('/dashboard/compare') ||
+    pathname?.startsWith('/dashboard/traffic');
 
   return (
     <header className="topbar">

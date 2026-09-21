@@ -3,28 +3,47 @@ export const REPORT_OPTIONS = [
   { key: 'campaigns', label: 'Campaigns', href: '/dashboard/campaigns' },
   { key: 'compare', label: 'Compare', href: '/dashboard/compare' },
   { key: 'inventory', label: 'Inventory report', href: '/dashboard/inventory' },
+  { key: 'traffic', label: 'Traffic', href: '/dashboard/traffic' },
   { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
   { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },
   { key: 'local', label: 'Local Intel', href: '/dashboard/local' },
 ];
 
+/** Not included in Admin / All reports. Only an explicit grant shows these. */
+const EXPLICIT_REPORT_KEYS = new Set(['traffic']);
+
 export const DEFAULT_ACCESS = Object.freeze({
   role: 'admin',
   allReports: true,
-  reportKeys: REPORT_OPTIONS.map((report) => report.key),
+  reportKeys: REPORT_OPTIONS.map((report) => report.key).filter(
+    (key) => !EXPLICIT_REPORT_KEYS.has(key)
+  ),
   allDealers: true,
   dealerIds: [],
 });
 
 const VALID_REPORT_KEYS = new Set(REPORT_OPTIONS.map((report) => report.key));
 
+function explicitReportKeys(keys) {
+  return (keys || []).filter(
+    (key) => VALID_REPORT_KEYS.has(key) && EXPLICIT_REPORT_KEYS.has(key)
+  );
+}
+
 export function normalizeAccess(row) {
-  if (!row || row.role !== 'user') return { ...DEFAULT_ACCESS };
+  const reportKeys = (row?.report_keys || []).filter((key) => VALID_REPORT_KEYS.has(key));
+
+  if (!row || row.role !== 'user') {
+    return {
+      ...DEFAULT_ACCESS,
+      reportKeys: explicitReportKeys(reportKeys),
+    };
+  }
 
   return {
     role: 'user',
     allReports: row.all_reports === true,
-    reportKeys: (row.report_keys || []).filter((key) => VALID_REPORT_KEYS.has(key)),
+    reportKeys,
     allDealers: row.all_dealers === true,
     dealerIds: (row.dealer_ids || [])
       .map(Number)
@@ -33,6 +52,9 @@ export function normalizeAccess(row) {
 }
 
 export function canAccessReport(access, key) {
+  if (EXPLICIT_REPORT_KEYS.has(key)) {
+    return Boolean(access?.reportKeys?.includes(key));
+  }
   if (!access || access.role === 'admin' || access.allReports) return true;
   return access.reportKeys.includes(key);
 }

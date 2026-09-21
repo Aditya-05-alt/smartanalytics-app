@@ -1,7 +1,13 @@
 -- Independent Unknown/Other cleanup (not Step 1/2/3).
 -- Match smart_vdp_logic_2 → update smart_final_data.
+-- Record each fix in smart_unknown_vdp_links (the notebook) as status 'matched' so
+-- it survives the nightly Step 3 rebuild via apply_logic2_notebook_replay, and skip
+-- URLs already recorded there so this only ever works the left-out ones.
 -- Leftover paths → smart_exception_data.
 -- Catalogs: smart_make, smart_models, smart_custom_unknown_fillers.
+--
+-- Depends on: 20260917_logic2_notebook_prepare.sql (unique index on
+-- (client_id, page_path), inv_custom_type, fix_source).
 
 CREATE OR REPLACE FUNCTION public.logic2_slugify(p text)
 RETURNS text
@@ -37,6 +43,7 @@ DECLARE
   v_filled_type int := 0;
   v_exceptions int := 0;
   v_cleared int := 0;
+  v_noted int := 0;
 BEGIN
   IF v_id IS NULL OR v_id = '' OR p_from IS NULL OR p_to IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'bad_args');
@@ -80,6 +87,15 @@ BEGIN
       OR f.vdp_conditions IS DISTINCT FROM TRUE
       OR NULLIF(btrim(f.inv_make), '') IS NULL
       OR lower(btrim(f.inv_make)) IN ('unknown', 'other')
+    )
+    -- Already solved and recorded, so apply_logic2_notebook_replay owns it now.
+    -- Logic 2 only ever works the genuinely left-out URLs.
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.smart_unknown_vdp_links n
+      WHERE n.client_id = v_id
+        AND n.page_path = f.page_path
+        AND n.status IN ('matched', 'applied')
     )
   GROUP BY f.page_path;
 
@@ -203,6 +219,86 @@ BEGIN
         );
       GET DIAGNOSTICS v_filled_type = ROW_COUNT;
     END IF;
+
+    -- Record what was just fixed, keyed by URL rather than date, so tomorrow's
+    -- Step 3 rebuild can be replayed instead of re-derived from scratch. This is
+    -- the only durable trace of which URL was ever repaired.
+    INSERT INTO public.smart_unknown_vdp_links (
+      client_id, ga4_property_id, account_name, report_date,
+      page_path, page_location, page_title, views, cms,
+      status, matched_vdp_logic, fix_source,
+      inv_url, inv_condition, inv_year, inv_make, inv_model,
+      inv_type, inv_custom_type, inv_stock_number,
+      updated_at
+    )
+    SELECT DISTINCT ON (f.page_path)
+      v_id,
+      f.ga4_property_id,
+      COALESCE(v_name, f.account_name),
+      f.report_date,          -- most recent date seen; metadata only
+      f.page_path,
+      f.page_location,
+      f.page_title,
+      f.views,                -- snapshot for context; never replayed back
+      v_cms,
+      'matched',
+      v_logic,
+      'logic2',
+      f.inv_url,
+      f.inv_condition,
+      NULLIF(btrim(COALESCE(f.inv_year, '')), '0'),
+      f.inv_make,
+      f.inv_model,
+      f.inv_type,
+      f.inv_custom_type,
+      f.inv_stock_number,
+      now()
+    FROM public.smart_final_data f
+    JOIN tmp_matched m ON m.page_path = f.page_path
+    WHERE f.client_id = v_id
+      AND f.report_date BETWEEN p_from AND p_to
+      -- The replay keys off inv_url, so an entry without one is not replayable.
+      AND NULLIF(btrim(f.inv_url), '') IS NOT NULL
+      AND NULLIF(btrim(f.inv_make), '') IS NOT NULL
+      AND lower(btrim(f.inv_make)) NOT IN ('unknown', 'other')
+    ORDER BY f.page_path, f.report_date DESC
+    ON CONFLICT (client_id, page_path) DO UPDATE SET
+      account_name = COALESCE(
+        EXCLUDED.account_name, public.smart_unknown_vdp_links.account_name),
+      report_date = GREATEST(
+        EXCLUDED.report_date, public.smart_unknown_vdp_links.report_date),
+      page_location = COALESCE(
+        EXCLUDED.page_location, public.smart_unknown_vdp_links.page_location),
+      page_title = COALESCE(
+        EXCLUDED.page_title, public.smart_unknown_vdp_links.page_title),
+      views = EXCLUDED.views,
+      cms = COALESCE(EXCLUDED.cms, public.smart_unknown_vdp_links.cms),
+      -- 'applied' means the replay has already used this entry; never downgrade it.
+      status = CASE
+        WHEN public.smart_unknown_vdp_links.status = 'applied' THEN 'applied'
+        ELSE 'matched'
+      END,
+      matched_vdp_logic = COALESCE(
+        EXCLUDED.matched_vdp_logic, public.smart_unknown_vdp_links.matched_vdp_logic),
+      -- A value already in the notebook is the durable record: keep it and only
+      -- fill gaps, so a stored fix never flip-flops between daily runs.
+      inv_url = COALESCE(public.smart_unknown_vdp_links.inv_url, EXCLUDED.inv_url),
+      inv_condition = COALESCE(
+        public.smart_unknown_vdp_links.inv_condition, EXCLUDED.inv_condition),
+      inv_year = COALESCE(public.smart_unknown_vdp_links.inv_year, EXCLUDED.inv_year),
+      inv_make = COALESCE(public.smart_unknown_vdp_links.inv_make, EXCLUDED.inv_make),
+      inv_model = COALESCE(public.smart_unknown_vdp_links.inv_model, EXCLUDED.inv_model),
+      inv_type = COALESCE(public.smart_unknown_vdp_links.inv_type, EXCLUDED.inv_type),
+      inv_custom_type = COALESCE(
+        public.smart_unknown_vdp_links.inv_custom_type, EXCLUDED.inv_custom_type),
+      inv_stock_number = COALESCE(
+        public.smart_unknown_vdp_links.inv_stock_number, EXCLUDED.inv_stock_number),
+      updated_at = now()
+    -- Hand-corrected rows are off limits to automation. COALESCE because fix_source
+    -- is nullable, and a NULL predicate would silently skip the row.
+    WHERE COALESCE(public.smart_unknown_vdp_links.fix_source, '') <> 'manual';
+
+    GET DIAGNOSTICS v_noted = ROW_COUNT;
   END IF;
 
   INSERT INTO public.smart_exception_data (
@@ -263,6 +359,7 @@ BEGIN
     'filled_make_rows', v_filled_make,
     'filled_model_rows', v_filled_model,
     'filled_type_rows', v_filled_type,
+    'notebook_entries_written', v_noted,
     'exception_paths', v_exceptions,
     'cleared_exceptions', v_cleared
   );
@@ -270,7 +367,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.apply_logic2_unknown_cleanup(text, date, date) IS
-  'Standalone Unknown/Other cleanup: map matching smart_vdp_logic_2 paths on smart_final_data; leftover URLs go to smart_exception_data.';
+  'Standalone Unknown/Other cleanup: map matching smart_vdp_logic_2 paths on smart_final_data, record each fix in the smart_unknown_vdp_links notebook, and skip URLs already recorded there. Leftover URLs go to smart_exception_data.';
 
 REVOKE ALL ON FUNCTION public.apply_logic2_unknown_cleanup(text, date, date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.apply_logic2_unknown_cleanup(text, date, date)

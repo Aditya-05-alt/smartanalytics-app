@@ -32,16 +32,6 @@ export async function loadUserAccessRecord(supabase, authUserId) {
   if (roleError) throw accessSchemaError(roleError);
   if (!roleRow) return null;
 
-  if (roleRow.role_key === 'admin') {
-    return {
-      role: 'admin',
-      all_reports: true,
-      all_dealers: true,
-      report_keys: [],
-      dealer_ids: [],
-    };
-  }
-
   const [{ data: reportRows, error: reportError }, { data: dealerRows, error: dealerError }] =
     await Promise.all([
       supabase
@@ -58,9 +48,9 @@ export async function loadUserAccessRecord(supabase, authUserId) {
   if (dealerError) throw accessSchemaError(dealerError);
 
   return {
-    role: 'user',
-    all_reports: roleRow.all_reports === true,
-    all_dealers: roleRow.all_dealers === true,
+    role: roleRow.role_key === 'admin' ? 'admin' : 'user',
+    all_reports: roleRow.role_key === 'admin' || roleRow.all_reports === true,
+    all_dealers: roleRow.role_key === 'admin' || roleRow.all_dealers === true,
     report_keys: (reportRows || []).map((row) => row.report_key),
     dealer_ids: (dealerRows || []).map((row) => Number(row.dealer_id)),
   };
@@ -103,9 +93,13 @@ export async function saveUserAccess(supabase, {
   await supabase.from(USER_REPORTS_TABLE).delete().eq('auth_user_id', userId);
   await supabase.from(USER_DEALERS_TABLE).delete().eq('auth_user_id', userId);
 
-  if (!isAdmin && !record.all_reports && reportKeys?.length) {
+  const keysToSave = isAdmin || record.all_reports
+    ? (reportKeys || []).filter((key) => key === 'traffic')
+    : reportKeys || [];
+
+  if (keysToSave.length) {
     const { error } = await supabase.from(USER_REPORTS_TABLE).insert(
-      reportKeys.map((reportKey) => ({
+      keysToSave.map((reportKey) => ({
         auth_user_id: userId,
         report_key: reportKey,
       }))
