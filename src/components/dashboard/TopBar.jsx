@@ -260,7 +260,8 @@ export default function TopBar() {
     pathname?.startsWith('/dashboard/admin') ||
     pathname?.startsWith('/reports') ||
     pathname?.startsWith('/dashboard/compare') ||
-    pathname?.startsWith('/dashboard/traffic');
+    pathname?.startsWith('/dashboard/traffic') ||
+    pathname?.startsWith('/dashboard/all-dealers');
 
   return (
     <header className="topbar">

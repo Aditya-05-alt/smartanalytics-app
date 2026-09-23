@@ -1,4 +1,4 @@
-import { DEFAULT_ACCESS, normalizeAccess } from '@/lib/access/permissions';
+import { DEFAULT_ACCESS, normalizeAccess, EXPLICIT_REPORT_KEYS } from '@/lib/access/permissions';
 
 export const USER_ROLES_TABLE = 'smart_user_roles';
 export const USER_REPORTS_TABLE = 'smart_user_reports';
@@ -94,7 +94,7 @@ export async function saveUserAccess(supabase, {
   await supabase.from(USER_DEALERS_TABLE).delete().eq('auth_user_id', userId);
 
   const keysToSave = isAdmin || record.all_reports
-    ? (reportKeys || []).filter((key) => key === 'traffic')
+    ? (reportKeys || []).filter((key) => EXPLICIT_REPORT_KEYS.has(key))
     : reportKeys || [];
 
   if (keysToSave.length) {

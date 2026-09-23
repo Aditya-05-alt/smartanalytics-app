@@ -138,7 +138,17 @@ function CompareValueCell({
   );
 }
 
-export default function AllDealerChannelTable() {
+/**
+ * @param {{
+ *   selectedDealerNames?: string[],
+ *   selectedChannels?: string[],
+ * }} [props]
+ * Empty arrays = show all (FilterDropdown multi "All" sentinel).
+ */
+export default function AllDealerChannelTable({
+  selectedDealerNames = [],
+  selectedChannels = [],
+} = {}) {
   const { dealers, loading: dealersLoading, dealerCategoryFilter } = useClient();
   const { setSnapshot } = useAllDealerMatrix();
   const {
@@ -196,8 +206,22 @@ export default function AllDealerChannelTable() {
   }, [portfolioDealers]);
 
   /** Dealers + headers show immediately; numeric data only after full load. */
-  const displayRows = dataReady ? matrixRows : shellRows;
-  const displayColumns = columns.length ? columns : columnsRef.current;
+  const rawDisplayRows = dataReady ? matrixRows : shellRows;
+  const rawDisplayColumns = columns.length ? columns : columnsRef.current;
+
+  const displayRows = useMemo(() => {
+    const names = (selectedDealerNames || []).filter(Boolean);
+    if (!names.length) return rawDisplayRows;
+    const allow = new Set(names);
+    return rawDisplayRows.filter((row) => allow.has(row?.dealer?.name));
+  }, [rawDisplayRows, selectedDealerNames]);
+
+  const displayColumns = useMemo(() => {
+    const chans = (selectedChannels || []).filter(Boolean);
+    if (!chans.length) return rawDisplayColumns;
+    const allow = new Set(chans);
+    return rawDisplayColumns.filter((name) => allow.has(name));
+  }, [rawDisplayColumns, selectedChannels]);
 
   const compareByDealer = useMemo(
     () => compareLookupFromRows(compareMatrixRows),

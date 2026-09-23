@@ -1,5 +1,6 @@
 export const REPORT_OPTIONS = [
   { key: 'overview', label: 'Overview', href: '/dashboard' },
+  { key: 'all-dealers', label: 'All Dealers', href: '/dashboard/all-dealers' },
   { key: 'campaigns', label: 'Campaigns', href: '/dashboard/campaigns' },
   { key: 'compare', label: 'Compare', href: '/dashboard/compare' },
   { key: 'inventory', label: 'Inventory report', href: '/dashboard/inventory' },
@@ -10,7 +11,7 @@ export const REPORT_OPTIONS = [
 ];
 
 /** Not included in Admin / All reports. Only an explicit grant shows these. */
-const EXPLICIT_REPORT_KEYS = new Set(['traffic']);
+export const EXPLICIT_REPORT_KEYS = new Set(['traffic', 'all-dealers']);
 
 export const DEFAULT_ACCESS = Object.freeze({
   role: 'admin',

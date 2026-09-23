@@ -794,6 +794,38 @@ body {
   width: var(--adc-channel-col-w);
 }
 
+/* All Dealers focused: show Expected VDP column + horizontal scrollbar */
+.adc-table-wrap--focused {
+  -ms-overflow-style: auto;
+  scrollbar-width: thin;
+}
+.adc-table-wrap--focused::-webkit-scrollbar {
+  display: block !important;
+  height: 10px;
+  width: 10px;
+}
+.adc-table-wrap--focused::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t3) 55%, transparent);
+  border-radius: 999px;
+}
+.adc-table--focused {
+  --adc-expected-col-w: 148px;
+}
+.adc-table--focused .adc-th-expected,
+.adc-table--focused .adc-td-expected {
+  min-width: var(--adc-expected-col-w) !important;
+  width: var(--adc-expected-col-w) !important;
+  max-width: var(--adc-expected-col-w) !important;
+  white-space: normal !important;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--acc);
+}
+.adc-table--focused .adc-td-expected .adc-cell-views {
+  color: var(--acc);
+  font-weight: 700;
+}
+
 /* ── Traffic report: freeze Dealer + metric cols; channels scroll ── */
 .traffic-table {
   --traffic-dealer-w: 220px;
