@@ -101,6 +101,39 @@ function shortPeriodTag(label) {
   return raw.length > 10 ? `${raw.slice(0, 10)}…` : raw;
 }
 
+function dayOrdinal(n) {
+  const j = n % 10;
+  const k = n % 100;
+  if (j === 1 && k !== 11) return 'st';
+  if (j === 2 && k !== 12) return 'nd';
+  if (j === 3 && k !== 13) return 'rd';
+  return 'th';
+}
+
+/** "Sep 21st" */
+function dayStamp(iso) {
+  const d = parseISODate(iso);
+  if (!d) return '';
+  const day = d.getDate();
+  const mon = d.toLocaleDateString('en-US', { month: 'short' });
+  return `${mon} ${day}${dayOrdinal(day)}`;
+}
+
+/** "Sep 1st–21st" or "Sep 21st" when single day. */
+function shortDayRange(from, to) {
+  const a = parseISODate(from);
+  const b = parseISODate(to);
+  if (!a || !b) return '';
+  if (from === to) return dayStamp(from);
+  const sameMonth =
+    a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+  if (sameMonth) {
+    const mon = a.toLocaleDateString('en-US', { month: 'short' });
+    return `${mon} ${a.getDate()}${dayOrdinal(a.getDate())}–${b.getDate()}${dayOrdinal(b.getDate())}`;
+  }
+  return `${dayStamp(from)}–${dayStamp(to)}`;
+}
+
 function ViewsCell({ value }) {
   const n = Number(value) || 0;
   if (n <= 0) return <span className="adc-cell-empty">—</span>;
@@ -383,6 +416,14 @@ export default function AllDealersFocusedTable({
   const showEmpty =
     !loading && !error && !dealersLoading && !portfolioDealers.length;
 
+  const compareRange = wantPop ? popRange : momRange;
+  const compareDatesCaption = compareActive
+    ? `${shortDayRange(from, to)} vs ${shortDayRange(
+        compareRange.compareFrom,
+        compareRange.compareTo
+      )}`
+    : '';
+
   const expectedHint =
     currentDays && daysInMonth
       ? `(Total VDP ÷ ${currentDays}) × ${daysInMonth}`
@@ -393,9 +434,7 @@ export default function AllDealersFocusedTable({
       ? `(Paid Search + Cross ÷ ${currentDays}) × ${daysInMonth}`
       : 'Expected VDP Till Month End (Paid Search + Cross Network)';
 
-  const badgeLabel = compareActive
-    ? `${currentLabel} · ${deltaLabel} vs ${compareLabel}`
-    : `${currentLabel} · Expected`;
+  const badgeLabel = `${currentLabel} · Expected`;
 
   function MetricCell({ current, previous, pending }) {
     if (compareActive) {
@@ -424,7 +463,16 @@ export default function AllDealersFocusedTable({
             bg: 'var(--s3)',
             color: 'var(--t2)',
           }}
-        />
+        >
+          {compareActive && compareDatesCaption ? (
+            <span
+              className="ph-compare-dates"
+              title={`${deltaLabel}: ${compareDatesCaption}`}
+            >
+              {compareDatesCaption}
+            </span>
+          ) : null}
+        </PanelHeader>
         <PanelBody className="all-dealer-channel-body">
           {loading && (
             <div

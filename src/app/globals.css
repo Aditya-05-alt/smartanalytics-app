@@ -901,7 +901,8 @@ body {
 }
 
 /* Cumulative left offsets: dealer + prior metrics
-   Order: VDP, Users, Sessions, Sessions/Users (wide), Pages/session (wide), Views/session (wide) */
+   Order: VDP, Users, Sessions, Sessions/Users (wide), Pages/session (wide),
+   Views/session (wide), Difference (wide) */
 .traffic-table .traffic-th-metric--0,
 .traffic-table .traffic-td-metric--0 {
   left: var(--traffic-dealer-w);
@@ -939,6 +940,16 @@ body {
 .traffic-table .traffic-td-metric--5 {
   left: calc(
     var(--traffic-dealer-w) + (3 * var(--traffic-metric-w)) + (2 * var(--traffic-metric-w-wide))
+  );
+  min-width: var(--traffic-metric-w-wide);
+  width: var(--traffic-metric-w-wide);
+  max-width: var(--traffic-metric-w-wide);
+}
+
+.traffic-table .traffic-th-metric--6,
+.traffic-table .traffic-td-metric--6 {
+  left: calc(
+    var(--traffic-dealer-w) + (3 * var(--traffic-metric-w)) + (3 * var(--traffic-metric-w-wide))
   );
   min-width: var(--traffic-metric-w-wide);
   width: var(--traffic-metric-w-wide);
@@ -4912,6 +4923,13 @@ body {
 }
 .ph-s { font-size: 11px; color: var(--t3); }
 .ph-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+.ph-compare-dates {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t2);
+  white-space: nowrap;
+  margin-left: auto;
+}
 .ph-tabs { display: flex; gap: 2px; margin-left: auto; }
 .ph-t2 {
   padding: 3px 9px;

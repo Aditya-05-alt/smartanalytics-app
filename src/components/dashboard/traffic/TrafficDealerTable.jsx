@@ -8,6 +8,8 @@ import Delta from '@/components/dashboard/Delta';
 import { pctChange, previousMonthAlignedRange, periodMonthLabel } from '@/lib/overview/comparePeriod';
 import { resolveDashboardDateRange } from '@/lib/dashboard/resolveDateRange';
 
+const DIFFERENCE_FORMULA = '(Sessions × Pages / session)';
+
 const METRIC_COLS = [
   { key: 'vdp', label: 'VDP', decimals: 0 },
   { key: 'users', label: 'Users', decimals: 0 },
@@ -15,6 +17,12 @@ const METRIC_COLS = [
   { key: 'sessionsPerUser', label: 'Sessions / Users', decimals: 2 },
   { key: 'pagesPerSession', label: 'Pages / session', decimals: 2 },
   { key: 'viewsPerSession', label: 'Views / session', decimals: 2 },
+  {
+    key: 'difference',
+    label: 'Difference',
+    decimals: 0,
+    title: DIFFERENCE_FORMULA,
+  },
 ];
 
 const DEFAULT_RANGE = 'current_month';
@@ -143,6 +151,14 @@ function ratio(numerator, denominator) {
   return Math.round(((Number(numerator) || 0) / den) * 100) / 100;
 }
 
+/** (Sessions × Pages / session) — VDP-scoped sessions/pages only */
+function differenceMetric(sessions, pagesPerSession) {
+  const s = Number(sessions) || 0;
+  const pps = Number(pagesPerSession) || 0;
+  if (s <= 0 || pps <= 0) return 0;
+  return Math.round(s * pps);
+}
+
 function channelMetrics(raw) {
   if (raw == null) return { sessions: 0, users: 0, pageViews: 0, vdp: 0 };
   if (typeof raw === 'number') {
@@ -185,26 +201,32 @@ function periodToRow(dealer, period, channelFilter = []) {
   }
 
   if (!filterSet) {
+    const sessions = period.sessions;
+    const pagesPerSession = period.pagesPerSession;
     return {
       dealer,
       users: period.users,
-      sessions: period.sessions,
+      sessions,
       sessionsPerUser: period.sessionsPerUser,
-      pagesPerSession: period.pagesPerSession,
+      pagesPerSession,
       vdp: period.vdp,
       viewsPerSession: period.viewsPerSession,
+      difference:
+        period.difference ?? differenceMetric(sessions, pagesPerSession),
       channels: channelsOut,
     };
   }
 
+  const pagesPerSession = ratio(pageViews, sessions);
   return {
     dealer,
     users,
     sessions,
     sessionsPerUser: ratio(sessions, users),
-    pagesPerSession: ratio(pageViews, sessions),
+    pagesPerSession,
     vdp,
     viewsPerSession: ratio(vdp, sessions),
+    difference: differenceMetric(sessions, pagesPerSession),
     channels: channelsOut,
   };
 }
@@ -417,6 +439,7 @@ export default function TrafficDealerTable() {
                         <th
                           key={col.key}
                           className={`adc-th-total traffic-th-freeze traffic-th-metric traffic-th-metric--${index}`}
+                          title={col.title || undefined}
                         >
                           {col.label}
                         </th>

@@ -1,0 +1,106 @@
+-- Re-apply: ensure Traffic MV is VDP-only (vdp_conditions = TRUE).
+-- Prior definition had drifted back to full-site sessions/users/page_views.
+
+DROP MATERIALIZED VIEW IF EXISTS public.mv_traffic_dealer_channel_daily CASCADE;
+
+CREATE MATERIALIZED VIEW public.mv_traffic_dealer_channel_daily AS
+SELECT
+  p.client_id,
+  p.report_date,
+  COALESCE(NULLIF(btrim(p.channel), ''), '(not set)') AS channel,
+  COALESCE(SUM(p.sessions), 0)::bigint AS sessions,
+  COALESCE(SUM(p.total_users), 0)::bigint AS users,
+  COALESCE(SUM(p.views), 0)::bigint AS page_views,
+  COALESCE(SUM(p.views), 0)::bigint AS vdp_views
+FROM public.smart_ga4_page_data p
+WHERE p.vdp_conditions IS TRUE
+  AND p.report_date >= ((CURRENT_DATE AT TIME ZONE 'Asia/Kolkata')::date - 400)
+GROUP BY p.client_id, p.report_date, COALESCE(NULLIF(btrim(p.channel), ''), '(not set)')
+WITH NO DATA;
+
+CREATE UNIQUE INDEX mv_traffic_dealer_channel_daily_uid
+  ON public.mv_traffic_dealer_channel_daily (client_id, report_date, channel);
+
+CREATE INDEX mv_traffic_dealer_channel_daily_date_client
+  ON public.mv_traffic_dealer_channel_daily (report_date, client_id);
+
+CREATE INDEX mv_traffic_dealer_channel_daily_client_date
+  ON public.mv_traffic_dealer_channel_daily (client_id, report_date);
+
+COMMENT ON MATERIALIZED VIEW public.mv_traffic_dealer_channel_daily IS
+  'Rolling 400-day dealer×day×channel VDP-only traffic (vdp_conditions). Source for Traffic dashboard RPCs.';
+
+REVOKE ALL ON TABLE public.mv_traffic_dealer_channel_daily FROM PUBLIC;
+GRANT SELECT ON TABLE public.mv_traffic_dealer_channel_daily TO service_role;
+
+CREATE OR REPLACE FUNCTION public.get_traffic_dealer_channels(
+  p_client_id text,
+  p_from date,
+  p_to date
+)
+RETURNS TABLE (
+  channel text,
+  sessions bigint,
+  users bigint,
+  page_views bigint,
+  vdp_views bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET statement_timeout = '30s'
+AS $$
+  SELECT
+    m.channel,
+    COALESCE(SUM(m.sessions), 0)::bigint AS sessions,
+    COALESCE(SUM(m.users), 0)::bigint AS users,
+    COALESCE(SUM(m.page_views), 0)::bigint AS page_views,
+    COALESCE(SUM(m.vdp_views), 0)::bigint AS vdp_views
+  FROM public.mv_traffic_dealer_channel_daily m
+  WHERE m.client_id = btrim(p_client_id)
+    AND m.report_date BETWEEN p_from AND p_to
+  GROUP BY m.channel
+  ORDER BY 5 DESC, 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_traffic_dealer_channels(text, date, date) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_traffic_dealer_channels(text, date, date)
+  TO service_role;
+
+CREATE OR REPLACE FUNCTION public.get_traffic_dealers_channels(
+  p_client_ids text[],
+  p_from date,
+  p_to date
+)
+RETURNS TABLE (
+  client_id text,
+  channel text,
+  sessions bigint,
+  users bigint,
+  page_views bigint,
+  vdp_views bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET statement_timeout = '30s'
+AS $$
+  SELECT
+    m.client_id,
+    m.channel,
+    COALESCE(SUM(m.sessions), 0)::bigint AS sessions,
+    COALESCE(SUM(m.users), 0)::bigint AS users,
+    COALESCE(SUM(m.page_views), 0)::bigint AS page_views,
+    COALESCE(SUM(m.vdp_views), 0)::bigint AS vdp_views
+  FROM unnest(p_client_ids) AS ids(client_id)
+  JOIN public.mv_traffic_dealer_channel_daily m
+    ON m.client_id = ids.client_id
+   AND m.report_date BETWEEN p_from AND p_to
+  GROUP BY 1, 2;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_traffic_dealers_channels(text[], date, date) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_traffic_dealers_channels(text[], date, date)
+  TO service_role;

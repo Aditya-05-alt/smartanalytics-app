@@ -7,6 +7,7 @@ export function PanelHeader({ title, subtitle, badge, children }) {
     <div className="ph">
       {title && <div className="ph-t">{title}</div>}
       {subtitle && <div className="ph-s">{subtitle}</div>}
+      {children}
       {badge && (
         <span
           className="ph-badge"
@@ -15,7 +16,6 @@ export function PanelHeader({ title, subtitle, badge, children }) {
           {badge.label}
         </span>
       )}
-      {children}
     </div>
   );
 }

@@ -98,6 +98,10 @@ function rollupDealer(rows) {
     sessionsPerUser: ratio(sessions, users),
     pagesPerSession: ratio(pageViews, sessions),
     viewsPerSession: ratio(vdp, sessions),
+    // VDP-only rows: sessions × pages/session ≈ VDP page views
+    difference: Math.round(
+      (Number(sessions) || 0) * ratio(pageViews, sessions)
+    ),
     channels: Object.fromEntries(
       channelList.map((c) => [
         c.name,
