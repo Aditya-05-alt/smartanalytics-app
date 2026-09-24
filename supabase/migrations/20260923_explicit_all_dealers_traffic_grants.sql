@@ -1,6 +1,6 @@
 -- Explicit report grants (production, 2026-09-23)
--- all-dealers: aditya@brandmirchi.com only
--- traffic: aditya@brandmirchi.com + avi@wheeleradvertising.com
+-- all-dealers: aditya@brandmirchi.com + shweta@brandmirchi.com
+-- traffic: aditya@brandmirchi.com + avi@wheeleradvertising.com + shweta@brandmirchi.com
 --
 -- App: EXPLICIT_REPORT_KEYS = traffic, all-dealers in permissions.js
 
@@ -15,7 +15,10 @@ INSERT INTO public.smart_user_reports (auth_user_id, report_key)
 SELECT ur.auth_user_id, v.report_key
 FROM public.smart_user_roles ur
 CROSS JOIN (VALUES ('traffic'), ('all-dealers')) AS v(report_key)
-WHERE lower(ur.email) = 'aditya@brandmirchi.com'
+WHERE lower(ur.email) IN (
+  'aditya@brandmirchi.com',
+  'shweta@brandmirchi.com'
+)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.smart_user_reports (auth_user_id, report_key)
@@ -28,4 +31,7 @@ DELETE FROM public.smart_user_reports r
 USING public.smart_user_roles ur
 WHERE r.auth_user_id = ur.auth_user_id
   AND r.report_key = 'all-dealers'
-  AND lower(ur.email) <> 'aditya@brandmirchi.com';
+  AND lower(ur.email) NOT IN (
+    'aditya@brandmirchi.com',
+    'shweta@brandmirchi.com'
+  );

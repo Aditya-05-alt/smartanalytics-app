@@ -63,16 +63,19 @@ const ICONS = {
   ),
   traffic: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M3 20a9 9 0 0 1 18 0" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      <path d="M7 15c2-1 4 1 6 0s3-2 4-1" strokeLinecap="round" />
     </svg>
   ),
   'all-dealers': (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M3 14h18" />
+      <path d="M9 9v11" />
+      <path d="M15 9v11" />
     </svg>
   ),
   settings: (
@@ -90,9 +93,9 @@ const ITEMS = [
   { id: 'compare', href: '/dashboard/compare', title: 'Compare' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
   { id: 'traffic', href: '/dashboard/traffic', title: 'Traffic' },
-  { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
-  { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
-  { id: 'local', href: '/dashboard/local', title: 'Local Intel' },
+  // { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
+  // { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
+  // { id: 'local', href: '/dashboard/local', title: 'Local Intel' },
 ];
 
 function SideBarLink({ item, active, collapsed }) {
@@ -187,6 +190,7 @@ export default function SideBar() {
             collapsed={collapsed}
           />
         ))}
+        {/* Admin — hidden for now
         <div className="sb-sep" />
         {access?.role !== 'user' && (
           <Link
@@ -199,6 +203,7 @@ export default function SideBar() {
             {!collapsed && <span className="sb-label">Admin</span>}
           </Link>
         )}
+        */}
       </nav>
 
       {/* Settings — hidden until used

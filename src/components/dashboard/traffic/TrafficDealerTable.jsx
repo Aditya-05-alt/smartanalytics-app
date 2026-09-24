@@ -9,9 +9,10 @@ import { pctChange, previousMonthAlignedRange, periodMonthLabel } from '@/lib/ov
 import { resolveDashboardDateRange } from '@/lib/dashboard/resolveDateRange';
 
 const METRIC_COLS = [
+  { key: 'vdp', label: 'VDP', decimals: 0 },
   { key: 'users', label: 'Users', decimals: 0 },
   { key: 'sessions', label: 'Sessions', decimals: 0 },
-  { key: 'vdp', label: 'VDP', decimals: 0 },
+  { key: 'sessionsPerUser', label: 'Sessions / Users', decimals: 2 },
   { key: 'pagesPerSession', label: 'Pages / session', decimals: 2 },
   { key: 'viewsPerSession', label: 'Views / session', decimals: 2 },
 ];
@@ -136,16 +137,75 @@ function MetricCell({
   );
 }
 
-function periodToRow(dealer, period) {
+function ratio(numerator, denominator) {
+  const den = Number(denominator) || 0;
+  if (den <= 0) return 0;
+  return Math.round(((Number(numerator) || 0) / den) * 100) / 100;
+}
+
+function channelMetrics(raw) {
+  if (raw == null) return { sessions: 0, users: 0, pageViews: 0, vdp: 0 };
+  if (typeof raw === 'number') {
+    const n = Number(raw) || 0;
+    return { sessions: 0, users: 0, pageViews: 0, vdp: n };
+  }
+  return {
+    sessions: Number(raw.sessions) || 0,
+    users: Number(raw.users) || 0,
+    pageViews: Number(raw.pageViews) || 0,
+    vdp: Number(raw.vdp) || 0,
+  };
+}
+
+function channelVdpValue(raw) {
+  if (raw == null) return 0;
+  if (typeof raw === 'number') return Number(raw) || 0;
+  return Number(raw.vdp) || 0;
+}
+
+function periodToRow(dealer, period, channelFilter = []) {
   if (!period) return null;
+  const channelsIn = period.channels || {};
+  const filterSet = channelFilter.length ? new Set(channelFilter) : null;
+
+  const channelsOut = {};
+  let users = 0;
+  let sessions = 0;
+  let pageViews = 0;
+  let vdp = 0;
+
+  for (const [name, raw] of Object.entries(channelsIn)) {
+    if (filterSet && !filterSet.has(name)) continue;
+    const m = channelMetrics(raw);
+    channelsOut[name] = m.vdp;
+    users += m.users;
+    sessions += m.sessions;
+    pageViews += m.pageViews;
+    vdp += m.vdp;
+  }
+
+  if (!filterSet) {
+    return {
+      dealer,
+      users: period.users,
+      sessions: period.sessions,
+      sessionsPerUser: period.sessionsPerUser,
+      pagesPerSession: period.pagesPerSession,
+      vdp: period.vdp,
+      viewsPerSession: period.viewsPerSession,
+      channels: channelsOut,
+    };
+  }
+
   return {
     dealer,
-    users: period.users,
-    sessions: period.sessions,
-    pagesPerSession: period.pagesPerSession,
-    vdp: period.vdp,
-    viewsPerSession: period.viewsPerSession,
-    channels: period.channels || {},
+    users,
+    sessions,
+    sessionsPerUser: ratio(sessions, users),
+    pagesPerSession: ratio(pageViews, sessions),
+    vdp,
+    viewsPerSession: ratio(vdp, sessions),
+    channels: channelsOut,
   };
 }
 
@@ -220,10 +280,12 @@ export default function TrafficDealerTable() {
       .map((dealer) => ({
         clientId: dealer.clientId,
         name: dealer.name,
-        current: periodToRow(dealer.name, dealer.current),
-        compare: compareEnabled ? periodToRow(dealer.name, dealer.compare) : null,
+        current: periodToRow(dealer.name, dealer.current, selectedChannels),
+        compare: compareEnabled
+          ? periodToRow(dealer.name, dealer.compare, selectedChannels)
+          : null,
       }));
-  }, [payload, selectedDealers, compareEnabled]);
+  }, [payload, selectedDealers, selectedChannels, compareEnabled]);
 
   const dealerOptions = useMemo(
     () => [
@@ -393,8 +455,12 @@ export default function TrafficDealerTable() {
                             className="adc-td-channel"
                           >
                             <MetricCell
-                              value={dealer.current?.channels?.[colName]}
-                              compareValue={dealer.compare?.channels?.[colName]}
+                              value={channelVdpValue(
+                                dealer.current?.channels?.[colName]
+                              )}
+                              compareValue={channelVdpValue(
+                                dealer.compare?.channels?.[colName]
+                              )}
                               {...cellCompareProps}
                             />
                           </td>

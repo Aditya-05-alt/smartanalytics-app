@@ -5,9 +5,9 @@ export const REPORT_OPTIONS = [
   { key: 'compare', label: 'Compare', href: '/dashboard/compare' },
   { key: 'inventory', label: 'Inventory report', href: '/dashboard/inventory' },
   { key: 'traffic', label: 'Traffic', href: '/dashboard/traffic' },
-  { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
-  { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },
-  { key: 'local', label: 'Local Intel', href: '/dashboard/local' },
+  // { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
+  // { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },
+  // { key: 'local', label: 'Local Intel', href: '/dashboard/local' },
 ];
 
 /** Not included in Admin / All reports. Only an explicit grant shows these. */

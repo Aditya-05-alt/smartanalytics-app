@@ -1,4 +1,37 @@
--- Traffic report RPCs — read mv_traffic_dealer_channel_daily (VDP-only).
+-- Traffic MV: VDP pages only (vdp_conditions = TRUE).
+-- Users / sessions / page views / channel totals are no longer full-site GA4.
+
+DROP MATERIALIZED VIEW IF EXISTS public.mv_traffic_dealer_channel_daily CASCADE;
+
+CREATE MATERIALIZED VIEW public.mv_traffic_dealer_channel_daily AS
+SELECT
+  p.client_id,
+  p.report_date,
+  COALESCE(NULLIF(btrim(p.channel), ''), '(not set)') AS channel,
+  COALESCE(SUM(p.sessions), 0)::bigint AS sessions,
+  COALESCE(SUM(p.total_users), 0)::bigint AS users,
+  COALESCE(SUM(p.views), 0)::bigint AS page_views,
+  COALESCE(SUM(p.views), 0)::bigint AS vdp_views
+FROM public.smart_ga4_page_data p
+WHERE p.vdp_conditions IS TRUE
+  AND p.report_date >= ((CURRENT_DATE AT TIME ZONE 'Asia/Kolkata')::date - 400)
+GROUP BY p.client_id, p.report_date, COALESCE(NULLIF(btrim(p.channel), ''), '(not set)')
+WITH NO DATA;
+
+CREATE UNIQUE INDEX mv_traffic_dealer_channel_daily_uid
+  ON public.mv_traffic_dealer_channel_daily (client_id, report_date, channel);
+
+CREATE INDEX mv_traffic_dealer_channel_daily_date_client
+  ON public.mv_traffic_dealer_channel_daily (report_date, client_id);
+
+CREATE INDEX mv_traffic_dealer_channel_daily_client_date
+  ON public.mv_traffic_dealer_channel_daily (client_id, report_date);
+
+COMMENT ON MATERIALIZED VIEW public.mv_traffic_dealer_channel_daily IS
+  'Rolling 400-day dealer×day×channel VDP-only traffic (vdp_conditions). Source for Traffic dashboard RPCs.';
+
+REVOKE ALL ON TABLE public.mv_traffic_dealer_channel_daily FROM PUBLIC;
+GRANT SELECT ON TABLE public.mv_traffic_dealer_channel_daily TO service_role;
 
 CREATE OR REPLACE FUNCTION public.get_traffic_dealer_channels(
   p_client_id text,

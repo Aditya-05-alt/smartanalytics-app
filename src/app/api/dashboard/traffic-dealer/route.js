@@ -87,17 +87,28 @@ function rollupDealer(rows) {
   }
 
   const channelList = [...channels.entries()]
-    .map(([name, metrics]) => ({ name, sessions: metrics.sessions }))
-    .sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name));
+    .map(([name, metrics]) => ({ name, ...metrics }))
+    .sort((a, b) => b.vdp - a.vdp || a.name.localeCompare(b.name));
 
   return {
     users,
     sessions,
     pageViews,
     vdp,
+    sessionsPerUser: ratio(sessions, users),
     pagesPerSession: ratio(pageViews, sessions),
     viewsPerSession: ratio(vdp, sessions),
-    channels: Object.fromEntries(channelList.map((c) => [c.name, c.sessions])),
+    channels: Object.fromEntries(
+      channelList.map((c) => [
+        c.name,
+        {
+          sessions: c.sessions,
+          users: c.users,
+          pageViews: c.pageViews,
+          vdp: c.vdp,
+        },
+      ])
+    ),
     channelOrder: channelList.map((c) => c.name),
   };
 }
@@ -169,8 +180,9 @@ export async function GET(request) {
 
     const channelTotals = new Map();
     for (const dealer of dealers) {
-      for (const [name, sessions] of Object.entries(dealer.current.channels || {})) {
-        channelTotals.set(name, (channelTotals.get(name) || 0) + sessions);
+      for (const [name, metrics] of Object.entries(dealer.current.channels || {})) {
+        const vdp = Number(metrics?.vdp ?? metrics) || 0;
+        channelTotals.set(name, (channelTotals.get(name) || 0) + vdp);
       }
     }
     const channelOrder = [...channelTotals.entries()]

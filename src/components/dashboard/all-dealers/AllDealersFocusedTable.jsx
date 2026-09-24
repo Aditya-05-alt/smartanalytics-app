@@ -21,6 +21,7 @@ import {
 
 const PAID_SEARCH_ALIASES = ['Paid Search'];
 const CROSS_NETWORK_ALIASES = ['Cross-network', 'Cross Network'];
+const DISPLAY_ALIASES = ['Display'];
 
 function dealerIncludedOnVdp(dealer) {
   return dealer?.showAllDealersVdp !== false;
@@ -41,9 +42,11 @@ function channelMetrics(row) {
   const sliceMap = sliceMapForRow(row);
   const paidSearch = sumAliases(sliceMap, PAID_SEARCH_ALIASES);
   const crossNetwork = sumAliases(sliceMap, CROSS_NETWORK_ALIASES);
+  const display = sumAliases(sliceMap, DISPLAY_ALIASES);
   return {
     paidSearch,
     crossNetwork,
+    display,
     paidPlusCross: paidSearch + crossNetwork,
     totalVdp: Number(row?.total) || 0,
   };
@@ -164,7 +167,8 @@ function ComparePeriodCell({
 
 /**
  * External All Dealers matrix — fixed columns:
- * Dealers | Total VDP | Expected VDP | Paid Search | Cross Network | Paid Search + Cross Network
+ * Dealers | Total VDP | Expected VDP | Paid Search | Cross Network | Display |
+ * Paid Search + Cross Network | Expected VDP (Paid Search + Cross)
  * PoP / MoM compare (toolbar switch) stacks into VDP + channel cells.
  */
 export default function AllDealersFocusedTable({
@@ -352,7 +356,9 @@ export default function AllDealersFocusedTable({
       columns: [
         'Paid Search',
         'Cross Network',
+        'Display',
         'Paid Search + Cross Network',
+        'Expected VDP Paid Search + Cross Network',
       ],
       loading: dealersLoading || loading,
       compareLoading: loading,
@@ -381,6 +387,11 @@ export default function AllDealersFocusedTable({
     currentDays && daysInMonth
       ? `(Total VDP ÷ ${currentDays}) × ${daysInMonth}`
       : 'Expected VDP Till Month End';
+
+  const expectedPaidCrossHint =
+    currentDays && daysInMonth
+      ? `(Paid Search + Cross ÷ ${currentDays}) × ${daysInMonth}`
+      : 'Expected VDP Till Month End (Paid Search + Cross Network)';
 
   const badgeLabel = compareActive
     ? `${currentLabel} · ${deltaLabel} vs ${compareLabel}`
@@ -449,9 +460,18 @@ export default function AllDealersFocusedTable({
                   <thead>
                     <tr>
                       <th className="adc-th-dealer">Dealers</th>
-                      <th className="adc-th-total">Total VDP</th>
+                      <th className="adc-th-total">
+                        <div className="adc-col-head">
+                          <span className="adc-col-label">Total VDP</span>
+                        </div>
+                      </th>
                       <th className="adc-th-total adc-th-expected" title={expectedHint}>
-                        Expected VDP Till Month End
+                        <div className="adc-col-head">
+                          <span className="adc-col-label">
+                            <span className="adc-col-label-line">Expected VDP</span>
+                            <span className="adc-col-label-line">Till Month End</span>
+                          </span>
+                        </div>
                       </th>
                       <th className="adc-th-channel">
                         <div className="adc-col-head">
@@ -465,9 +485,25 @@ export default function AllDealersFocusedTable({
                       </th>
                       <th className="adc-th-channel">
                         <div className="adc-col-head">
+                          <span className="adc-col-label">Display</span>
+                        </div>
+                      </th>
+                      <th className="adc-th-channel">
+                        <div className="adc-col-head">
                           <span className="adc-col-label">
                             <span className="adc-col-label-line">Paid Search +</span>
                             <span className="adc-col-label-line">Cross Network</span>
+                          </span>
+                        </div>
+                      </th>
+                      <th
+                        className="adc-th-total adc-th-expected"
+                        title={expectedPaidCrossHint}
+                      >
+                        <div className="adc-col-head">
+                          <span className="adc-col-label">
+                            <span className="adc-col-label-line">Expected VDP</span>
+                            <span className="adc-col-label-line">Paid + Cross</span>
                           </span>
                         </div>
                       </th>
@@ -480,6 +516,11 @@ export default function AllDealersFocusedTable({
                       const pending = !dataReady || loading || row.error;
                       const expected = expectedVdpTillMonthEnd(
                         m.totalVdp,
+                        currentDays,
+                        daysInMonth
+                      );
+                      const expectedPaidCross = expectedVdpTillMonthEnd(
+                        m.paidPlusCross,
                         currentDays,
                         daysInMonth
                       );
@@ -526,10 +567,27 @@ export default function AllDealersFocusedTable({
                           </td>
                           <td className="adc-td-channel">
                             <MetricCell
+                              current={m.display}
+                              previous={cmp?.display}
+                              pending={pending}
+                            />
+                          </td>
+                          <td className="adc-td-channel">
+                            <MetricCell
                               current={m.paidPlusCross}
                               previous={cmp?.paidPlusCross}
                               pending={pending}
                             />
+                          </td>
+                          <td
+                            className="adc-td-total adc-td-expected"
+                            title={expectedPaidCrossHint}
+                          >
+                            {pending ? (
+                              <span className="adc-cell-empty">—</span>
+                            ) : (
+                              <ViewsCell value={expectedPaidCross} />
+                            )}
                           </td>
                         </tr>
                       );

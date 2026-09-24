@@ -811,6 +811,23 @@ body {
 .adc-table--focused {
   --adc-expected-col-w: 148px;
 }
+.adc-table--focused thead .adc-th-dealer {
+  text-align: left !important;
+}
+.adc-table--focused thead .adc-th-total,
+.adc-table--focused thead .adc-th-channel,
+.adc-table--focused thead .adc-th-expected,
+.adc-table--focused .adc-td-total,
+.adc-table--focused .adc-td-channel,
+.adc-table--focused .adc-td-expected {
+  text-align: right !important;
+}
+.adc-table--focused thead .adc-col-head,
+.adc-table--focused thead .adc-col-label {
+  align-items: flex-end;
+  text-align: right;
+  width: 100%;
+}
 .adc-table--focused .adc-th-expected,
 .adc-table--focused .adc-td-expected {
   min-width: var(--adc-expected-col-w) !important;
@@ -824,6 +841,13 @@ body {
 .adc-table--focused .adc-td-expected .adc-cell-views {
   color: var(--acc);
   font-weight: 700;
+}
+.adc-table--focused .adc-cell,
+.adc-table--focused .adc-cell-views,
+.adc-table--focused .adc-cell-empty {
+  display: block;
+  text-align: right;
+  width: 100%;
 }
 
 /* ── Traffic report: freeze Dealer + metric cols; channels scroll ── */
@@ -876,7 +900,8 @@ body {
   top: 0;
 }
 
-/* Cumulative left offsets: dealer + prior metrics */
+/* Cumulative left offsets: dealer + prior metrics
+   Order: VDP, Users, Sessions, Sessions/Users (wide), Pages/session (wide), Views/session (wide) */
 .traffic-table .traffic-th-metric--0,
 .traffic-table .traffic-td-metric--0 {
   left: var(--traffic-dealer-w);
@@ -904,6 +929,16 @@ body {
 .traffic-table .traffic-td-metric--4 {
   left: calc(
     var(--traffic-dealer-w) + (3 * var(--traffic-metric-w)) + var(--traffic-metric-w-wide)
+  );
+  min-width: var(--traffic-metric-w-wide);
+  width: var(--traffic-metric-w-wide);
+  max-width: var(--traffic-metric-w-wide);
+}
+
+.traffic-table .traffic-th-metric--5,
+.traffic-table .traffic-td-metric--5 {
+  left: calc(
+    var(--traffic-dealer-w) + (3 * var(--traffic-metric-w)) + (2 * var(--traffic-metric-w-wide))
   );
   min-width: var(--traffic-metric-w-wide);
   width: var(--traffic-metric-w-wide);
