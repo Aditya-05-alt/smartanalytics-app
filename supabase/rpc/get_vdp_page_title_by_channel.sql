@@ -1,9 +1,9 @@
--- VDP tab: top page titles × channel columns.
+﻿-- VDP tab: top page titles × channel columns.
 -- Display title preference:
 --   1) real GA4/final page_title (not blank, not a URL/path)
 --   2) inventory-built title (Condition Year Make Model … | Location | #Stock)
 --   3) humanized last path segment (never raw /full/url/path)
--- Paid Search = paid_search + cross_network + display.
+-- Paid Search = paid_search + cross_network. Display is its own column.
 -- Facebook = paid/organic social + facebook sources.
 -- Deploy in Supabase SQL editor.
 
@@ -38,6 +38,7 @@ RETURNS TABLE (
   organic_search bigint,
   direct bigint,
   paid_search bigint,
+  display bigint,
   facebook bigint,
   referral bigint,
   total_views bigint,
@@ -167,12 +168,13 @@ AS $$
           THEN 'organic_search'
         WHEN j.channel_raw = 'direct'
           THEN 'direct'
+        WHEN j.channel_raw = 'display'
+          THEN 'display'
         WHEN j.channel_raw IN (
           'paid_search',
           'paidsearch',
           'cross_network',
-          'crossnetwork',
-          'display'
+          'crossnetwork'
         )
           THEN 'paid_search'
         WHEN j.channel_raw = 'referral'
@@ -208,6 +210,7 @@ AS $$
       SUM(b.views) FILTER (WHERE b.bucket = 'organic_search')::bigint AS organic_search,
       SUM(b.views) FILTER (WHERE b.bucket = 'direct')::bigint AS direct,
       SUM(b.views) FILTER (WHERE b.bucket = 'paid_search')::bigint AS paid_search,
+      SUM(b.views) FILTER (WHERE b.bucket = 'display')::bigint AS display,
       SUM(b.views) FILTER (WHERE b.bucket = 'facebook')::bigint AS facebook,
       SUM(b.views) FILTER (WHERE b.bucket = 'referral')::bigint AS referral,
       SUM(b.views)::bigint AS total_views
@@ -221,6 +224,7 @@ AS $$
       COALESCE(p.organic_search, 0) AS organic_search,
       COALESCE(p.direct, 0) AS direct,
       COALESCE(p.paid_search, 0) AS paid_search,
+      COALESCE(p.display, 0) AS display,
       COALESCE(p.facebook, 0) AS facebook,
       COALESCE(p.referral, 0) AS referral,
       COALESCE(p.total_views, 0) AS total_views,
@@ -310,6 +314,7 @@ AS $$
       l.organic_search,
       l.direct,
       l.paid_search,
+      l.display,
       l.facebook,
       l.referral,
       l.total_views,
@@ -323,6 +328,7 @@ AS $$
     r.organic_search,
     r.direct,
     r.paid_search,
+    r.display,
     r.facebook,
     r.referral,
     r.total_views,
@@ -335,7 +341,7 @@ $$;
 COMMENT ON FUNCTION public.get_vdp_page_title_by_channel(
   text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
 ) IS
-  'VDP page×channel matrix. Titles: clean ASCII English only (drops CJK/Cyrillic/Greek); else inventory/path. Paid Search = paid+cross+display.';
+  'VDP page×channel matrix. Titles: clean ASCII English only (drops CJK/Cyrillic/Greek); else inventory/path. Paid Search = paid+cross network; Display separate.';
 
 REVOKE ALL ON FUNCTION public.get_vdp_page_title_by_channel(
   text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text

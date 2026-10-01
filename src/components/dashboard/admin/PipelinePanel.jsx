@@ -26,6 +26,13 @@ export default function PipelinePanel() {
 
   useEffect(() => {
     let cancelled = false;
+    const params = new URLSearchParams(window.location.search);
+    const qFrom = params.get('from');
+    const qTo = params.get('to');
+    if (qFrom && qTo && qFrom <= qTo) {
+      setFrom(qFrom);
+      setTo(qTo);
+    }
     (async () => {
       setLoading(true);
       setError(null);
@@ -33,13 +40,18 @@ export default function PipelinePanel() {
         const list = await fetchPipelineDealers();
         if (!cancelled) {
           setDealers(list);
+          const queryId = params.get('dealer');
+          const queryMatch = queryId
+            ? list.find((d) => String(d.id) === String(queryId))
+            : null;
           const storedId = readStoredAdminDealerId();
           const storedMatch = storedId
             ? list.find((d) => String(d.id) === String(storedId) && d.ga4CustomerId)
             : null;
           const first = list.find((d) => d.ga4CustomerId);
-          const nextId = storedMatch?.id ?? first?.id;
+          const nextId = queryMatch?.id ?? storedMatch?.id ?? first?.id;
           if (nextId != null) setSelectedId(String(nextId));
+          if (queryMatch) writeStoredAdminDealerId(queryMatch.id);
         }
       } catch (e) {
         if (!cancelled) setError(e?.message || 'Failed to load dealers.');

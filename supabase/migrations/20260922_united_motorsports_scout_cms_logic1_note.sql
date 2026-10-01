@@ -1,0 +1,17 @@
+-- United Motorsports & RV (6250904299)
+-- Applied 2026-09-22 via MCP. This dealer only.
+--
+-- CMS change: Dealer Spike → Scout RV
+--   - smart_hoot_config.website_platform = Scout RV
+--   - smart_vdp_logic.cms = Scout RV
+--   - smart_vdp_logic_2.cms = Scout RV
+--
+-- Logic 1 (smart_vdp_logic): keep legacy Dealer Spike + add Scout (OR):
+--   ^/(NEW|USED)-Inventory-\d{4}-.+-\d+(?:\?.*)?$
+--   OR ^/(inventory)/(new|used)[/ \-]+.*(\d{4})
+--   srp_logic = ^/(inventory)
+--
+-- Logic 2: kept existing Dealer Spike pattern and OR'd standard Scout
+-- inventory Logic 2 regex (A&L / Sky River style).
+-- Re-applied cleanly 2026-09-22 07:41 UTC; SRP now uses OR separator.
+-- No Step 1–3 run — next cron brings data.

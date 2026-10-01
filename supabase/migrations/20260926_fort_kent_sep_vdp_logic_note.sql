@@ -1,0 +1,19 @@
+-- Fort Kent Powersports (3454932870) — Sept 2026 VDP logic widen + full re-sync note
+-- Date: 2026-09-26
+--
+-- Issue: All Dealers Paid Search + Cross Network looked low.
+-- Findings:
+-- 1) Most Paid Search volume is Inventory SRP (/Inventory/...) — correctly NOT VDP.
+-- 2) sync_status was partial; re-ran Steps 1–3 for 2026-09-01..09-26.
+-- 3) Missed alternate VDP URL style:
+--    /Fort-Kent-ME-.../VDP/{uuid}  (2 Paid Search views in Sept)
+--
+-- Applied:
+-- UPDATE smart_vdp_logic id=126 vdp_logic to:
+--   ^/.+-Fort-Kent-ME-{uuid}
+--   OR ^/Fort-Kent-ME-.+/VDP/{uuid}
+-- Then Step 2 + Step 3 for Sept.
+--
+-- After re-sync (Sep 1–25):
+--   Total VDP ~1484, Paid Search ~475, Cross-network ~44, Paid+Cross ~519
+SELECT 1;

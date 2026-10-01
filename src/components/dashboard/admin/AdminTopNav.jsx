@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const LINKS = [
   { href: '/dashboard/admin/pipeline', label: 'Pipeline' },
+  { href: '/dashboard/admin/alerts', label: 'Alerts' },
   { href: '/dashboard/admin/dealers', label: 'Dealers' },
   { href: '/dashboard/admin/roles', label: 'Roles' },
   { href: '/dashboard/admin/daily-sync', label: 'Daily Sync' },
@@ -17,6 +18,7 @@ function isActive(pathname, href) {
     return (
       pathname === href ||
       (pathname.startsWith('/dashboard/admin') &&
+        !pathname.startsWith('/dashboard/admin/alerts') &&
         !pathname.startsWith('/dashboard/admin/dealers') &&
         !pathname.startsWith('/dashboard/admin/roles') &&
         !pathname.startsWith('/dashboard/admin/daily-sync') &&

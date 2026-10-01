@@ -1,0 +1,17 @@
+-- Kokomo Honda (4174607404) + Kokomo Toyota (4174607403)
+-- Applied 2026-09-22 via MCP. Production data fix only.
+--
+-- Root cause: Hoot feeds were swapped on smart_hoot_config, so inventory
+-- customer_name was crossed (Honda rows under Toyota and vice versa). Step 3
+-- therefore could not path-match September VDPs. Logic 2 cms was Dealer.com
+-- while fillers/catalogs lived under cms=Kokomo.
+--
+-- Fixes applied:
+-- 1) Swapped hoot_url between config id 20 (Honda) and 21 (Toyota)
+-- 2) Reassigned smart_hoot_inventory + _live customer_name by site domain
+-- 3) Set smart_vdp_logic / smart_vdp_logic_2 cms = 'Kokomo'
+-- 4) Seeded smart_make / smart_models cms='Kokomo' from inventory
+-- 5) build_smart_final_data Sep 1 → current for both dealers
+-- 6) apply_logic2_unknown_cleanup for both; filled 10 leftover Toyota rows
+--
+-- Result: Honda Sep VDP make/model/type 704/704; Toyota ~1782/1782.

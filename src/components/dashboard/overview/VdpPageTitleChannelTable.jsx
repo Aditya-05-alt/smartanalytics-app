@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Panel, PanelHeader, PanelBody } from '@/components/dashboard/Panel';
 import ChartTopNSelect from '@/components/dashboard/ChartTopNSelect';
 import { useOverview } from '@/components/dashboard/overview/OverviewDataContext';
@@ -11,6 +11,7 @@ const CHANNEL_COLS = [
   { key: 'organic_search', label: 'Organic search', type: 'number' },
   { key: 'direct', label: 'Direct', type: 'number' },
   { key: 'paid_search', label: 'Paid search', type: 'number' },
+  { key: 'display', label: 'Display', type: 'number' },
   { key: 'facebook', label: 'Facebook', type: 'number' },
   { key: 'referral', label: 'Referral', type: 'number' },
 ];
@@ -54,6 +55,7 @@ function normalizeRows(data) {
       organic_search: Number(row.organic_search) || 0,
       direct: Number(row.direct) || 0,
       paid_search: Number(row.paid_search) || 0,
+      display: Number(row.display) || 0,
       facebook: Number(row.facebook) || 0,
       referral: Number(row.referral) || 0,
       total_views: Number(row.total_views) || 0,
@@ -129,7 +131,7 @@ export default function VdpPageTitleChannelTable({
   to,
   limit = 10,
 }) {
-  const { tab, vdpFilters, ga4PropertyId, beginBreakdownLoad, endBreakdownLoad } = useOverview();
+  const { tab, vdpFilters, ga4PropertyId } = useOverview();
   const [topN, setTopN] = useState(limit ?? 10);
   const [sortKey, setSortKey] = useState('total_views');
   const [sortDir, setSortDir] = useState('desc');
@@ -148,15 +150,6 @@ export default function VdpPageTitleChannelTable({
     normalize: normalizeRows,
     errorMessage: 'Failed to load VDP page titles.',
   });
-
-  useEffect(() => {
-    if (!enabled) return undefined;
-    if (loading) beginBreakdownLoad?.();
-    else endBreakdownLoad?.();
-    return () => {
-      endBreakdownLoad?.();
-    };
-  }, [enabled, loading, beginBreakdownLoad, endBreakdownLoad]);
 
   const sortedRows = useMemo(() => {
     const col = ALL_COLS.find((c) => c.key === sortKey) || ALL_COLS[ALL_COLS.length - 1];

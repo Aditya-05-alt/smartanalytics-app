@@ -1,0 +1,10 @@
+-- VDP Pages by Channel: new chunk RPC public.get_vdp_page_title_channel_chunk
+-- (source: supabase/rpc/get_vdp_page_title_channel_chunk.sql).
+-- Frontend calls it in 3-day windows (3 in parallel, bisect on timeout) and
+-- merges/ranks client-side, replacing the single full-range
+-- get_vdp_page_title_by_channel call that hit statement_timeout.
+-- Function uses EXECUTE … USING + enable_nestloop/mergejoin = off: planner
+-- estimates were off by 100×+ for some dealers / property scopes and picked
+-- nested-loop or merge joins over smart_ga4_page_data (25–40s per window).
+-- Remaining cost is cold heap reads on smart_ga4_page_data (~2s per cold window).
+-- get_vdp_page_title_by_channel is kept as a fallback only.

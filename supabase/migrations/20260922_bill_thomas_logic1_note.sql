@@ -1,0 +1,24 @@
+-- Bill Thomas Campers (5364794945) — Logic 1 created 2026-09-22 via MCP.
+-- Production config only; no other dealers changed.
+--
+-- Context: Logic 2 already had Interact RV VDP regex; Logic 1 (smart_vdp_logic)
+-- was missing, so Step 2 filtration could not tag GA4 VDP pages.
+--
+-- Applied:
+-- 1) INSERT smart_vdp_logic id=128
+--    website_url = https://www.btcamper.com/
+--    cms = Interact RV, data_source = Hoot, feed 56224
+--    vdp_logic = ^/rv-inventory/(new|used)/[a-z0-9-]+/[0-9]{4}-[a-zA-Z0-9-]+/[0-9]+/?
+--    srp_logic = ^/rv-inventory/(new|used)/?
+--    home_page_logic = ^/$  (kept end $ so home does not match every path)
+--    (no trailing $ — prefix match, not strict end-anchor)
+--    ga4_property_id = NULL (scopes both properties for this dealer)
+-- 2) UPDATE smart_vdp_logic_2: same vdp/srp/home + website_url
+-- 3) 2026-09-22 follow-up: removed end $ from Logic 1 + Logic 2
+--
+-- Validation (2026-09-22):
+--   Hoot live URLs: 127/127 (100%) match vdp_logic
+--   GA4 page_paths matching vdp_logic: 2115 distinct
+--
+-- Next (optional): run apply_vdp_filtration* for client_id 5364794945,
+-- then Step 3 build_smart_final_data for desired date range.

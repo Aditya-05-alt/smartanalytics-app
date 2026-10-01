@@ -1,0 +1,14 @@
+-- Toppers RV (260260849) moved from Interact RV to Scout RV around 2026-09-16.
+-- VDP logic now = Scout RV patterns OR legacy Interact RV /product/ pattern.
+-- cms set to 'Scout RV' in smart_vdp_logic (id 125) and smart_vdp_logic_2 (id 126).
+-- Applied 2026-09-28 via MCP.
+--
+-- smart_vdp_logic id 125:
+--   ^/(inventory)/(new|used)[/ \-]+.*(\d{4})
+--   OR ^/inventory/(new|used)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+--   OR ^/product/(new|used)-[0-9]{4}-[a-zA-Z0-9]+(-[a-zA-Z0-9]+)+-[0-9]+-[0-9]+$   (legacy)
+--
+-- smart_vdp_logic_2 id 126:
+--   ^/(inventory)/(new|used)[/ \-]+.*(\d{4})
+--   OR ^/inventory/(new|used)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+--   OR ^/product/(new|used)-[0-9]{4}-.+   (legacy)

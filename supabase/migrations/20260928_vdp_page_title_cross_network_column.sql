@@ -1,0 +1,4 @@
+-- VDP Pages by Channel: Paid Search = paid search + cross network; Display gets its own column.
+--
+-- Source of truth: supabase/rpc/get_vdp_page_title_by_channel.sql
+-- Applied 2026-09-28 via MCP: vdp_page_title_cross_network_column, vdp_page_title_display_column

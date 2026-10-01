@@ -21,6 +21,10 @@ import {
 } from '@/lib/pipeline/inventoryResolve';
 import PipelineSyncLog from '@/components/dashboard/admin/PipelineSyncLog';
 import {
+  broadcastPipelineAlerts,
+  recheckPipelineAlertDealers,
+} from '@/lib/api/adminPipelineAlerts';
+import {
   formatStep1BatchProgressLog,
   formatStep1DayByDayLog,
   formatStep1WaitingLog,
@@ -312,6 +316,42 @@ export default function DealerPipelineCard({ dealer, from, to }) {
     setStep3Result(null);
     setStepLogs({ 1: [], 2: [], 3: [] });
   }, [clientId]);
+
+  const prevBusyStepRef = useRef(null);
+  useEffect(() => {
+    const finished = prevBusyStepRef.current;
+    prevBusyStepRef.current = busyStep;
+    if (busyStep != null || ![1, 2, 3].includes(finished) || dealer.id == null) return;
+
+    let cancelled = false;
+    appendStepLog(finished, logLine('Re-checking pipeline alerts for this dealer…'));
+    recheckPipelineAlertDealers([dealer.id], { source: 'pipeline' })
+      .then((snapshot) => {
+        broadcastPipelineAlerts(snapshot);
+        if (cancelled) return;
+        const open = (snapshot?.alerts || []).filter(
+          (a) => String(a.dealerId) === String(dealer.id) && a.severity !== 'pending'
+        );
+        appendStepLog(
+          finished,
+          logLine(
+            open.length === 0
+              ? 'Pipeline alerts: no open issues for this dealer.'
+              : `Pipeline alerts: ${open.length} open issue(s) left — ${open
+                  .map((a) => `${a.reportDate || 'setup'} step ${a.step}`)
+                  .join(', ')}`
+          )
+        );
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          appendStepLog(finished, logLine(`Pipeline alerts re-check failed: ${e?.message || e}`));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [busyStep, dealer.id, appendStepLog]);
 
   const runStep1 = async () => {
     if (!clientId) return;

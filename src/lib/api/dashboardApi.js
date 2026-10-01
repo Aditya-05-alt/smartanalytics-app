@@ -6,6 +6,7 @@ import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
 import { fetchInventoryBreakdownChunked } from '@/lib/api/inventoryBreakdownFetch';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { fetchVdpKpiFiltered } from '@/lib/api/vdpKpiFetch';
+import { fetchVdpPageTitleChunked } from '@/lib/api/vdpPageTitleFetch';
 import {
   appendAnalyticsScope,
   isPropertyScoped,
@@ -363,29 +364,19 @@ export async function fetchVdpPageTitleByChannel({
   tab = 'vdp',
   ga4PropertyId,
   onCancelCheck,
+  onProgress,
 }) {
-  const supabase = createClient();
-  if (!supabase) throw new Error('Supabase is not configured.');
-  if (onCancelCheck?.()) return null;
-
-  const params = withPropertyRpcParams(
-    {
-      p_client_id: String(clientId).trim(),
-      p_from: toDateOnly(from),
-      p_to: toDateOnly(to),
-      p_limit: limit,
-      ...vdpRpcExtraParams(vdpFilters, tab),
-    },
-    ga4PropertyId
-  );
-
-  const { data, error } = await supabase.rpc('get_vdp_page_title_by_channel', params);
-
-  if (error) {
-    if (isPropertyScoped(ga4PropertyId) && isMissingRpcError(error)) return [];
-    throw new Error(error.message || 'Failed to fetch VDP page title channels.');
-  }
-  return data || [];
+  return fetchVdpPageTitleChunked({
+    clientId,
+    from: toDateOnly(from),
+    to: toDateOnly(to),
+    limit,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck,
+    onProgress,
+  });
 }
 
 /** Type breakdown from smart_final_data (VDP tab only). */
