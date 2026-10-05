@@ -5,6 +5,22 @@
 -- Drop legacy 1-arg overload if present:
 DROP FUNCTION IF EXISTS public.apply_vdp_filtration(text);
 
+-- New/Used from a VDP path. Whole-word tokens win over substrings so
+-- "/inventory/used/...-newmar-..." is Used, not New.
+CREATE OR REPLACE FUNCTION public.vdp_condition_from_path(p_path text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_path ~* '(^|[^a-z])(used|pre-?owned)([^a-z]|$)' THEN 'Used'
+    WHEN p_path ~* '(^|[^a-z])new([^a-z]|$)' THEN 'New'
+    WHEN p_path ~* '(used|pre-?owned)' THEN 'Used'
+    WHEN p_path ~* 'new' THEN 'New'
+    ELSE NULL
+  END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.apply_vdp_filtration(
   p_client_id text DEFAULT NULL,
   p_days_back integer DEFAULT NULL
@@ -54,12 +70,7 @@ BEGIN
           public.ga4_effective_page_path(g.page_path, g.page_path_q_s),
           sl.vdp_logic
         ) THEN
-          CASE
-            WHEN public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%new%' THEN 'New'
-            WHEN public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%used%'
-              OR public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%preowned%' THEN 'Used'
-            ELSE NULL
-          END
+          public.vdp_condition_from_path(public.ga4_effective_page_path(g.page_path, g.page_path_q_s))
         ELSE NULL
       END,
 

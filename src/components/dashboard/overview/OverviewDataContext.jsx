@@ -12,6 +12,7 @@ import {
 import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchVdpDailyFiltered, fetchVdpFilterOptions } from '@/lib/api/dashboardApi';
+import { beginPriorityRequest } from '@/lib/api/requestPriority';
 import {
   DEFAULT_VDP_FILTERS,
   normalizeVdpFilters,
@@ -551,9 +552,12 @@ export function OverviewProvider({ children }) {
           channels: VDP_CHANNEL_FILTER_OPTIONS,
         };
         setVdpFilterOptions(withChannels);
-        setVdpFilters((current) =>
-          pruneInvalidFilterSelections(normalizeVdpFilters(current), withChannels)
-        );
+        setVdpFilters((current) => {
+          const pruned = pruneInvalidFilterSelections(normalizeVdpFilters(current), withChannels);
+          return vdpFilterCacheSuffix(pruned, 'vdp') === vdpFilterCacheSuffix(current, 'vdp')
+            ? current
+            : pruned;
+        });
       })
       .catch(() => {
         if (!cancelled) setVdpFilterOptions(EMPTY_VDP_FILTER_OPTIONS);
@@ -583,6 +587,7 @@ export function OverviewProvider({ children }) {
     let cancelled = false;
     // Keep prior KPI visible while the next filter result loads (avoid blank flash).
     setVdpFiltersLoading(true);
+    const endPriority = beginPriorityRequest();
 
     fetchVdpDailyFiltered({
       clientId: clientKey,
@@ -605,11 +610,13 @@ export function OverviewProvider({ children }) {
         // Keep last good KPI on failure; do not wipe the chart to blank.
       })
       .finally(() => {
+        endPriority();
         if (!cancelled) setVdpFiltersLoading(false);
       });
 
     return () => {
       cancelled = true;
+      endPriority();
     };
   }, [scopeCacheKey, clientKey, ga4PropertyId, from, to, vdpFilters]);
 

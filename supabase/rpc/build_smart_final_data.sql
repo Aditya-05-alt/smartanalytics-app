@@ -1,6 +1,10 @@
 -- Deploy: Admin Pipeline Step 3 (build_smart_final_data).
 -- Fast path: dealer-scoped Hoot inventory + URL-path / VIN / DX1 UUID equality.
 -- DX1: GA4 paths may append trailing "G" after the listing UUID.
+-- Then the site listing ID (trailing numeric segment or Dealer.com ".htm" hash), which
+-- survives slug edits such as a condition or type change.
+-- Last resort: the path's final token equals the unit's stock number or feed VIN
+-- (feeds that lag a site migration still carry the stock code, e.g. FIFE RV "AG242").
 
 CREATE OR REPLACE FUNCTION public.extract_dx1_listing_id_from_page_path(p_page_path text)
 RETURNS text
@@ -89,6 +93,9 @@ BEGIN
       lower(btrim(g.page_path)) AS path_key,
       public.extract_vin_from_text(g.page_path) AS path_vin,
       public.extract_dx1_listing_id_from_page_path(g.page_path) AS dx1_id,
+      lower((regexp_match(btrim(g.page_path), '[-/]([A-Za-z0-9]{3,})/?$'))[1]) AS path_tail,
+      (regexp_match(btrim(g.page_path), '/([0-9]{5,})/?$'))[1] AS path_lid,
+      lower((regexp_match(btrim(g.page_path), '([0-9a-fA-F]{32})\.htm'))[1]) AS path_hash,
       MAX(g.page_location) AS page_location,
       MAX(g.page_title) AS page_title,
       MAX(g.ga4_page_type) AS ga4_page_type,
@@ -115,10 +122,17 @@ BEGIN
       LOWER(TRIM(i.url)) AS url_lower,
       lower(split_part(regexp_replace(lower(btrim(i.url)), '^https?://[^/]+', ''), '?', 1)) AS url_path,
       public.extract_dx1_listing_id_from_page_path(i.url) AS dx1_id,
+      (regexp_match(
+        split_part(regexp_replace(lower(btrim(i.url)), '^https?://[^/]+', ''), '?', 1),
+        '/([0-9]{5,})/?$'
+      ))[1] AS url_lid,
+      lower((regexp_match(i.url, '([0-9a-fA-F]{32})\.htm'))[1]) AS url_hash,
       COALESCE(
         NULLIF(upper(btrim(i.vin)), ''),
         public.extract_vin_from_text(i.url)
       ) AS inv_vin,
+      lower(NULLIF(btrim(i.stock_number), '')) AS stock_key,
+      lower(NULLIF(btrim(i.vin), '')) AS vin_key,
       i.sk, i.vin, i.url, i.make, i.model, i.year, i.trim,
       i.price, i.msrp, i.condition, i.type_, i.stock_number,
       i.location, i.first_seen, i.last_seen, i.raw_data
@@ -183,24 +197,56 @@ BEGIN
         AND x.dx1_id = u.dx1_id
       LIMIT 1
     ) by_dx1 ON TRUE
+    -- Site listing ID that survives slug changes: trailing numeric segment
+    -- (Interact "/2024-alliance-delta-281bh/744138/") or Dealer.com 32-hex ".htm" hash.
+    LEFT JOIN LATERAL (
+      SELECT x.*
+      FROM inv_norm x
+      WHERE by_path.sk IS NULL
+        AND by_vin.sk IS NULL
+        AND by_dx1.sk IS NULL
+        AND c.customer_name IS NOT NULL
+        AND x.customer_name_key = LOWER(TRIM(c.customer_name))
+        AND (
+          (u.path_lid IS NOT NULL AND x.url_lid = u.path_lid)
+          OR (u.path_hash IS NOT NULL AND x.url_hash = u.path_hash)
+        )
+      LIMIT 1
+    ) by_lid ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT x.*
+      FROM inv_norm x
+      WHERE by_path.sk IS NULL
+        AND by_vin.sk IS NULL
+        AND by_dx1.sk IS NULL
+        AND by_lid.sk IS NULL
+        AND c.customer_name IS NOT NULL
+        AND x.customer_name_key = LOWER(TRIM(c.customer_name))
+        AND u.path_tail IS NOT NULL
+        AND (u.path_tail ~ '[a-z]' OR length(u.path_tail) >= 6)
+        AND (x.stock_key = u.path_tail OR x.vin_key = u.path_tail)
+        -- Short stock codes can collide; the unit's year must appear in the path too.
+        AND (NULLIF(btrim(x.year), '') IS NULL OR strpos(u.page_path, btrim(x.year)) > 0)
+      LIMIT 1
+    ) by_stock ON TRUE
     CROSS JOIN LATERAL (
       SELECT
-        COALESCE(by_path.sk, by_vin.sk, by_dx1.sk) AS sk,
-        COALESCE(by_path.vin, by_vin.vin, by_dx1.vin) AS vin,
-        COALESCE(by_path.url, by_vin.url, by_dx1.url) AS url,
-        COALESCE(by_path.make, by_vin.make, by_dx1.make) AS make,
-        COALESCE(by_path.model, by_vin.model, by_dx1.model) AS model,
-        COALESCE(by_path.year, by_vin.year, by_dx1.year) AS year,
-        COALESCE(by_path.trim, by_vin.trim, by_dx1.trim) AS trim,
-        COALESCE(by_path.price, by_vin.price, by_dx1.price) AS price,
-        COALESCE(by_path.msrp, by_vin.msrp, by_dx1.msrp) AS msrp,
-        COALESCE(by_path.condition, by_vin.condition, by_dx1.condition) AS condition,
-        COALESCE(by_path.type_, by_vin.type_, by_dx1.type_) AS type_,
-        COALESCE(by_path.stock_number, by_vin.stock_number, by_dx1.stock_number) AS stock_number,
-        COALESCE(by_path.location, by_vin.location, by_dx1.location) AS location,
-        COALESCE(by_path.first_seen, by_vin.first_seen, by_dx1.first_seen) AS first_seen,
-        COALESCE(by_path.last_seen, by_vin.last_seen, by_dx1.last_seen) AS last_seen,
-        COALESCE(by_path.raw_data, by_vin.raw_data, by_dx1.raw_data) AS raw_data
+        COALESCE(by_path.sk, by_vin.sk, by_dx1.sk, by_lid.sk, by_stock.sk) AS sk,
+        COALESCE(by_path.vin, by_vin.vin, by_dx1.vin, by_lid.vin, by_stock.vin) AS vin,
+        COALESCE(by_path.url, by_vin.url, by_dx1.url, by_lid.url, by_stock.url) AS url,
+        COALESCE(by_path.make, by_vin.make, by_dx1.make, by_lid.make, by_stock.make) AS make,
+        COALESCE(by_path.model, by_vin.model, by_dx1.model, by_lid.model, by_stock.model) AS model,
+        COALESCE(by_path.year, by_vin.year, by_dx1.year, by_lid.year, by_stock.year) AS year,
+        COALESCE(by_path.trim, by_vin.trim, by_dx1.trim, by_lid.trim, by_stock.trim) AS trim,
+        COALESCE(by_path.price, by_vin.price, by_dx1.price, by_lid.price, by_stock.price) AS price,
+        COALESCE(by_path.msrp, by_vin.msrp, by_dx1.msrp, by_lid.msrp, by_stock.msrp) AS msrp,
+        COALESCE(by_path.condition, by_vin.condition, by_dx1.condition, by_lid.condition, by_stock.condition) AS condition,
+        COALESCE(by_path.type_, by_vin.type_, by_dx1.type_, by_lid.type_, by_stock.type_) AS type_,
+        COALESCE(by_path.stock_number, by_vin.stock_number, by_dx1.stock_number, by_lid.stock_number, by_stock.stock_number) AS stock_number,
+        COALESCE(by_path.location, by_vin.location, by_dx1.location, by_lid.location, by_stock.location) AS location,
+        COALESCE(by_path.first_seen, by_vin.first_seen, by_dx1.first_seen, by_lid.first_seen, by_stock.first_seen) AS first_seen,
+        COALESCE(by_path.last_seen, by_vin.last_seen, by_dx1.last_seen, by_lid.last_seen, by_stock.last_seen) AS last_seen,
+        COALESCE(by_path.raw_data, by_vin.raw_data, by_dx1.raw_data, by_lid.raw_data, by_stock.raw_data) AS raw_data
     ) iu
     ORDER BY u.client_id, u.report_date, u.page_path
   )
@@ -241,7 +287,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.build_smart_final_data(text, integer, date, date) IS
-  'Hoot Step 3 — path/VIN/DX1 UUID match (trailing G normalized). Final VDP follows GA4 VDP.';
+  'Hoot Step 3 — path/VIN/DX1 UUID match (trailing G normalized), then site listing ID (numeric tail / Dealer.com hash), then stock-code fallback. Final VDP follows GA4 VDP.';
 
 COMMENT ON FUNCTION public.extract_dx1_listing_id_from_page_path(text) IS
   'Extract DX1 listing UUID from path/URL; ignores optional trailing G.';

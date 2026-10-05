@@ -59,12 +59,7 @@ BEGIN
           public.ga4_effective_page_path(g.page_path, g.page_path_q_s),
           sl.vdp_logic
         ) THEN
-          CASE
-            WHEN public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%new%' THEN 'New'
-            WHEN public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%used%'
-              OR public.ga4_effective_page_path(g.page_path, g.page_path_q_s) ILIKE '%preowned%' THEN 'Used'
-            ELSE NULL
-          END
+          public.vdp_condition_from_path(public.ga4_effective_page_path(g.page_path, g.page_path_q_s))
         ELSE NULL
       END,
 

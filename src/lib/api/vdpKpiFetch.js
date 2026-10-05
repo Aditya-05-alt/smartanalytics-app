@@ -24,6 +24,19 @@ async function fetchVdpKpiFromScopedPageData(
   if (invFiltersActive(invParams)) return null;
   if (onCancelCheck?.()) return null;
 
+  const { data: aggRows, error: aggError } = await supabase.rpc('get_vdp_views_by_date_scoped', {
+    p_client_id: String(clientId).trim(),
+    p_ga4_property_id: pid,
+    p_from: String(from).slice(0, 10),
+    p_to: String(to).slice(0, 10),
+  });
+  if (!aggError) {
+    const daily = dailyRowsToMap(aggRows);
+    const total = Object.values(daily).reduce((sum, v) => sum + v, 0);
+    return { daily, total };
+  }
+  if (!isMissingRpcError(aggError)) throw aggError;
+
   const pageSize = 1000;
   let offset = 0;
   const daily = {};
@@ -153,6 +166,22 @@ export async function fetchVdpKpiFiltered(
       emitProgress(onProgress, scoped, { completed: 1, total: 1, fromScopedPageData: true });
       return scoped;
     }
+  }
+
+  if (!invFiltersActive(invParams)) {
+    const { data, error } = await supabase.rpc('get_vdp_views_by_date_fast', {
+      p_client_id: params.p_client_id,
+      p_from: params.p_from,
+      p_to: params.p_to,
+    });
+    if (onCancelCheck?.()) return null;
+    if (!error) {
+      daily = dailyRowsToMap(data);
+      total = Object.values(daily).reduce((sum, v) => sum + v, 0);
+      emitProgress(onProgress, { daily, total }, { completed: 1, total: 1, part: 'fast' });
+      return { daily, total };
+    }
+    if (!isMissingRpcError(error)) throw error;
   }
 
   try {

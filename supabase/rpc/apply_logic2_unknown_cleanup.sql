@@ -21,6 +21,19 @@ AS $$
   );
 $$;
 
+-- Filler makes were pasted from URLs, so some carry a percent-encoded ® / ™.
+CREATE OR REPLACE FUNCTION public.logic2_clean_make(p text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public
+AS $$
+  SELECT NULLIF(
+    btrim(regexp_replace(regexp_replace(COALESCE(p, ''), '%C2%AE', '®', 'gi'), '%E2%84%A2', '™', 'gi')),
+    ''
+  );
+$$;
+
 CREATE OR REPLACE FUNCTION public.apply_logic2_unknown_cleanup(
   p_client_id text,
   p_from date,
@@ -41,6 +54,8 @@ DECLARE
   v_filled_make int := 0;
   v_filled_model int := 0;
   v_filled_type int := 0;
+  v_filled_filler_make int := 0;
+  v_filled_filler_type int := 0;
   v_exceptions int := 0;
   v_cleared int := 0;
   v_noted int := 0;
@@ -132,6 +147,8 @@ BEGIN
           CASE
             WHEN f.page_path ~* '/(new)(/|$)' THEN 'New'
             WHEN f.page_path ~* '/(used|pre-owned|preowned)(/|$)' THEN 'Used'
+            WHEN f.page_path ~* '/new-(19|20)[0-9]{2}-' THEN 'New'
+            WHEN f.page_path ~* '/(used|pre-owned|preowned)-(19|20)[0-9]{2}-' THEN 'Used'
             ELSE f.inv_condition
           END
         ELSE f.inv_condition
@@ -140,6 +157,7 @@ BEGIN
         WHEN NULLIF(btrim(f.inv_year), '') IS NULL OR btrim(f.inv_year) = '0'
         THEN COALESCE(
           (regexp_match(f.page_path, '(?:^|/)((?:19|20)[0-9]{2})(?:-|/)'))[1],
+          (regexp_match(f.page_path, '(?i)/(?:new|used|pre-owned|preowned)-((?:19|20)[0-9]{2})-'))[1],
           f.inv_year
         )
         ELSE f.inv_year
@@ -198,27 +216,150 @@ BEGIN
         AND f.page_path = best.page_path
         AND NULLIF(btrim(f.inv_model), '') IS NULL;
       GET DIAGNOSTICS v_filled_model = ROW_COUNT;
-
-      UPDATE public.smart_final_data f
-      SET
-        inv_type = c.type,
-        inv_custom_type = COALESCE(NULLIF(btrim(f.inv_custom_type), ''), c.type)
-      FROM public.smart_custom_unknown_fillers c
-      WHERE f.client_id = v_id
-        AND f.report_date BETWEEN p_from AND p_to
-        AND f.page_path IN (SELECT page_path FROM tmp_matched)
-        AND lower(c.cms) = lower(v_cms)
-        AND lower(btrim(f.inv_make)) = lower(btrim(c.make))
-        AND (
-          lower(btrim(COALESCE(f.inv_model, ''))) = lower(btrim(c.model))
-          OR lower(btrim(COALESCE(f.inv_model, ''))) LIKE lower(btrim(c.model)) || ' %'
-        )
-        AND (
-          NULLIF(btrim(f.inv_type), '') IS NULL
-          OR lower(btrim(f.inv_type)) IN ('unknown', 'other')
-        );
-      GET DIAGNOSTICS v_filled_type = ROW_COUNT;
     END IF;
+
+    -- Filler rows are labelled by CMS or by dealer group (e.g. 'McKibben' covers
+    -- every McKibben store whose CMS is 'MNG Pro Tech').
+    CREATE TEMP TABLE tmp_fillers ON COMMIT DROP AS
+    SELECT
+      public.logic2_clean_make(c.make) AS make,
+      public.logic2_clean_make(c.model) AS model,
+      NULLIF(btrim(c.type), '') AS type,
+      public.logic2_slugify(public.logic2_clean_make(c.make)) AS make_slug,
+      public.logic2_slugify(c.model) AS model_slug,
+      (v_cms IS NOT NULL AND lower(btrim(c.cms)) = lower(v_cms)) AS exact_cms
+    FROM public.smart_custom_unknown_fillers c
+    WHERE NULLIF(btrim(c.cms), '') IS NOT NULL
+      AND public.logic2_slugify(public.logic2_clean_make(c.make)) IS NOT NULL
+      AND (
+        (v_cms IS NOT NULL AND lower(btrim(c.cms)) = lower(v_cms))
+        OR (
+          length(btrim(c.cms)) >= 4
+          AND v_name IS NOT NULL
+          AND position(lower(btrim(c.cms)) IN lower(v_name)) > 0
+        )
+      );
+
+    -- Inventory says 'Forest River RV' where the URL only says 'forest-river'.
+    INSERT INTO tmp_fillers (make, model, type, make_slug, model_slug, exact_cms)
+    SELECT make, model, type, regexp_replace(make_slug, '-(rv|rvs)$', ''), model_slug, exact_cms
+    FROM tmp_fillers
+    WHERE make_slug ~ '.-(rv|rvs)$';
+
+    CREATE TEMP TABLE tmp_matched_slug ON COMMIT DROP AS
+    SELECT
+      m.page_path,
+      '-' || COALESCE(public.logic2_slugify(public.logic2_clean_make(m.page_path)), '') || '-' AS slug
+    FROM tmp_matched m;
+
+    -- The make sits right after the year in a VDP slug, so the earliest hit wins;
+    -- longest-first would pick a model name like 'Sportsman' over 'Polaris'.
+    UPDATE public.smart_final_data f
+    SET inv_make = best.make
+    FROM (
+      SELECT DISTINCT ON (mth.page_path)
+        mth.page_path,
+        fl.make
+      FROM tmp_matched_slug mth
+      JOIN tmp_fillers fl
+        ON position('-' || fl.make_slug || '-' IN mth.slug) > 0
+      ORDER BY
+        mth.page_path,
+        position('-' || fl.make_slug || '-' IN mth.slug),
+        length(fl.make_slug) DESC,
+        fl.exact_cms DESC
+    ) best
+    WHERE f.client_id = v_id
+      AND f.report_date BETWEEN p_from AND p_to
+      AND f.page_path = best.page_path
+      AND (
+        NULLIF(btrim(f.inv_make), '') IS NULL
+        OR lower(btrim(f.inv_make)) IN ('unknown', 'other')
+      );
+    GET DIAGNOSTICS v_filled_filler_make = ROW_COUNT;
+    v_filled_make := v_filled_make + v_filled_filler_make;
+
+    UPDATE public.smart_final_data f
+    SET
+      inv_model = COALESCE(NULLIF(btrim(f.inv_model), ''), best.model),
+      inv_type = CASE
+        WHEN NULLIF(btrim(f.inv_type), '') IS NULL
+          OR lower(btrim(f.inv_type)) IN ('unknown', 'other')
+        THEN COALESCE(best.type, f.inv_type)
+        ELSE f.inv_type
+      END,
+      inv_custom_type = COALESCE(NULLIF(btrim(f.inv_custom_type), ''), best.type)
+    FROM (
+      SELECT DISTINCT ON (mth.page_path, fl.make)
+        mth.page_path,
+        fl.make,
+        fl.model,
+        fl.type
+      FROM tmp_matched_slug mth
+      JOIN tmp_fillers fl
+        ON fl.model_slug IS NOT NULL
+       AND length(fl.model_slug) >= 2
+       AND position('-' || fl.make_slug || '-' || fl.model_slug || '-' IN mth.slug) > 0
+      ORDER BY mth.page_path, fl.make, length(fl.model_slug) DESC, fl.exact_cms DESC
+    ) best
+    WHERE f.client_id = v_id
+      AND f.report_date BETWEEN p_from AND p_to
+      AND f.page_path = best.page_path
+      AND lower(btrim(f.inv_make)) = lower(best.make)
+      AND (
+        NULLIF(btrim(f.inv_model), '') IS NULL
+        OR NULLIF(btrim(f.inv_type), '') IS NULL
+        OR lower(btrim(f.inv_type)) IN ('unknown', 'other')
+      );
+    GET DIAGNOSTICS v_filled_type = ROW_COUNT;
+
+    UPDATE public.smart_final_data f
+    SET
+      inv_type = c.type,
+      inv_custom_type = COALESCE(NULLIF(btrim(f.inv_custom_type), ''), c.type)
+    FROM tmp_fillers c
+    WHERE f.client_id = v_id
+      AND f.report_date BETWEEN p_from AND p_to
+      AND f.page_path IN (SELECT page_path FROM tmp_matched)
+      AND c.type IS NOT NULL
+      AND lower(btrim(f.inv_make)) = lower(c.make)
+      AND (
+        lower(btrim(COALESCE(f.inv_model, ''))) = lower(c.model)
+        OR lower(btrim(COALESCE(f.inv_model, ''))) LIKE lower(c.model) || ' %'
+      )
+      AND (
+        NULLIF(btrim(f.inv_type), '') IS NULL
+        OR lower(btrim(f.inv_type)) IN ('unknown', 'other')
+      );
+    GET DIAGNOSTICS v_filled_filler_type = ROW_COUNT;
+    v_filled_type := v_filled_type + v_filled_filler_type;
+
+    -- Fillers spell makes loosely ('Honda' vs 'Honda®'); use the dealer's own
+    -- inventory spelling so one make never splits into two on the dashboard.
+    UPDATE public.smart_final_data f
+    SET inv_make = canon.make
+    FROM (
+      SELECT DISTINCT ON (s.slug) s.slug, s.make
+      FROM (
+        SELECT
+          public.logic2_slugify(public.logic2_clean_make(i.inv_make)) AS slug,
+          btrim(i.inv_make) AS make,
+          SUM(COALESCE(i.views, 0)) AS v
+        FROM public.smart_final_data i
+        WHERE i.client_id = v_id
+          AND i.report_date BETWEEN p_from AND p_to
+          AND i.inv_sk IS NOT NULL
+          AND NULLIF(btrim(i.inv_make), '') IS NOT NULL
+        GROUP BY 1, 2
+      ) s
+      WHERE s.slug IS NOT NULL
+      ORDER BY s.slug, s.v DESC
+    ) canon
+    WHERE f.client_id = v_id
+      AND f.report_date BETWEEN p_from AND p_to
+      AND f.page_path IN (SELECT page_path FROM tmp_matched)
+      AND public.logic2_slugify(public.logic2_clean_make(f.inv_make)) = canon.slug
+      AND f.inv_make IS DISTINCT FROM canon.make;
 
     -- Record what was just fixed, keyed by URL rather than date, so tomorrow's
     -- Step 3 rebuild can be replayed instead of re-derived from scratch. This is
@@ -358,6 +499,7 @@ BEGIN
     'mapped_rows', v_matched,
     'filled_make_rows', v_filled_make,
     'filled_model_rows', v_filled_model,
+    'filled_filler_make_rows', v_filled_filler_make,
     'filled_type_rows', v_filled_type,
     'notebook_entries_written', v_noted,
     'exception_paths', v_exceptions,
@@ -375,3 +517,6 @@ GRANT EXECUTE ON FUNCTION public.apply_logic2_unknown_cleanup(text, date, date)
 
 REVOKE ALL ON FUNCTION public.logic2_slugify(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.logic2_slugify(text) TO service_role;
+
+REVOKE ALL ON FUNCTION public.logic2_clean_make(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.logic2_clean_make(text) TO service_role;

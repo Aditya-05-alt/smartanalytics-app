@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { waitForPriorityRequests } from '@/lib/api/requestPriority';
 import { rpcByDateChunksProgressive } from '@/lib/api/chunkedRpc';
 import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
 import {
@@ -188,6 +189,9 @@ export async function fetchChannelBreakdownBundle({
       return cached;
     }
   }
+
+  await waitForPriorityRequests();
+  if (onCancelCheck?.()) return [];
 
   if (preferServer) {
     try {

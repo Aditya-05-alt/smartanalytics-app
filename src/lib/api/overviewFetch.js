@@ -4,6 +4,7 @@
  */
 
 import { appendAnalyticsScope } from '@/lib/analytics/analyticsScope';
+import { waitForPriorityRequests } from '@/lib/api/requestPriority';
 
 async function fetchOverviewViaApi({ clientId, from, to, ga4PropertyId, onCancelCheck }) {
   if (typeof window === 'undefined') return null;
@@ -45,5 +46,7 @@ export async function fetchOverviewBundle({
     return { rows: [], userTotalsRows: [] };
   }
 
+  await waitForPriorityRequests();
+  if (onCancelCheck?.()) return null;
   return fetchOverviewViaApi({ clientId, from, to, ga4PropertyId, onCancelCheck });
 }

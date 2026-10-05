@@ -7,6 +7,7 @@ import { fetchInventoryBreakdownChunked } from '@/lib/api/inventoryBreakdownFetc
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { fetchVdpKpiFiltered } from '@/lib/api/vdpKpiFetch';
 import { fetchVdpPageTitleChunked } from '@/lib/api/vdpPageTitleFetch';
+import { waitForPriorityRequests } from '@/lib/api/requestPriority';
 import {
   appendAnalyticsScope,
   isPropertyScoped,
@@ -115,6 +116,7 @@ export async function fetchVdpFilterOptions({
   onCancelCheck,
 }) {
   if (!clientId || !from || !to) return null;
+  await waitForPriorityRequests();
   if (onCancelCheck?.()) return null;
 
   const invParams = vdpFiltersToRpcParams(vdpFilters, tab);
@@ -248,6 +250,57 @@ export async function fetchVdpDailyFiltered({
     }
   }
 
+  const inflightKey = `${cacheKey}|${toDateOnly(from)}|${toDateOnly(to)}|${cacheSuffix}`;
+  if (!skipCache && vdpDailyInflight.has(inflightKey)) {
+    const shared = await vdpDailyInflight.get(inflightKey);
+    if (onCancelCheck?.()) return null;
+    if (shared) onProgress?.(shared, { completed: 1, total: 1, shared: true });
+    return shared;
+  }
+
+  // Shared requests must not be cancelled by whichever caller started them.
+  const run = fetchVdpDailyFilteredUncached({
+    clientId,
+    from,
+    to,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck: skipCache ? onCancelCheck : undefined,
+    onProgress: (partial, meta) => {
+      if (!onCancelCheck?.()) onProgress?.(partial, meta);
+    },
+    skipCache,
+    cacheKey,
+    cacheSuffix,
+  });
+  if (skipCache) return run;
+
+  vdpDailyInflight.set(inflightKey, run);
+  try {
+    const result = await run;
+    if (onCancelCheck?.()) return null;
+    return result;
+  } finally {
+    vdpDailyInflight.delete(inflightKey);
+  }
+}
+
+const vdpDailyInflight = new Map();
+
+async function fetchVdpDailyFilteredUncached({
+  clientId,
+  from,
+  to,
+  vdpFilters,
+  tab,
+  ga4PropertyId,
+  onCancelCheck,
+  onProgress,
+  skipCache,
+  cacheKey,
+  cacheSuffix,
+}) {
   const inv = vdpRpcExtraParams(vdpFilters, tab);
 
   // Service-role API first (RLS-safe after smart_ga4_page_data is locked down).
@@ -546,6 +599,7 @@ export async function fetchLocationBreakdown({
   onCancelCheck,
   onProgress,
 }) {
+  await waitForPriorityRequests();
   if (onCancelCheck?.()) return undefined;
 
   const rows = await fetchInventoryBreakdownChunked({
