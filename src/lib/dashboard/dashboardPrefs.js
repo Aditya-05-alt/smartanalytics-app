@@ -10,6 +10,7 @@ const OVERVIEW_TAB_KEY = 'sa_overview_tab';
 const OVERVIEW_DATE_RANGE_KEY = 'sa_overview_date_range';
 const OVERVIEW_COMPARE_ENABLED_KEY = 'sa_overview_compare_enabled';
 const OVERVIEW_COMPARE_DATE_RANGE_KEY = 'sa_overview_compare_date_range';
+const OVERVIEW_COMPARE_MODE_KEY = 'sa_overview_compare_mode';
 const ADMIN_DEALER_ID_KEY = 'sa_admin_pipeline_dealer_id';
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -247,6 +248,25 @@ export function writeStoredOverviewCompareDateRange(value) {
         }),
       );
     }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 'mom' (full prior month, default) or 'pop' (same dates last month). */
+export function readStoredOverviewCompareMode() {
+  if (!canUseStorage()) return 'mom';
+  try {
+    return localStorage.getItem(OVERVIEW_COMPARE_MODE_KEY) === 'pop' ? 'pop' : 'mom';
+  } catch {
+    return 'mom';
+  }
+}
+
+export function writeStoredOverviewCompareMode(mode) {
+  if (!canUseStorage()) return;
+  try {
+    localStorage.setItem(OVERVIEW_COMPARE_MODE_KEY, mode === 'pop' ? 'pop' : 'mom');
   } catch {
     /* ignore */
   }

@@ -31,20 +31,33 @@ export function previousMonthAlignedRange(from, to) {
 }
 
 /**
- * Full previous calendar month relative to the current range start month.
- * e.g. 2026-08-01 → 2026-08-24 compares to 2026-07-01 → 2026-07-31 (MoM)
+ * Full previous calendar month(s): first day of the month before `from` through
+ * the last day of the month before `to`.
+ * e.g. 2026-09-01 → 2026-09-30 compares to 2026-08-01 → 2026-08-31 (MoM)
+ *      2026-08-01 → 2026-08-24 compares to 2026-07-01 → 2026-07-31
  */
-export function previousFullMonthRange(from, _to) {
+export function previousFullMonthRange(from, to) {
   const start = parseISO(from);
   if (!start) return { compareFrom: null, compareTo: null };
-  const y = start.getFullYear();
-  const m = start.getMonth();
-  const prevStart = new Date(y, m - 1, 1);
-  const prevEnd = new Date(y, m, 0);
+  const end = parseISO(to) || start;
+  const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
+  const prevEnd = new Date(end.getFullYear(), end.getMonth(), 0);
   return {
     compareFrom: toCalendarISO(prevStart),
     compareTo: toCalendarISO(prevEnd),
   };
+}
+
+export const COMPARE_MODES = [
+  { value: 'pop', label: 'PoP' },
+  { value: 'mom', label: 'MoM' },
+];
+
+/** PoP = same dates last month; MoM = full prior calendar month. */
+export function compareRangeForMode(mode, from, to) {
+  return mode === 'pop'
+    ? previousMonthAlignedRange(from, to)
+    : previousFullMonthRange(from, to);
 }
 
 /** Alias used by overview compare — same aligned prior-month window as PoP. */

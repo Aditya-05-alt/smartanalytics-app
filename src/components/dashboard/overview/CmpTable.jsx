@@ -5,6 +5,7 @@ import { Panel, PanelHeader, PanelBody } from '../Panel';
 import Delta from '../Delta';
 import ChannelGroupToggle from './ChannelGroupToggle';
 import CompareBreakdownSection from '../CompareBreakdownSection';
+import { CompareSeg } from '@/components/campaigns/CampaignUi';
 import { useOverview } from './OverviewDataContext';
 import { useIsVdpLab } from './VdpLabContext';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
@@ -16,6 +17,7 @@ import {
 import { channelBreakdownUsesGroups } from '@/lib/vdp/vdpFilterParams';
 import { useChannelGroupExpansion } from '@/hooks/useChannelGroupExpansion';
 import {
+  COMPARE_MODES,
   mergeChannelComparison,
   sameMonthLastYearLabel,
   sameMonthLastYearRange,
@@ -44,6 +46,9 @@ export default function CmpTable() {
     from,
     to,
     compareEnabled,
+    compareMode,
+    setCompareMode,
+    compareDateRange,
     compareFrom,
     compareTo,
     currentPeriodLabel,
@@ -69,6 +74,8 @@ export default function CmpTable() {
   const { expanded, isExpanded, toggle } = useChannelGroupExpansion(false);
 
   const yoyEnabled = VISIBLE_TABS.has(tab);
+  // A user-picked compare range is neither PoP nor MoM, so the delta is just "Change".
+  const deltaLabel = compareDateRange ? 'Change' : compareMode === 'pop' ? 'PoP' : 'MoM';
   const panelTitle = `${TAB_TITLES[tab] || 'Page'} Views by Channel — Period Comparison`;
   const lyPeriodLabel = useMemo(
     () => sameMonthLastYearLabel(from, to),
@@ -211,7 +218,7 @@ export default function CmpTable() {
         currentPeriodLabel,
         comparePeriodLabel,
         lyPeriodLabel,
-        'MoM',
+        deltaLabel,
         'YoY',
       ].join('\t'),
     ];
@@ -255,11 +262,20 @@ export default function CmpTable() {
     currentPeriodLabel,
     comparePeriodLabel,
     lyPeriodLabel,
+    deltaLabel,
   ]);
 
   if (!VISIBLE_TABS.has(tab)) return null;
 
   const showSideBySide = tab === 'vdp' && compareEnabled && compareFrom && compareTo;
+
+  const compareModeSwitch = (
+    <CompareSeg
+      value={compareDateRange ? null : compareMode}
+      options={COMPARE_MODES}
+      onChange={setCompareMode}
+    />
+  );
 
   const copyButton = (
     <button
@@ -298,7 +314,7 @@ export default function CmpTable() {
               <tr>
                 <th>Channel</th>
                 <th>Views</th>
-                {showMom && <th className="col-mom">MoM</th>}
+                {showMom && <th className="col-mom">{deltaLabel}</th>}
               </tr>
             </thead>
             <tbody>
@@ -371,7 +387,15 @@ export default function CmpTable() {
 
   if (showSideBySide) {
     return (
-      <CompareBreakdownSection title={panelTitle} headerExtra={copyButton}>
+      <CompareBreakdownSection
+        title={panelTitle}
+        headerExtra={(
+          <>
+            {compareModeSwitch}
+            {copyButton}
+          </>
+        )}
+      >
         {renderPeriodTable(comparePeriodLabel, 'cmp')}
         {renderPeriodTable(currentPeriodLabel, 'cur', { showMom: true })}
       </CompareBreakdownSection>
@@ -385,8 +409,9 @@ export default function CmpTable() {
         badge={{ label: 'Copy-ready', bg: 'var(--acc-soft)', color: 'var(--acc)' }}
       >
         <span className="cmp-table-head-note">
-          {`${currentPeriodLabel} · ${comparePeriodLabel} · ${lyPeriodLabel} · MoM · YoY`}
+          {`${currentPeriodLabel} · ${comparePeriodLabel} · ${lyPeriodLabel} · ${deltaLabel} · YoY`}
         </span>
+        {compareModeSwitch}
         {copyButton}
       </PanelHeader>
 
@@ -401,7 +426,7 @@ export default function CmpTable() {
                 <th className="col-cur">{currentPeriodLabel}</th>
                 <th className="col-prev">{comparePeriodLabel}</th>
                 <th className="col-lyear">{lyPeriodLabel}</th>
-                <th className="col-mom">MoM</th>
+                <th className="col-mom">{deltaLabel}</th>
                 <th className="col-yoy">YoY</th>
               </tr>
             </thead>
@@ -489,7 +514,7 @@ export default function CmpTable() {
         <div className="cmp-legend-swatch cmp-legend-swatch--lyear" />
         {lyPeriodLabel}
         <span className="cmp-table-foot-note">
-          {`MoM: ${currentPeriodLabel} vs ${comparePeriodLabel} · YoY: ${currentPeriodLabel} vs ${lyPeriodLabel}`}
+          {`${deltaLabel}: ${currentPeriodLabel} vs ${comparePeriodLabel} · YoY: ${currentPeriodLabel} vs ${lyPeriodLabel}`}
         </span>
       </div>
     </Panel>

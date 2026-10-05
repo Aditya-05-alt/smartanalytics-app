@@ -36,6 +36,7 @@ import {
 import { useIsVdpLab } from '@/components/dashboard/overview/VdpLabContext';
 import {
   previousMonthAlignedRange,
+  compareRangeForMode,
   periodMonthLabel,
   sameMonthLastYearRange,
   mergeChannelComparison,
@@ -52,6 +53,8 @@ import {
   writeStoredOverviewCompareEnabled,
   readStoredOverviewCompareDateRange,
   writeStoredOverviewCompareDateRange,
+  readStoredOverviewCompareMode,
+  writeStoredOverviewCompareMode,
 } from '@/lib/dashboard/dashboardPrefs';
 
 const OverviewDataContext = createContext(null);
@@ -195,9 +198,20 @@ export function OverviewProvider({ children }) {
   const [compareEnabled, setCompareEnabledState] = useState(
     () => readStoredOverviewCompareEnabled(),
   );
-  const [compareDateRange, setCompareDateRangeState] = useState(
-    () => readStoredOverviewCompareDateRange(),
-  );
+  const [compareMode, setCompareModeState] = useState(() => readStoredOverviewCompareMode());
+  const [compareDateRange, setCompareDateRangeState] = useState(() => {
+    const stored = readStoredOverviewCompareDateRange();
+    if (!stored) return null;
+    // Compare toggling used to persist the same-dates default as a custom range;
+    // treat that as "no override" so the selected compare mode applies.
+    const main = resolveRange(readStoredOverviewDateRange() || DEFAULT_RANGE);
+    const aligned = previousMonthAlignedRange(main.from, main.to);
+    if (stored.start === aligned.compareFrom && stored.end === aligned.compareTo) {
+      writeStoredOverviewCompareDateRange(null);
+      return null;
+    }
+    return stored;
+  });
 
   const setCompareDateRange = useCallback((next) => {
     setCompareDateRangeState(next);
@@ -225,8 +239,8 @@ export function OverviewProvider({ children }) {
   const { from, to } = useMemo(() => resolveRange(dateRange), [dateRange]);
 
   const defaultCompare = useMemo(
-    () => previousMonthAlignedRange(from, to),
-    [from, to]
+    () => compareRangeForMode(compareMode, from, to),
+    [compareMode, from, to]
   );
 
   const { compareFrom, compareTo } = useMemo(() => {
@@ -279,19 +293,18 @@ export function OverviewProvider({ children }) {
     setCompareEnabledState((prev) => {
       const next = !prev;
       writeStoredOverviewCompareEnabled(next);
-      if (next) {
-        const def = previousMonthAlignedRange(from, to);
-        setCompareDateRange({
-          start: def.compareFrom,
-          end: def.compareTo,
-          preset: 'custom',
-        });
-      } else {
-        setCompareDateRange(null);
-      }
+      // No explicit range: the compare window follows compareMode until the user picks one.
+      setCompareDateRange(null);
       return next;
     });
-  }, [from, to, setCompareDateRange]);
+  }, [setCompareDateRange]);
+
+  const setCompareMode = useCallback((mode) => {
+    const next = mode === 'pop' ? 'pop' : 'mom';
+    setCompareModeState(next);
+    writeStoredOverviewCompareMode(next);
+    setCompareDateRange(null);
+  }, [setCompareDateRange]);
 
   const prevMainRangeRef = useRef(null);
   useEffect(() => {
@@ -963,6 +976,8 @@ export function OverviewProvider({ children }) {
       compareEnabled,
       setCompareEnabled,
       toggleCompareEnabled,
+      compareMode,
+      setCompareMode,
       compareDateRange,
       setCompareDateRange,
       compareFrom,
@@ -1013,6 +1028,8 @@ export function OverviewProvider({ children }) {
       compareEnabled,
       setCompareEnabled,
       toggleCompareEnabled,
+      compareMode,
+      setCompareMode,
       compareDateRange,
       setCompareDateRange,
       compareFrom,
