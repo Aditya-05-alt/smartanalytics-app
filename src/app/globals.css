@@ -722,6 +722,22 @@ body {
   padding-bottom: 12px !important;
 }
 
+.adc-dealer-link {
+  text-decoration: none;
+  cursor: pointer;
+}
+button.adc-dealer-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+}
+.adc-dealer-link:hover,
+.adc-dealer-link:focus-visible {
+  color: var(--blue);
+  text-decoration: underline;
+}
 .adc-dealer-name {
   display: block;
   font-size: 12px;

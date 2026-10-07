@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { rpcByDateChunksProgressive } from '@/lib/api/chunkedRpc';
 import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
+import { pilotBreakdownChunkPlan } from '@/lib/api/ga4SummaryPilot';
 import { appendAnalyticsScope, isPropertyScoped, withPropertyRpcParams } from '@/lib/analytics/analyticsScope';
 import {
   appendInvParamsToSearchParams,
@@ -80,11 +81,6 @@ export async function fetchInventoryBreakdownChunked({
     ga4PropertyId
   );
 
-  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
-    invFilters,
-    pageType: 'VDP',
-  });
-
   const finalize = (rawRows) =>
     mergeInventoryBreakdownRows(rawRows, bucketKey, secondaryBucketKey, limit);
 
@@ -115,6 +111,15 @@ export async function fetchInventoryBreakdownChunked({
 
   const supabase = createClient();
   if (!supabase) throw new Error('Supabase is not configured.');
+
+  const { chunkDays, concurrency } = await pilotBreakdownChunkPlan(
+    supabase,
+    clientId,
+    from,
+    to,
+    resolveRpcChunkPlan(from, to, { invFilters, pageType: 'VDP' }),
+    extraParams.p_channels
+  );
 
   const merged = [];
 

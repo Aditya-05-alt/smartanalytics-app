@@ -5,6 +5,12 @@ import { mergeChannelBreakdownRows } from '@/lib/ga4/channelBreakdownMerge';
 import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
 import { mergeAnalyticsExtra } from '@/lib/api/analyticsScope';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
+import {
+  canUseGa4Summary,
+  canUseGa4VdpPaths,
+  inventoryFiltersActive,
+  singleCallPlan,
+} from '@/lib/api/ga4SummaryPilot';
 
 export const maxDuration = 120;
 
@@ -42,12 +48,37 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
+  let { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
     invFilters,
     pageType,
   });
 
   try {
+    if (inventoryFiltersActive(inv) && (await canUseGa4VdpPaths(supabase, clientId, from, to))) {
+      ({ chunkDays, concurrency } = singleCallPlan(from, to));
+    }
+
+    if (!inventoryFiltersActive(inv) && (await canUseGa4Summary(supabase, clientId, from, to))) {
+      const started = Date.now();
+      const { data, error } = await supabase.rpc(
+        'get_ga4_channel_breakdown_summary',
+        mergeAnalyticsExtra(searchParams, {
+          p_client_id: clientId,
+          p_from: from,
+          p_to: to,
+          p_page_type: pageType,
+          p_channels: inv.p_channels?.length ? inv.p_channels : null,
+        })
+      );
+      if (!error) {
+        return NextResponse.json({
+          rows: mergeChannelBreakdownRows(data || []),
+          meta: { source: 'ga4-summary', ms: Date.now() - started, pageType },
+        });
+      }
+      console.warn('[channel-breakdown] summary path failed, using chunked RPC:', error.message);
+    }
+
     const raw = await rpcByDateChunks(supabase, 'get_ga4_channel_breakdown', {
       clientId,
       from,

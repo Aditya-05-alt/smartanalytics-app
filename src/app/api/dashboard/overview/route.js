@@ -6,6 +6,7 @@ import {
   rpcByDateChunks,
 } from '@/lib/api/chunkedRpc';
 import { mergeAnalyticsExtra, parsePropertyId } from '@/lib/api/analyticsScope';
+import { canUseGa4Summary } from '@/lib/api/ga4SummaryPilot';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -40,6 +41,25 @@ export async function GET(request) {
   };
 
   try {
+    if (await canUseGa4Summary(supabase, clientId, from, to)) {
+      const started = Date.now();
+      const params = { p_client_id: clientId, p_from: from, p_to: to, ...chunkOpts.extraParams };
+      const { data: rows, error } = await supabase.rpc('get_ga4_overview_summary', params);
+      if (!error) {
+        const { data: userTotalsRows } = await supabase.rpc('get_ga4_user_totals', {
+          p_client_id: clientId,
+          p_from: from,
+          p_to: to,
+        });
+        return NextResponse.json({
+          rows: rows || [],
+          userTotalsRows: userTotalsRows || [],
+          meta: { source: 'ga4-summary', ms: Date.now() - started, propertyId: parsePropertyId(searchParams) },
+        });
+      }
+      console.warn('[overview] summary path failed, using chunked RPC:', error.message);
+    }
+
     const rows = await rpcByDateChunks(supabase, 'get_ga4_overview', chunkOpts);
 
     let userTotalsRows = [];

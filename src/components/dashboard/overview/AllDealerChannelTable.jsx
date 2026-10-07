@@ -149,7 +149,12 @@ export default function AllDealerChannelTable({
   selectedDealerNames = [],
   selectedChannels = [],
 } = {}) {
-  const { dealers, loading: dealersLoading, dealerCategoryFilter } = useClient();
+  const {
+    dealers,
+    loading: dealersLoading,
+    dealerCategoryFilter,
+    pickClient,
+  } = useClient();
   const { setSnapshot } = useAllDealerMatrix();
   const {
     tab,
@@ -446,9 +451,17 @@ export default function AllDealerChannelTable({
                       return (
                         <tr key={row.dealer.id}>
                           <td className="adc-td-dealer">
-                            <span className="adc-dealer-name" title={row.dealer.name}>
+                            <button
+                              type="button"
+                              className="adc-dealer-name adc-dealer-link"
+                              title={`Open ${row.dealer.name} in Overview`}
+                              onClick={() => {
+                                pickClient(row.dealer);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                            >
                               {row.dealer.name}
-                            </span>
+                            </button>
                             {dataReady && row.error && (
                               <span className="adc-dealer-err" title={row.error}>
                                 !

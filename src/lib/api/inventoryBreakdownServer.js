@@ -1,6 +1,7 @@
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { mergeInventoryBreakdownRows } from '@/lib/api/inventoryBreakdownMerge';
 import { resolveRpcChunkPlan } from '@/lib/api/rpcChunkPlan';
+import { pilotBreakdownChunkPlan } from '@/lib/api/ga4SummaryPilot';
 import { mergeAnalyticsExtra } from '@/lib/api/analyticsScope';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
 
@@ -31,10 +32,14 @@ export async function runChunkedInventoryBreakdown(
     ...inv,
   });
 
-  const { chunkDays, concurrency } = resolveRpcChunkPlan(from, to, {
-    invFilters,
-    pageType: 'VDP',
-  });
+  const { chunkDays, concurrency } = await pilotBreakdownChunkPlan(
+    supabase,
+    clientId,
+    from,
+    to,
+    resolveRpcChunkPlan(from, to, { invFilters, pageType: 'VDP' }),
+    inv.p_channels
+  );
 
   let raw;
   try {

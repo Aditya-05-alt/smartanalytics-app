@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Panel, PanelHeader, PanelBody } from '@/components/dashboard/Panel';
+import { writeStoredDealerId } from '@/lib/dashboard/dashboardPrefs';
 import Delta from '@/components/dashboard/Delta';
 import { useClient } from '@/components/dashboard/ClientContext';
 import { useOverview } from '@/components/dashboard/overview/OverviewDataContext';
@@ -209,6 +211,12 @@ export default function AllDealersFocusedTable({
   compareMode = null,
 }) {
   const { dealers, loading: dealersLoading, dealerCategoryFilter } = useClient();
+
+  // Only the stored selection is written: this page resets the live client to All Dealers,
+  // and Overview resolves its dealer from storage on navigation.
+  const openDealerOverview = useCallback((dealer) => {
+    if (dealer?.id != null) writeStoredDealerId(dealer.id);
+  }, []);
   const { setSnapshot } = useAllDealerMatrix();
   const { from, to } = useOverview();
 
@@ -576,9 +584,15 @@ export default function AllDealersFocusedTable({
                       return (
                         <tr key={row.dealer.id}>
                           <td className="adc-td-dealer">
-                            <span className="adc-dealer-name" title={row.dealer.name}>
+                            <Link
+                              href="/dashboard"
+                              className="adc-dealer-name adc-dealer-link"
+                              title={`Open ${row.dealer.name} in Overview`}
+                              onClick={() => openDealerOverview(row.dealer)}
+                              onAuxClick={() => openDealerOverview(row.dealer)}
+                            >
                               {row.dealer.name}
-                            </span>
+                            </Link>
                             {dataReady && row.error && (
                               <span className="adc-dealer-err" title={row.error}>
                                 !
