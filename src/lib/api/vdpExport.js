@@ -68,41 +68,32 @@ function rowDateIso(value) {
   return String(value || '').slice(0, 10);
 }
 
-/** Expand each URL+dimension row across every day in the selected range (0 views when missing). */
+/** Sum rows per day+URL+dimension; days with no data get one 0-view placeholder row. */
 function fillDateRange(rows, fromIso, toIso, dimLabel) {
   const dates = enumerateDatesInclusive(fromIso, toIso);
   if (!dates.length) return rows;
 
-  const combos = new Map();
-  const viewsByKey = new Map();
+  const byKey = new Map();
+  const datesWithData = new Set();
 
   for (const row of rows) {
     const iso = rowDateIso(row.Date);
     const url = row.URL;
     const dim = row[dimLabel] ?? '';
-    const comboKey = `${url}\0${dim}`;
-    combos.set(comboKey, { URL: url, [dimLabel]: dim });
-    viewsByKey.set(`${iso}\0${comboKey}`, row.Views);
+    const key = `${iso}\0${url}\0${dim}`;
+    const prev = byKey.get(key);
+    if (prev) {
+      prev.Views += row.Views;
+    } else {
+      byKey.set(key, { Date: toExcelDate(iso), URL: url, Views: row.Views, [dimLabel]: dim });
+    }
+    datesWithData.add(iso);
   }
 
-  if (combos.size === 0) {
-    return dates.map((iso) => ({
-      Date: toExcelDate(iso),
-      URL: '',
-      Views: 0,
-      [dimLabel]: '',
-    }));
-  }
-
-  const filled = [];
+  const filled = [...byKey.values()];
   for (const iso of dates) {
-    for (const [comboKey, combo] of combos) {
-      filled.push({
-        Date: toExcelDate(iso),
-        URL: combo.URL,
-        Views: viewsByKey.get(`${iso}\0${comboKey}`) ?? 0,
-        [dimLabel]: combo[dimLabel],
-      });
+    if (!datesWithData.has(iso)) {
+      filled.push({ Date: toExcelDate(iso), URL: '', Views: 0, [dimLabel]: '' });
     }
   }
 

@@ -102,65 +102,50 @@ function comboKeyFromRow(row) {
   return COMBO_KEYS.map((k) => String(row[k] ?? '')).join('\0');
 }
 
-/** Expand each page/channel row across every day in range; keep 0 views on missing days. */
+function blankAllTabRow(iso) {
+  const blank = {};
+  for (const col of ALL_EXPORT_COLUMNS) {
+    if (col.key === 'report_date') blank[col.key] = iso;
+    else if (METRIC_KEYS.has(col.key)) blank[col.key] = 0;
+    else blank[col.key] = '';
+  }
+  return blank;
+}
+
+/** Sum rows per day+page/channel combo; days with no data get one 0-view placeholder row. */
 function fillAllTabDateRange(rows, fromIso, toIso) {
   const dates = enumerateDatesInclusive(fromIso, toIso);
   if (!dates.length) return rows;
 
-  const combos = new Map();
-  const metricsByKey = new Map();
+  const byKey = new Map();
+  const datesWithData = new Set();
 
   for (const row of rows) {
     const iso = formatReportDateIso(row.report_date);
-    const comboKey = comboKeyFromRow(row);
-    if (!combos.has(comboKey)) {
-      const template = {};
-      for (const k of COMBO_KEYS) template[k] = row[k];
-      combos.set(comboKey, template);
-    }
-    const metricKey = `${iso}\0${comboKey}`;
-    const prev = metricsByKey.get(metricKey);
-    metricsByKey.set(metricKey, {
-      views: (prev?.views || 0) + (Number(row.views) || 0),
-      total_users: (prev?.total_users || 0) + (Number(row.total_users) || 0),
-      sessions: (prev?.sessions || 0) + (Number(row.sessions) || 0),
-      new_users: (prev?.new_users || 0) + (Number(row.new_users) || 0),
-      created_at: prev?.created_at ?? row.created_at ?? '',
-    });
-  }
-
-  if (combos.size === 0) {
-    return dates.map((iso) => {
-      const blank = {};
-      for (const col of ALL_EXPORT_COLUMNS) {
-        if (col.key === 'report_date') blank[col.key] = iso;
-        else if (METRIC_KEYS.has(col.key)) blank[col.key] = 0;
-        else blank[col.key] = '';
-      }
-      return blank;
-    });
-  }
-
-  const filled = [];
-  for (const iso of dates) {
-    for (const [comboKey, template] of combos) {
-      const metrics = metricsByKey.get(`${iso}\0${comboKey}`) || {
-        views: 0,
-        total_users: 0,
-        sessions: 0,
-        new_users: 0,
-        created_at: '',
-      };
-      filled.push({
-        ...template,
+    const key = `${iso}\0${comboKeyFromRow(row)}`;
+    const prev = byKey.get(key);
+    if (prev) {
+      prev.views += Number(row.views) || 0;
+      prev.total_users += Number(row.total_users) || 0;
+      prev.sessions += Number(row.sessions) || 0;
+      prev.new_users += Number(row.new_users) || 0;
+    } else {
+      byKey.set(key, {
+        ...row,
         report_date: iso,
-        created_at: metrics.created_at,
-        views: metrics.views,
-        total_users: metrics.total_users,
-        sessions: metrics.sessions,
-        new_users: metrics.new_users,
+        created_at: row.created_at ?? '',
+        views: Number(row.views) || 0,
+        total_users: Number(row.total_users) || 0,
+        sessions: Number(row.sessions) || 0,
+        new_users: Number(row.new_users) || 0,
       });
     }
+    datesWithData.add(iso);
+  }
+
+  const filled = [...byKey.values()];
+  for (const iso of dates) {
+    if (!datesWithData.has(iso)) filled.push(blankAllTabRow(iso));
   }
 
   filled.sort((a, b) => {

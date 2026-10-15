@@ -17,11 +17,30 @@ function rpcParams(clientId, from, to, extra = {}) {
   };
 }
 
-async function runRpcRange(supabase, rpcName, clientId, range, extraParams) {
-  const { data, error } = await supabase.rpc(
-    rpcName,
-    rpcParams(clientId, range.from, range.to, extraParams)
-  );
+export const RPC_PAGE_SIZE = 1000;
+
+/**
+ * Fetch every row of a set-returning RPC. PostgREST silently caps each response
+ * (max-rows), so page until an empty page comes back. Requires a deterministic ORDER BY.
+ */
+export async function rpcAllRows(supabase, rpcName, params, pageSize = RPC_PAGE_SIZE) {
+  const rows = [];
+  for (let offset = 0; ; ) {
+    const { data, error } = await supabase
+      .rpc(rpcName, params)
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    rows.push(...data);
+    offset += data.length;
+  }
+  return rows;
+}
+
+async function runRpcRange(supabase, rpcName, clientId, range, extraParams, paginate) {
+  const params = rpcParams(clientId, range.from, range.to, extraParams);
+  if (paginate) return rpcAllRows(supabase, rpcName, params);
+  const { data, error } = await supabase.rpc(rpcName, params);
   if (error) throw error;
   return data || [];
 }
@@ -29,9 +48,9 @@ async function runRpcRange(supabase, rpcName, clientId, range, extraParams) {
 /**
  * On timeout, bisect the date window and retry (handles variable load per dealer).
  */
-async function runRpcRangeResilient(supabase, rpcName, clientId, range, extraParams) {
+async function runRpcRangeResilient(supabase, rpcName, clientId, range, extraParams, paginate) {
   try {
-    return await runRpcRange(supabase, rpcName, clientId, range, extraParams);
+    return await runRpcRange(supabase, rpcName, clientId, range, extraParams, paginate);
   } catch (error) {
     if (!isStatementTimeoutError(error)) throw error;
 
@@ -43,8 +62,8 @@ async function runRpcRangeResilient(supabase, rpcName, clientId, range, extraPar
     const right = { from: days[mid], to: days[days.length - 1] };
 
     const [leftRows, rightRows] = await Promise.all([
-      runRpcRangeResilient(supabase, rpcName, clientId, left, extraParams),
-      runRpcRangeResilient(supabase, rpcName, clientId, right, extraParams),
+      runRpcRangeResilient(supabase, rpcName, clientId, left, extraParams, paginate),
+      runRpcRangeResilient(supabase, rpcName, clientId, right, extraParams, paginate),
     ]);
     return [...leftRows, ...rightRows];
   }
@@ -64,6 +83,7 @@ export async function rpcByDateChunks(
     chunkDays = RPC_CHUNK_DAYS,
     concurrency = RPC_CHUNK_CONCURRENCY,
     onCancelCheck,
+    paginate = false,
   } = {}
 ) {
   if (!clientId || !from || !to) return [];
@@ -73,7 +93,7 @@ export async function rpcByDateChunks(
   if (!ranges.length) return [];
 
   if (ranges.length === 1) {
-    return runRpcRangeResilient(supabase, rpcName, clientId, ranges[0], extraParams);
+    return runRpcRangeResilient(supabase, rpcName, clientId, ranges[0], extraParams, paginate);
   }
 
   const merged = [];
@@ -82,7 +102,7 @@ export async function rpcByDateChunks(
     const batch = ranges.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map((range) =>
-        runRpcRangeResilient(supabase, rpcName, clientId, range, extraParams)
+        runRpcRangeResilient(supabase, rpcName, clientId, range, extraParams, paginate)
       )
     );
     for (const data of results) {

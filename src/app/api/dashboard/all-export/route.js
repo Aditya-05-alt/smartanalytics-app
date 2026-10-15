@@ -38,6 +38,7 @@ export async function GET(request) {
       to,
       chunkDays: RPC_CHUNK_DAYS,
       concurrency: RPC_CHUNK_CONCURRENCY,
+      paginate: true,
     });
 
     return NextResponse.json({

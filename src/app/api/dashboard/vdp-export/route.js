@@ -1,15 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { parseInvRpcFromSearchParams } from '@/lib/vdp/vdpFilterParams';
+import { RPC_CHUNK_DAYS, rpcByDateChunks } from '@/lib/api/chunkedRpc';
 
 export const maxDuration = 120;
 
 /** Always pass the full RPC arg set so PostgREST picks the correct overload. */
-function buildVdpExportRpcParams(clientId, from, to, inv) {
+function buildVdpExportExtraParams(inv) {
   return {
-    p_client_id: clientId,
-    p_from: from,
-    p_to: to,
     p_types: inv.p_types ?? null,
     p_makes: inv.p_makes ?? null,
     p_models: inv.p_models ?? null,
@@ -43,36 +41,33 @@ export async function GET(request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const params = buildVdpExportRpcParams(clientId, from, to, parseInvRpcFromSearchParams(searchParams));
+  const extraParams = buildVdpExportExtraParams(parseInvRpcFromSearchParams(searchParams));
+  const fetchAll = (rpcName) =>
+    rpcByDateChunks(supabase, rpcName, {
+      clientId,
+      from,
+      to,
+      extraParams,
+      chunkDays: RPC_CHUNK_DAYS,
+      concurrency: 2,
+      paginate: true,
+    });
 
   try {
-    const [channelRes, locationRes, makeRes, modelRes, conditionRes] =
-      await Promise.all([
-        supabase.rpc('get_vdp_export_by_channel', params),
-        supabase.rpc('get_vdp_export_by_location', params),
-        supabase.rpc('get_vdp_export_by_make', params),
-        supabase.rpc('get_vdp_export_by_model', params),
-        supabase.rpc('get_vdp_export_by_condition', params),
-      ]);
-
-    const errors = [
-      channelRes.error,
-      locationRes.error,
-      makeRes.error,
-      modelRes.error,
-      conditionRes.error,
-    ].filter(Boolean);
-
-    if (errors.length) {
-      return NextResponse.json({ error: errors[0].message }, { status: 500 });
-    }
+    const [byChannel, byLocation, byMake, byModel, byCondition] = await Promise.all([
+      fetchAll('get_vdp_export_by_channel'),
+      fetchAll('get_vdp_export_by_location'),
+      fetchAll('get_vdp_export_by_make'),
+      fetchAll('get_vdp_export_by_model'),
+      fetchAll('get_vdp_export_by_condition'),
+    ]);
 
     return NextResponse.json({
-      byChannel: channelRes.data || [],
-      byLocation: locationRes.data || [],
-      byMake: makeRes.data || [],
-      byModel: modelRes.data || [],
-      byCondition: conditionRes.data || [],
+      byChannel: byChannel || [],
+      byLocation: byLocation || [],
+      byMake: byMake || [],
+      byModel: byModel || [],
+      byCondition: byCondition || [],
       meta: { from, to, clientId },
     });
   } catch (err) {
