@@ -40,11 +40,19 @@ export function mergeInventoryBreakdownRows(
   const grand = sorted.reduce((sum, r) => sum + r.views, 0);
   if (grand <= 0) return [];
 
+  // RPCs already bucket blank values as "Other"; keep it out of the ranking so it
+  // merges with the top-N overflow instead of showing as a second "Other".
+  const isOtherBucket = (r) => String(r[bucketKey] ?? '').trim().toLowerCase() === 'other';
+  const ranked = sorted.filter((r) => !isOtherBucket(r));
+  const rpcOtherViews = sorted
+    .filter(isOtherBucket)
+    .reduce((sum, r) => sum + r.views, 0);
+
   const cap = limit != null && limit > 0 ? limit : null;
-  const top = cap ? sorted.slice(0, cap) : sorted;
-  const otherViews = cap
-    ? sorted.slice(cap).reduce((sum, r) => sum + r.views, 0)
-    : 0;
+  const top = cap ? ranked.slice(0, cap) : ranked;
+  const otherViews =
+    rpcOtherViews +
+    (cap ? ranked.slice(cap).reduce((sum, r) => sum + r.views, 0) : 0);
 
   const out = top.map((r, index) => ({
     ...r,

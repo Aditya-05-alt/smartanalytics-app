@@ -207,7 +207,11 @@ export function OverviewProvider({ children }) {
     // treat that as "no override" so the selected compare mode applies.
     const main = resolveRange(readStoredOverviewDateRange() || DEFAULT_RANGE);
     const aligned = previousMonthAlignedRange(main.from, main.to);
-    if (stored.start === aligned.compareFrom && stored.end === aligned.compareTo) {
+    const modeDefault = compareRangeForMode(readStoredOverviewCompareMode(), main.from, main.to);
+    if (
+      (stored.start === aligned.compareFrom && stored.end === aligned.compareTo)
+      || (stored.start === modeDefault.compareFrom && stored.end === modeDefault.compareTo)
+    ) {
       writeStoredOverviewCompareDateRange(null);
       return null;
     }
@@ -243,6 +247,19 @@ export function OverviewProvider({ children }) {
     () => compareRangeForMode(compareMode, from, to),
     [compareMode, from, to]
   );
+
+  // A picked range identical to the mode's default is not a custom override (keeps MoM/PoP labels).
+  const effectiveCompareDateRange = useMemo(() => {
+    if (
+      compareDateRange
+      && typeof compareDateRange === 'object'
+      && compareDateRange.start === defaultCompare.compareFrom
+      && compareDateRange.end === defaultCompare.compareTo
+    ) {
+      return null;
+    }
+    return compareDateRange;
+  }, [compareDateRange, defaultCompare]);
 
   const { compareFrom, compareTo } = useMemo(() => {
     const fallback = defaultCompare;
@@ -985,7 +1002,7 @@ export function OverviewProvider({ children }) {
       toggleCompareEnabled,
       compareMode,
       setCompareMode,
-      compareDateRange,
+      compareDateRange: effectiveCompareDateRange,
       setCompareDateRange,
       compareFrom,
       compareTo,
@@ -1037,7 +1054,7 @@ export function OverviewProvider({ children }) {
       toggleCompareEnabled,
       compareMode,
       setCompareMode,
-      compareDateRange,
+      effectiveCompareDateRange,
       setCompareDateRange,
       compareFrom,
       compareTo,

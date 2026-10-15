@@ -2,7 +2,9 @@
  * Daily scrap-dealers transfer email via Google SMTP (nodemailer).
  *
  * Lists every scrap_link = on dealer (all names) and whether today's scrap
- * data was transmitted, with unit counts.
+ * data was transmitted, with unit counts. Dealers that are scraped but not yet
+ * mapped (scrap_link off) are listed separately as "stored only", taken from
+ * today's + the previous day's daily snapshot.
  *
  * Scrap source (same as inventory-daily-email):
  *   Scrap → smart_scrap_inventory_daily for TODAY's pull_date (not full history)
@@ -19,6 +21,7 @@
  * Supabase (auto): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  *
  * Manual test: POST {} or POST {"dry_run":true} or POST {"to":["you@company.com"]}
+ * (body.to skips the default CC unless body.cc is also given)
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -38,7 +41,8 @@ const INVENTORY_EMAIL_TO = [
 ];
 /** CC recipient(s) — add as many as you need. */
 const INVENTORY_EMAIL_CC = [
-  "adityakhan063@gmail.com",
+  "abdul@brandmirchi.com",
+  "lisa@brandmirchi.com"
 ];
 
 const SMTP_HOST = "smtp.gmail.com";
@@ -64,6 +68,7 @@ type StatusRow = {
   report_date: string;
   ga4_customer_id: string;
   dealer_name: string;
+  mapped: boolean;
   transmitted: boolean;
   live_units: number;
   transferred_units: number;
@@ -238,31 +243,85 @@ function countScrapByDealer(scrapRows: Record<string, unknown>[]) {
   return { byId, byName };
 }
 
+/** Distinct dealers in the latest daily snapshot before scrapAsOf (to flag stored-only dealers missing today). */
+async function fetchPreviousSnapshotDealers(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  scrapAsOf: string,
+): Promise<ScrapDealer[]> {
+  const { data: prev } = await supabase
+    .from("smart_scrap_inventory_daily")
+    .select("pull_date")
+    .lt("pull_date", scrapAsOf)
+    .order("pull_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!prev?.pull_date) return [];
+  const rows = await fetchPaged((from, to) =>
+    supabase
+      .from("smart_scrap_inventory_daily")
+      .select("customer_id,customer_name")
+      .eq("pull_date", String(prev.pull_date).slice(0, 10))
+      .order("customer_id", { ascending: true })
+      .order("sk", { ascending: true })
+      .range(from, to),
+  );
+  const byId = new Map<string, ScrapDealer>();
+  for (const row of rows) {
+    const id = keyId(row.customer_id);
+    if (id && !byId.has(id)) {
+      byId.set(id, { ga4_customer_id: id, customer_name: String(row.customer_name ?? "").trim() });
+    }
+  }
+  return [...byId.values()];
+}
+
 function buildStatusRows(
   dealers: ScrapDealer[],
   scrapRows: Record<string, unknown>[],
   reportDate: string,
+  previousDealers: ScrapDealer[] = [],
 ): StatusRow[] {
   const { byId, byName } = countScrapByDealer(scrapRows);
-  return dealers
-    .map((d) => {
-      const id = keyId(d.ga4_customer_id);
-      const name = String(d.customer_name ?? "").trim();
-      const units = byId.get(id) || byName.get(keyName(name)) || 0;
-      return {
-        report_date: reportDate,
-        ga4_customer_id: id,
-        dealer_name: name || id || "—",
-        transmitted: units > 0,
-        live_units: units,
-        transferred_units: units,
-        daily_snapshot_units: units,
-        day_complete_units: units,
-        last_seen: null,
-        completed_at: null,
-      };
-    })
-    .sort((a, b) => a.dealer_name.localeCompare(b.dealer_name));
+  const toRow = (id: string, name: string, units: number, mapped: boolean): StatusRow => ({
+    report_date: reportDate,
+    ga4_customer_id: id,
+    dealer_name: name || id || "—",
+    mapped,
+    transmitted: units > 0,
+    live_units: units,
+    transferred_units: units,
+    daily_snapshot_units: units,
+    day_complete_units: units,
+    last_seen: null,
+    completed_at: null,
+  });
+
+  const mappedIds = new Set<string>();
+  const mappedNames = new Set<string>();
+  const mapped = dealers.map((d) => {
+    const id = keyId(d.ga4_customer_id);
+    const name = String(d.customer_name ?? "").trim();
+    if (id) mappedIds.add(id);
+    if (name) mappedNames.add(keyName(name));
+    return toRow(id, name, byId.get(id) || byName.get(keyName(name)) || 0, true);
+  });
+
+  const storedOnly = new Map<string, string>();
+  for (const row of scrapRows) {
+    const id = keyId(row.customer_id);
+    if (id && !storedOnly.has(id)) storedOnly.set(id, String(row.customer_name ?? "").trim());
+  }
+  for (const d of previousDealers) {
+    const id = keyId(d.ga4_customer_id);
+    if (id && !storedOnly.has(id)) storedOnly.set(id, String(d.customer_name ?? "").trim());
+  }
+  const unmapped = [...storedOnly.entries()]
+    .filter(([id, name]) => !mappedIds.has(id) && !(name && mappedNames.has(keyName(name))))
+    .map(([id, name]) => toRow(id, name, byId.get(id) || 0, false));
+
+  const byDealerName = (a: StatusRow, b: StatusRow) => a.dealer_name.localeCompare(b.dealer_name);
+  return [...mapped.sort(byDealerName), ...unmapped.sort(byDealerName)];
 }
 
 function pad(value: string | number, width: number, align: "left" | "right" = "left") {
@@ -281,6 +340,7 @@ function formatReport(
   const total = rows.length;
   const yes = rows.filter((r) => r.transmitted).length;
   const no = total - yes;
+  const mappedCount = rows.filter((r) => r.mapped).length;
   const unitsToday = rows.reduce((sum, r) => sum + (Number(r.transferred_units) || 0), 0);
 
   const lines = [
@@ -289,18 +349,24 @@ function formatReport(
     `Report date : ${reportDate} (Asia/Kolkata)`,
     `Scrap as of : ${scrapAsOf}`,
     `Source      : ${scrapSource}`,
-    `Dealers     : ${total}  |  Transmitted: ${yes}  |  Missing: ${no}`,
+    `Dealers     : ${total} (mapped ${mappedCount}, stored only ${total - mappedCount})  |  Transmitted: ${yes}  |  Missing: ${no}`,
     `Units today : ${unitsToday.toLocaleString("en-IN")}`,
     "============================================================",
-    `${pad("#", 3)}  ${pad("Status", 6)}  ${pad("Dealer", 36)}  ${pad("Units", 8, "right")}`,
-    "------------------------------------------------------------",
   ];
 
-  rows.forEach((row, i) => {
-    lines.push(
-      `${pad(i + 1, 3, "right")}  ${pad(row.transmitted ? "YES" : "NO", 6)}  ${pad(row.dealer_name || "—", 36)}  ${pad(Number(row.transferred_units) || 0, 8, "right")}`,
-    );
-  });
+  const section = (title: string, list: StatusRow[]) => {
+    if (!list.length) return;
+    lines.push(title);
+    lines.push(`${pad("#", 3)}  ${pad("Status", 6)}  ${pad("Dealer", 36)}  ${pad("Units", 8, "right")}`);
+    lines.push("------------------------------------------------------------");
+    list.forEach((row, i) => {
+      lines.push(
+        `${pad(i + 1, 3, "right")}  ${pad(row.transmitted ? "YES" : "NO", 6)}  ${pad(row.dealer_name || "—", 36)}  ${pad(Number(row.transferred_units) || 0, 8, "right")}`,
+      );
+    });
+  };
+  section("MAPPED SCRAP DEALERS (scrap_link = on):", rows.filter((r) => r.mapped));
+  section("STORED ONLY (scraped, not mapped yet):", rows.filter((r) => !r.mapped));
 
   const missing = rows.filter((r) => !r.transmitted);
   lines.push("------------------------------------------------------------");
@@ -319,6 +385,7 @@ function formatReport(
 function statusCsv(rows: StatusRow[]) {
   const headers = [
     "Status",
+    "Mode",
     "Dealer Name",
     "GA4 Customer ID",
     "Units Today",
@@ -328,6 +395,7 @@ function statusCsv(rows: StatusRow[]) {
   const lines = rows.map((r) =>
     [
       r.transmitted ? "YES" : "NO",
+      r.mapped ? "Mapped" : "Stored only",
       r.dealer_name,
       r.ga4_customer_id,
       r.transferred_units,
@@ -352,8 +420,10 @@ function buildHtmlEmail(opts: {
   const yes = rows.filter((r) => r.transmitted);
   const no = rows.filter((r) => !r.transmitted);
   const units = rows.reduce((s, r) => s + (Number(r.transferred_units) || 0), 0);
+  const mappedRows = rows.filter((r) => r.mapped);
+  const storedRows = rows.filter((r) => !r.mapped);
 
-  const dealerHtml = rows
+  const dealerRowsHtml = (list: StatusRow[]) => list
     .map(
       (r) =>
         `<tr>
@@ -369,6 +439,17 @@ function buildHtmlEmail(opts: {
         </tr>`,
     )
     .join("");
+
+  const dealerTable = (title: string, list: StatusRow[], emptyText: string) => `
+              <h2 style="margin:0 0 10px;font-size:15px;font-weight:600;color:#0f172a;">${escapeHtml(title)} (${list.length})</h2>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin:0 0 22px;">
+                <tr style="background:#f8fafc;">
+                  <th align="left" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Dealer</th>
+                  <th align="center" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Sent</th>
+                  <th align="right" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Units</th>
+                </tr>
+                ${dealerRowsHtml(list) || `<tr><td colspan="3" style="padding:12px;font-size:13px;color:#64748b;">${escapeHtml(emptyText)}</td></tr>`}
+              </table>`;
 
   const missingHtml = no.length
     ? no
@@ -412,6 +493,7 @@ function buildHtmlEmail(opts: {
                     <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;background:#f8fafc;">
                       <p style="margin:0 0 4px;font-size:12px;color:#64748b;">Scrap dealers</p>
                       <p style="margin:0;font-size:22px;font-weight:700;color:#0f172a;">${rows.length.toLocaleString("en-IN")}</p>
+                      <p style="margin:4px 0 0;font-size:12px;color:#64748b;">${mappedRows.length} mapped · ${storedRows.length} stored only</p>
                     </div>
                   </td>
                   <td width="50%" style="padding:0 0 12px 6px;vertical-align:top;">
@@ -437,15 +519,8 @@ function buildHtmlEmail(opts: {
                 </tr>
               </table>
 
-              <h2 style="margin:0 0 10px;font-size:15px;font-weight:600;color:#0f172a;">All scrap dealers</h2>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin:0 0 22px;">
-                <tr style="background:#f8fafc;">
-                  <th align="left" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Dealer</th>
-                  <th align="center" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Sent</th>
-                  <th align="right" style="padding:8px 12px;font-size:12px;font-weight:600;color:#64748b;">Units</th>
-                </tr>
-                ${dealerHtml || `<tr><td colspan="3" style="padding:12px;font-size:13px;color:#64748b;">No scrap dealers (scrap_link = on)</td></tr>`}
-              </table>
+              ${dealerTable("Mapped scrap dealers", mappedRows, "No scrap dealers (scrap_link = on)")}
+              ${storedRows.length ? dealerTable("Stored only — scraped, not mapped yet", storedRows, "") : ""}
 
               <h2 style="margin:0 0 8px;font-size:15px;font-weight:600;color:#0f172a;">Missing today</h2>
               <ul style="margin:0 0 18px;padding:0 0 0 18px;">${missingHtml}</ul>
@@ -626,8 +701,14 @@ Deno.serve(async (req) => {
     const dbCc = Array.isArray(cfg?.cc_recipients)
       ? cfg.cc_recipients.map((x: string) => String(x).trim()).filter((e: string) => !isPlaceholderEmail(e))
       : [];
-    const cc =
-      secretCc.length > 0 ? secretCc : inlineCc.length > 0 ? inlineCc : dbCc;
+    const bodyCc = Array.isArray(body?.cc)
+      ? (body.cc as unknown[]).map((x) => String(x).trim()).filter((e) => e && !isPlaceholderEmail(e))
+      : typeof body?.cc === "string"
+      ? parseEmailList(String(body.cc))
+      : null;
+    const cc = bodyCc ?? (bodyTo.length > 0
+      ? []
+      : secretCc.length > 0 ? secretCc : inlineCc.length > 0 ? inlineCc : dbCc);
 
     console.log(`[scrap-dealers-daily-status] Loading scrap dealers + today's scrap for ${reportDate}…`);
 
@@ -646,7 +727,8 @@ Deno.serve(async (req) => {
     );
 
     const scrapPack = await fetchTodayScrap(supabase, reportDate);
-    const statusRows = buildStatusRows(dealers, scrapPack.rows, reportDate);
+    const previousDealers = await fetchPreviousSnapshotDealers(supabase, scrapPack.scrapAsOf);
+    const statusRows = buildStatusRows(dealers, scrapPack.rows, reportDate, previousDealers);
     const missing = statusRows.filter((r) => !r.transmitted);
     const unitsToday = statusRows.reduce((s, r) => s + r.transferred_units, 0);
     const template = formatReport(
