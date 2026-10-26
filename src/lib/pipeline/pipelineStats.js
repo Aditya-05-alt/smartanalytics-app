@@ -144,6 +144,8 @@ export function buildWorkflowPayload({
           hasScrapSource: inventory.hasScrapSource,
           hasScrapInventory: inventory.hasScrapInventory,
           hasHootInventory: inventory.hasHootInventory,
+          hasConnerSource: inventory.hasConnerSource ?? false,
+          connerRowCount: inventory.connerInventoryCount ?? 0,
         }
       : null,
     workflow: {

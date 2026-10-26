@@ -4,6 +4,7 @@ import {
   daysBackForFinalSync,
 } from '@/lib/pipeline/dates';
 import {
+  FINAL_RPC_CONNER,
   FINAL_RPC_HOOT,
   FINAL_RPC_HOOT_QS,
   resolveFinalVdpRpc,
@@ -100,7 +101,9 @@ export async function runFinalVdpSync(
             rpcNameOverride === FINAL_RPC_HOOT ||
             rpcNameOverride === FINAL_RPC_HOOT_QS
               ? 'hoot'
-              : 'scrap',
+              : rpcNameOverride === FINAL_RPC_CONNER
+                ? 'conner'
+                : 'scrap',
         }
       : await resolveFinalVdpRpc(supabase, clientId);
 
@@ -130,6 +133,8 @@ export async function runFinalVdpSync(
       p_date_from: chunkFrom,
       p_date_to: chunkTo,
       p_days_back: null,
+      // The Conner RPC is a dry run unless told otherwise.
+      ...(rpcName === FINAL_RPC_CONNER ? { p_dry_run: false } : {}),
     };
     const legacyOnly = {
       p_client_id: clientId,
@@ -189,7 +194,7 @@ export async function runFinalVdpSync(
 
     const row = (data || [])[0];
     const rows = Number(row?.out_total_rows ?? 0) || 0;
-    const matched = Number(row?.out_vdp_true_rows ?? 0) || 0;
+    const matched = Number(row?.out_vdp_true_rows ?? row?.out_matched_rows ?? 0) || 0;
     totalRows += rows;
     totalVdpTrue += matched;
     accountName = row?.out_account_name ?? row?.account_name ?? accountName;

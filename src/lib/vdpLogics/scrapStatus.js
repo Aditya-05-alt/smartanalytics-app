@@ -34,6 +34,25 @@ export async function loadScrapInventoryByCustomerId(supabase) {
   return counts;
 }
 
+/** ga4_customer_id values with an active Conner feed (Step 3 uses smart_conner_inventory). */
+export async function loadConnerDealerIds(supabase) {
+  const { data, error } = await supabase
+    .from('smart_conner_config')
+    .select('ga4_customer_id, hoot_url')
+    .eq('is_active', true)
+    .not('hoot_url', 'is', null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  return new Set(
+    (data || [])
+      .filter((row) => String(row.hoot_url ?? '').trim() !== '')
+      .map((row) => String(row.ga4_customer_id ?? '').trim())
+      .filter(Boolean)
+  );
+}
+
 export function scrapStatusForDealerId(dealerId, scrapCounts) {
   const id = String(dealerId ?? '').trim();
   if (!id) {

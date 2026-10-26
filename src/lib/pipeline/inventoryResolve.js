@@ -4,6 +4,8 @@ export const FINAL_RPC_HOOT = 'build_smart_final_data';
 /** Destination Cycle / page_path_q_s dealers only — uses ga4_effective_page_path. */
 export const FINAL_RPC_HOOT_QS = 'build_smart_final_data_qs';
 export const FINAL_RPC_SCRAP = 'build_smart_final_data_scrap';
+/** Scout RV / ScoutX VLA feeds — smart_conner_config + smart_conner_inventory. */
+export const FINAL_RPC_CONNER = 'build_smart_final_data_conner';
 
 /** Dealers that must use build_smart_final_data_qs (pathname+query matching). */
 export const PAGE_PATH_QS_CLIENT_IDS = new Set([
@@ -45,7 +47,7 @@ async function loadVdpLogicRow(supabase, clientId, customerName, ga4PropertyId) 
 
   let byIdQuery = supabase
     .from('smart_vdp_logic')
-    .select('hoot_link, scrap_link')
+    .select('hoot_link, scrap_link, data_source')
     .eq('dealer_id', clientId);
 
   if (propertyId) {
@@ -69,7 +71,7 @@ async function loadVdpLogicRow(supabase, clientId, customerName, ga4PropertyId) 
 
   let byNameQuery = supabase
     .from('smart_vdp_logic')
-    .select('hoot_link, scrap_link')
+    .select('hoot_link, scrap_link, data_source')
     .eq('dealer_name', customerName);
 
   if (propertyId) {
@@ -87,17 +89,52 @@ async function loadVdpLogicRow(supabase, clientId, customerName, ga4PropertyId) 
   return byName?.[0] ?? null;
 }
 
+/** Active smart_conner_config row with a feed URL, plus loaded Conner inventory rows. */
+async function loadConnerSource(supabase, clientId) {
+  const { data: rows, error } = await supabase
+    .from('smart_conner_config')
+    .select('customer_name, hoot_url')
+    .eq('ga4_customer_id', clientId)
+    .eq('is_active', true)
+    .not('hoot_url', 'is', null)
+    .limit(1);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  const row = rows?.[0];
+  const customerName = row?.customer_name?.trim() || null;
+  if (!hasText(row?.hoot_url) || !customerName) {
+    return { isConner: false, connerInventoryCount: 0 };
+  }
+
+  const { count, error: countError } = await supabase
+    .from('smart_conner_inventory')
+    .select('*', { count: 'exact', head: true })
+    .eq('customer_name', customerName);
+
+  if (countError) {
+    throw new Error(countError.message);
+  }
+  return { isConner: true, connerInventoryCount: count ?? 0 };
+}
+
 /**
  * Pick Step 3 RPC for one dealer.
  *
  * Config tables:
+ * - smart_conner_config (hoot_url = Scout RV / ScoutX feed) — Conner dealers
  * - smart_vdp_logic (hoot_link, scrap_link) — Admin → VDP Logics
  * - smart_hoot_config (customer_name, hoot_url, ga4_customer_id)
  * Inventory tables:
+ * - smart_conner_inventory (customer_name) — daily Conner feed snapshots
  * - smart_hoot_inventory_live (customer_name) — hoot report pipeline live feed
  * - smart_scrap_inventory (customer_id / customer_name)
  *
  * Priority:
+ * 0. active Conner feed → conner RPC (Hoot / Scrap Step 3 skip these dealers)
+ * 0b. data_source = Logic → hoot RPC with no inventory (unmatched rows); Step 4 /
+ *     Logic 2 cleanup fills make / model / year / condition from the page path
  * 1. hoot_link set → hoot RPC
  * 2. scrap_link OR scrap inventory rows → scrap RPC (even if stale hoot_url / hoot rows exist)
  * 3. hoot_url OR hoot inventory rows → hoot RPC
@@ -198,6 +235,49 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
     step3Reason = 'no hoot source configured';
   }
 
+  const { isConner, connerInventoryCount } = await loadConnerSource(supabase, trimmedId);
+
+  if (isConner) {
+    return {
+      rpcName: FINAL_RPC_CONNER,
+      inventorySource: 'conner',
+      step3Reason: `Conner feed on smart_conner_config (${connerInventoryCount.toLocaleString()} inventory rows)`,
+      customerName,
+      hasConnerSource: true,
+      connerInventoryCount,
+      hasHootLink,
+      hasScrapLink,
+      hasHootUrl,
+      hasHootSource: false,
+      hasScrapSource: false,
+      hasScrapInventory,
+      hasHootInventory,
+      hootInventoryCount,
+      scrapInventoryCount,
+    };
+  }
+
+  if (String(vdpLogic?.data_source ?? '').trim().toLowerCase() === 'logic') {
+    return {
+      rpcName: resolveHootFinalRpcName(trimmedId),
+      inventorySource: 'logic',
+      step3Reason:
+        'Logic only (Step 4) — no inventory feed; Logic 2 fills make / model / year from the page path',
+      customerName,
+      hasConnerSource: false,
+      connerInventoryCount: 0,
+      hasHootLink,
+      hasScrapLink,
+      hasHootUrl,
+      hasHootSource: false,
+      hasScrapSource: false,
+      hasScrapInventory,
+      hasHootInventory,
+      hootInventoryCount,
+      scrapInventoryCount,
+    };
+  }
+
   return {
     rpcName: useHoot ? resolveHootFinalRpcName(trimmedId) : FINAL_RPC_SCRAP,
     inventorySource: useHoot ? 'hoot' : 'scrap',
@@ -207,6 +287,8 @@ export async function resolveFinalVdpRpc(supabase, clientId) {
         : step3Reason
       : step3Reason,
     customerName,
+    hasConnerSource: false,
+    connerInventoryCount: 0,
     hasHootLink,
     hasScrapLink,
     hasHootUrl,

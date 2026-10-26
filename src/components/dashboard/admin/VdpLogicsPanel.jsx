@@ -65,6 +65,16 @@ function filterVdpRows(rows, { search = '', cms = '', dataSource = '' } = {}) {
 }
 
 function formatScrapStatus(row) {
+  if (row.connerOn) {
+    return (
+      <span
+        className="vdp-logics-scrap-flag vdp-logics-scrap-flag--on"
+        title="Step 3 inventory comes from the Conner feed (smart_conner_inventory); Hoot and Scrap matching are off"
+      >
+        CONNER
+      </span>
+    );
+  }
   const on = row.scrapOn || String(row.scrapStatus || row.scrapLink || '').toLowerCase() === 'on';
   const count = row.scrapRowCount ?? 0;
   return (

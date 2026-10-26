@@ -109,7 +109,7 @@ async function ensureTagged(supabase: SupabaseClient, clientId: string): Promise
 async function loadScrapDealers(
   supabase: SupabaseClient,
   onlyClientId: string | null,
-): Promise<{ clientIds: string[]; dealers: RpcRow[] }> {
+): Promise<{ clientIds: string[]; dealers: RpcRow[]; conner: Set<string> }> {
   const { data, error } = await supabase.rpc("get_scrap_dealers_for_sync", {
     p_client_id: onlyClientId,
   });
@@ -118,7 +118,19 @@ async function loadScrapDealers(
       `${error.message} — deploy supabase/rpc/get_scrap_dealers_for_sync.sql`,
     );
   }
-  const dealers = (data || []) as RpcRow[];
+  const { data: connerData, error: connerErr } = await supabase.rpc("get_conner_dealers_for_sync", {
+    p_client_id: onlyClientId,
+  });
+  if (connerErr) throw new Error(`get_conner_dealers_for_sync: ${connerErr.message}`);
+  const conner = new Set(
+    ((connerData as RpcRow[] | null) || [])
+      .map((d) => String(d.ga4_customer_id ?? "").trim())
+      .filter(Boolean),
+  );
+
+  const dealers = ((data || []) as RpcRow[]).filter(
+    (d) => !conner.has(String(d.ga4_customer_id ?? "").trim()),
+  );
   const clientIds = [
     ...new Set(
       dealers
@@ -126,7 +138,7 @@ async function loadScrapDealers(
         .filter(Boolean),
     ),
   ];
-  return { clientIds, dealers };
+  return { clientIds, dealers, conner };
 }
 
 function json(body: unknown, status: number): Response {
@@ -172,7 +184,7 @@ serve(async (req) => {
   );
 
   try {
-    const { clientIds, dealers } = await loadScrapDealers(supabase, onlyClientId);
+    const { clientIds, dealers, conner } = await loadScrapDealers(supabase, onlyClientId);
     const labelOf = (clientId: string) =>
       String(
         dealers.find((d) => String(d.ga4_customer_id).trim() === clientId)
@@ -180,6 +192,13 @@ serve(async (req) => {
       );
 
     if (onlyClientId) {
+      if (conner.has(onlyClientId)) {
+        return json({
+          success: false,
+          rpc: RPC,
+          error: `${onlyClientId} is a Conner dealer — run smart-conner-final-data instead`,
+        }, 409);
+      }
       const runStep2 = body?.run_step2 !== false;
       console.log(`🧹 Scrap Step 3 manual for ${labelOf(onlyClientId)} (days_back=${daysBack}, run_step2=${runStep2})`);
       if (runStep2) {

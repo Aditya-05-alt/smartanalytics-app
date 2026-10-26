@@ -121,8 +121,19 @@ async function ensureTagged(supabase: SupabaseClient, clientId: string): Promise
   return true;
 }
 
+/** Dealers whose Step 3 runs in smart-conner-final-data (active Conner feed). */
+async function loadConnerClientIds(supabase: SupabaseClient): Promise<Set<string>> {
+  const { data, error } = await supabase.rpc("get_conner_dealers_for_sync", { p_client_id: null });
+  if (error) throw new Error(`get_conner_dealers_for_sync: ${error.message}`);
+  return new Set(
+    ((data as { ga4_customer_id?: string }[]) || [])
+      .map((d) => String(d.ga4_customer_id ?? "").trim())
+      .filter(Boolean),
+  );
+}
+
 async function loadHootClientIds(supabase: SupabaseClient): Promise<string[]> {
-  const [{ data: dealers, error: dErr }, { data: scrapDealers, error: sErr }] =
+  const [{ data: dealers, error: dErr }, { data: scrapDealers, error: sErr }, conner] =
     await Promise.all([
       supabase
         .from("smart_ga4_config")
@@ -130,6 +141,7 @@ async function loadHootClientIds(supabase: SupabaseClient): Promise<string[]> {
         .eq("is_active", true)
         .order("client_id", { ascending: true }),
       supabase.rpc("get_scrap_dealers_for_sync", { p_client_id: null }),
+      loadConnerClientIds(supabase),
     ]);
   if (dErr) throw dErr;
   if (sErr) throw sErr;
@@ -146,7 +158,8 @@ async function loadHootClientIds(supabase: SupabaseClient): Promise<string[]> {
         .map((d: { client_id: string }) => String(d.client_id).trim())
         .filter(Boolean)
         .filter((id) => !PAGE_PATH_QS_CLIENT_IDS.has(id))
-        .filter((id) => !scrap.has(id)),
+        .filter((id) => !scrap.has(id))
+        .filter((id) => !conner.has(id)),
     ),
   ];
 }
@@ -196,6 +209,13 @@ serve(async (req) => {
 
   try {
     if (onlyClientId) {
+      if ((await loadConnerClientIds(supabase)).has(onlyClientId)) {
+        return json({
+          success: false,
+          rpc: "build_smart_final_data",
+          error: `${onlyClientId} is a Conner dealer — run smart-conner-final-data instead`,
+        }, 409);
+      }
       const runStep2 = body?.run_step2 !== false;
       console.log(`🧹 Hoot Step 3 manual for ${onlyClientId} (days_back=${daysBack}, run_step2=${runStep2})`);
       if (runStep2) {

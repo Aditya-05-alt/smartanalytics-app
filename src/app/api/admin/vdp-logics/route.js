@@ -3,6 +3,7 @@ import { getSuperadminFromCookies } from '@/lib/auth/adminApiAuth';
 import { createAdminDataClient } from '@/lib/supabase/adminDataClient';
 import { bodyToDbRecord } from '@/lib/vdpLogics/fields';
 import {
+  loadConnerDealerIds,
   loadScrapInventoryByCustomerId,
   scrapStatusForDealerId,
 } from '@/lib/vdpLogics/scrapStatus';
@@ -42,9 +43,13 @@ export async function GET(request) {
 
   const rawRows = (data || []).map(normalizeRow);
   let scrapCounts = new Map();
+  let connerIds = new Set();
 
   try {
-    scrapCounts = await loadScrapInventoryByCustomerId(admin.supabase);
+    [scrapCounts, connerIds] = await Promise.all([
+      loadScrapInventoryByCustomerId(admin.supabase),
+      loadConnerDealerIds(admin.supabase),
+    ]);
   } catch (err) {
     return NextResponse.json(
       { error: err?.message || 'Failed to load scrap inventory status.' },
@@ -69,12 +74,16 @@ export async function GET(request) {
           .eq('id', row.id);
       }
 
+      const connerOn = connerIds.has(dealerId);
+
       return {
         ...row,
+        dataSource: connerOn ? 'Conner' : row.dataSource,
         scrapLink: scrapStatus,
         scrapOn,
         scrapStatus,
         scrapRowCount,
+        connerOn,
       };
     })
   );

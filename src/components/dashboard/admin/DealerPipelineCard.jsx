@@ -992,7 +992,14 @@ export default function DealerPipelineCard({ dealer, from, to }) {
               </>
             )}
           </p>
-          {stats?.inventory && (
+          {stats?.inventory && stats.inventory.hasConnerSource && (
+            <p className="pipeline-step-meta">
+              Config: smart_conner_config · Inventory: smart_conner_inventory
+              · Source: Conner
+              · Conner rows: {(stats.inventory.connerRowCount || 0).toLocaleString()}
+            </p>
+          )}
+          {stats?.inventory && !stats.inventory.hasConnerSource && (
             <p className="pipeline-step-meta">
               Config: smart_vdp_logic + smart_hoot_config · Inventory: smart_hoot_inventory_live + smart_scrap_inventory
               · Hoot link: {stats.inventory.hasHootLink ? 'yes' : 'no'}
