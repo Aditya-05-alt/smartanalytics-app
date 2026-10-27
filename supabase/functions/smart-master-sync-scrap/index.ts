@@ -91,16 +91,19 @@ async function buildDealer(
   return result;
 }
 
-/** Step 2 normally finishes before Step 3; only re-tag a dealer whose recent rows are untagged. */
-async function ensureTagged(supabase: SupabaseClient, clientId: string): Promise<boolean> {
+/**
+ * Step 2 normally finishes before Step 3; re-tag only when rows in the rebuild window are untagged.
+ * GA4 re-syncs a day ~5 days later (resetting its tags), so check the whole window, not just 2 days.
+ */
+async function ensureTagged(supabase: SupabaseClient, clientId: string, daysBack: number): Promise<boolean> {
   const { data: needs, error } = await supabase.rpc("step3_needs_tagging", {
     p_client_id: clientId,
-    p_days_back: 2,
+    p_days_back: daysBack,
   });
   if (error || !needs) return false;
   const { error: filtErr } = await supabase.rpc("apply_vdp_filtration", {
     p_client_id: clientId,
-    p_days_back: 2,
+    p_days_back: daysBack,
   });
   if (filtErr) throw new Error(`apply_vdp_filtration: ${filtErr.message}`);
   return true;
@@ -252,7 +255,7 @@ serve(async (req) => {
       const t0 = Date.now();
 
       try {
-        const retagged = await ensureTagged(supabase, clientId);
+        const retagged = await ensureTagged(supabase, clientId, daysBack);
         const built = await buildDealer(supabase, clientId, daysBack, dayByDay, deadline, resumeDay);
 
         if (built.outOfBudget) {

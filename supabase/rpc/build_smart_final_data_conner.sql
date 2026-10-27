@@ -13,13 +13,15 @@
 --     built from Hoot/Scrap before the switch to Conner are kept.
 
 DROP FUNCTION IF EXISTS public.build_smart_final_data_conner(text, integer, date, date, boolean);
+DROP FUNCTION IF EXISTS public.build_smart_final_data_conner(text, integer, date, date, boolean, boolean);
 
 CREATE OR REPLACE FUNCTION public.build_smart_final_data_conner(
-  p_client_id text,
-  p_days_back integer DEFAULT NULL,
-  p_date_from date DEFAULT NULL,
-  p_date_to   date DEFAULT NULL,
-  p_dry_run   boolean DEFAULT true
+  p_client_id  text,
+  p_days_back  integer DEFAULT NULL,
+  p_date_from  date DEFAULT NULL,
+  p_date_to    date DEFAULT NULL,
+  p_dry_run    boolean DEFAULT true,
+  p_full_range boolean DEFAULT false
 )
 RETURNS TABLE(
   client_id         text,
@@ -73,7 +75,10 @@ BEGIN
   END IF;
 
   -- GA4 for day D lands on D+1, so the first snapshot also covers the day before it.
-  v_from := GREATEST(v_from, v_first - 1);
+  -- p_full_range: deliberate backfill (e.g. a new dealer with no earlier Final rows to protect).
+  IF NOT p_full_range THEN
+    v_from := GREATEST(v_from, v_first - 1);
+  END IF;
 
   DROP TABLE IF EXISTS pg_temp._conner_final;
 
@@ -337,10 +342,10 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION public.build_smart_final_data_conner(text, integer, date, date, boolean) IS
+COMMENT ON FUNCTION public.build_smart_final_data_conner(text, integer, date, date, boolean, boolean) IS
   'Conner Step 3: smart_final_data from smart_conner_inventory (Hoot matching rules). Dry run by default.';
 
-REVOKE ALL ON FUNCTION public.build_smart_final_data_conner(text, integer, date, date, boolean)
+REVOKE ALL ON FUNCTION public.build_smart_final_data_conner(text, integer, date, date, boolean, boolean)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.build_smart_final_data_conner(text, integer, date, date, boolean)
+GRANT EXECUTE ON FUNCTION public.build_smart_final_data_conner(text, integer, date, date, boolean, boolean)
   TO service_role;

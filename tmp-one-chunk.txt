@@ -1,0 +1,105 @@
+INSERT INTO public._tmp_sql_deploy(ord, chunk) VALUES (0, '-- Scrap Step 3 — independent of Hoot / QS.
+-- Fast path: dealer-scoped scrap (+ optional same-dealer hoot) inventory,
+-- path equality / VIN / Dealer Spike id= / MNG Pro Tech /units/info/{10-digit}
+-- / DX1 listing UUID (seo path vs /dx1inventory/{uuid})
+-- (no full-table LIKE over 77k rows).
+-- Includes inv_custom_type (Destination Cycle / smart_final_data column).
+
+CREATE OR REPLACE FUNCTION public.extract_mng_unit_id_from_page_path(p_page_path text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT (regexp_match(lower(btrim(COALESCE(p_page_path, ''''))), ''/units/info/([0-9]{10})''))[1];
+$$;
+
+CREATE OR REPLACE FUNCTION public.extract_dx1_listing_id_from_page_path(p_page_path text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT lower((regexp_match(
+    lower(btrim(COALESCE(p_page_path, ''''))),
+    ''([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})g?''
+  ))[1]);
+$$;
+
+CREATE OR REPLACE FUNCTION public.build_smart_final_data_scrap(
+  p_client_id text DEFAULT NULL,
+  p_days_back integer DEFAULT NULL,
+  p_date_from date DEFAULT NULL,
+  p_date_to date DEFAULT NULL
+)
+RETURNS TABLE (
+  client_id text,
+  account_name text,
+  cms text,
+  out_total_rows bigint,
+  out_vdp_true_rows bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+SET lock_timeout = ''120s''
+SET statement_timeout = ''180s''
+AS $$
+BEGIN
+  IF p_client_id IS NULL OR btrim(p_client_id) = '''' THEN
+    RAISE EXCEPTION ''build_smart_final_data_scrap requires p_client_id (per-dealer only)'';
+  END IF;
+
+  DELETE FROM public.smart_final_data AS sfd
+  WHERE sfd.client_id = trim(p_client_id)
+    AND (p_date_from IS NULL OR sfd.report_date >= p_date_from)
+    AND (p_date_to IS NULL OR sfd.report_date <= p_date_to)
+    AND (
+      p_date_from IS NOT NULL
+      OR p_days_back IS NULL
+      OR sfd.report_date >= CURRENT_DATE - p_days_back
+    );
+
+  INSERT INTO public.smart_final_data (
+    client_id, ga4_property_id, account_name, report_date,
+    page_location, page_path, page_title,
+    views, total_users, sessions, new_users, ga4_page_type,
+    hoot_customer_name, hoot_id, hoot_url, website_platform,
+    inv_sk, inv_vin, inv_url, inv_make, inv_model, inv_year, inv_trim,
+    inv_price, inv_msrp, inv_condition, inv_type, inv_custom_type, inv_stock_number,
+    inv_location, inv_first_seen, inv_last_seen,
+    vdp_conditions, vdp_vehicle_condition, cms
+  )
+  WITH config_unique AS (
+    SELECT DISTINCT ON (
+      h.ga4_customer_id,
+      COALESCE(NULLIF(btrim(h.ga4_property_id), ''''), ''__legacy__'')
+    )
+      h.ga4_customer_id,
+      h.ga4_property_id,
+      h.customer_name,
+      h.hoot_id,
+      h.hoot_url,
+      h.website_platform,
+      NULLIF(TRIM(h.inv_type_raw_key), '''') AS inv_type_raw_key
+    FROM public.smart_hoot_config h
+    WHERE h.ga4_customer_id IS NOT NULL
+      AND trim(h.ga4_customer_id::text) = trim(p_client_id)
+    ORDER BY
+      h.ga4_customer_id,
+      COALESCE(NULLIF(btrim(h.ga4_property_id), ''''), ''__legacy__''),
+      h.is_active DESC NULLS LAST,
+      h.id DESC
+  ),
+  dealer_names AS (
+    SELECT DISTINCT LOWER(TRIM(c.customer_name)) AS customer_name_key
+    FROM config_unique c
+    WHERE c.customer_name IS NOT NULL AND btrim(c.customer_name) <> ''''
+    UNION
+    SELECT DISTINCT LOWER(TRIM(i.customer_name)) AS customer_name_key
+    FROM public.smart_scrap_inventory i
+    WHERE NULLIF(TRIM(i.customer_id), '''') = trim(p_client_id)
+      AND i.customer_name IS NOT NULL
+      AND btrim(i.customer_name) <> ''''
+  ),
+  ga4_unique AS (
+    SELECT
+      g.client_i');

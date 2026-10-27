@@ -35,8 +35,10 @@ const sb = createClient(url, key, {
 });
 
 const USERS = [
-  { email: 'jays@wheeleradvertising.com', password: 'Wheeler@16$', name: 'Jays' },
+  { email: 'jack@wheeleradvertising.com', password: 'Wheeler@17$', name: 'Jack' },
 ];
+
+const REPORT_KEYS = ['overview', 'compare'];
 
 async function findUserIdByEmail(email) {
   const target = email.toLowerCase();
@@ -99,10 +101,9 @@ async function assignOverviewAllDealers(userId, email) {
     .eq('auth_user_id', userId);
   if (delRepErr) throw delRepErr;
 
-  const { error: insRepErr } = await sb.from('smart_user_reports').insert({
-    auth_user_id: userId,
-    report_key: 'overview',
-  });
+  const { error: insRepErr } = await sb.from('smart_user_reports').insert(
+    REPORT_KEYS.map((report_key) => ({ auth_user_id: userId, report_key }))
+  );
   if (insRepErr) throw insRepErr;
 
   const { error: delDealErr } = await sb
@@ -123,7 +124,7 @@ for (const u of USERS) {
       userId: id,
       status: created ? 'created' : 'updated',
       role: 'user',
-      reports: ['overview'],
+      reports: REPORT_KEYS,
       allDealers: true,
     });
   } catch (e) {

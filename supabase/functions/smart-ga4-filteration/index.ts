@@ -100,9 +100,24 @@ serve(async (req) => {
       );
     }
 
-    const batch = pickDealerGroup(dealers, groupId, groupCount);
+    const groupDealers = pickDealerGroup(dealers, groupId, groupCount);
+    // A budget cut skips the tail of the batch, so run dealers with untagged rows first
+    // (GA4 re-syncs reset a day's tags; skipping them again leaves those days with no VDP).
+    const untagged = await Promise.all(
+      groupDealers.map(async (d) => {
+        const { data } = await supabase.rpc("step3_needs_tagging", {
+          p_client_id: d.client_id,
+          p_days_back: daysBack,
+        });
+        return data === true;
+      }),
+    );
+    const batch = [
+      ...groupDealers.filter((_, i) => untagged[i]),
+      ...groupDealers.filter((_, i) => !untagged[i]),
+    ];
     console.log(
-      `Found ${dealers.length} dealers; processing ${batch.length} in this batch...`,
+      `Found ${dealers.length} dealers; processing ${batch.length} in this batch (${untagged.filter(Boolean).length} with untagged rows first)...`,
     );
 
     const results: Record<string, unknown>[] = [];
