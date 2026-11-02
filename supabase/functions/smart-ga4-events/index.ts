@@ -15,8 +15,9 @@ const CHUNK_SIZE = 500;
 const GLOBAL_BUDGET_MS = 130_000;
 const PAGE_SIZE = 10_000;
 
-/** Event Tracking is Sky River RV only for now. */
+/** Event Tracking dealers: Sky River RV (default), Gerzeny's RV, A&L RV Sales. One dealer per call. */
 const SKY_RIVER_CLIENT_ID = "9842851162";
+const EVENT_TRACKING_CLIENT_IDS = [SKY_RIVER_CLIENT_ID, "1162028739", "2728830488"];
 
 const FORM_EVENTS = [
   "contact_us_submit",
@@ -82,9 +83,11 @@ serve(async (req) => {
     const clientId = String(
       body.target_client_id ?? body.client_id ?? SKY_RIVER_CLIENT_ID
     );
-    if (clientId !== SKY_RIVER_CLIENT_ID) {
+    if (!EVENT_TRACKING_CLIENT_IDS.includes(clientId)) {
       return jsonRes(
-        { error: `smart-ga4-events is limited to Sky River RV (${SKY_RIVER_CLIENT_ID})` },
+        {
+          error: `smart-ga4-events is limited to Event Tracking dealers (${EVENT_TRACKING_CLIENT_IDS.join(", ")})`,
+        },
         400
       );
     }
@@ -96,7 +99,7 @@ serve(async (req) => {
       ? (body.event_names as string[]).map(String)
       : FORM_EVENTS;
 
-    log(`=== GA4 EVENTS SYNC — Sky River RV ${listEvents ? "(LIST EVENTS, no write)" : ""} ===`);
+    log(`=== GA4 EVENTS SYNC — ${clientId} ${listEvents ? "(LIST EVENTS, no write)" : ""} ===`);
     log(`Window: ${dateFrom} → ${dateTo}`);
 
     const { data: dealer, error: dErr } = await supabase
