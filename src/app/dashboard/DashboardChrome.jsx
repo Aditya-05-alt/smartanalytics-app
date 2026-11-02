@@ -40,7 +40,9 @@ function DashboardContent({ children }) {
             <TopBar />
             <div className={`dash-layout ${isAdminRoute ? 'dash-layout--admin' : ''}`}>
               {!isAdminRoute && <SideBar />}
-              <main className="page-shell">
+              <main
+                className={`page-shell${pathname?.startsWith('/dashboard/event-tracking') ? ' page-shell--scrollable' : ''}`}
+              >
                 {denied ? (
                   <p className="ga4-count-meta">Redirecting to an allowed report…</p>
                 ) : (

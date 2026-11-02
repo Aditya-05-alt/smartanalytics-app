@@ -1903,6 +1903,13 @@ button.adc-dealer-link {
   min-width: 0;
   min-height: 0;
 }
+.page-shell--scrollable {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.page-shell--scrollable > * {
+  flex: 0 0 auto;
+}
 .page-shell > .page-tabs,
 .page-shell > .filters,
 .page-shell > .statusbar,

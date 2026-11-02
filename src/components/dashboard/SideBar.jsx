@@ -69,6 +69,11 @@ const ICONS = {
       <path d="M7 15c2-1 4 1 6 0s3-2 4-1" strokeLinecap="round" />
     </svg>
   ),
+  'event-tracking': (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 12h4l3-8 4 16 3-8h4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
   'all-dealers': (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -93,6 +98,7 @@ const ITEMS = [
   { id: 'compare', href: '/dashboard/compare', title: 'Compare' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
   { id: 'traffic', href: '/dashboard/traffic', title: 'Traffic' },
+  { id: 'event-tracking', href: '/dashboard/event-tracking', title: 'Event Tracking' },
   // { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
   // { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
   // { id: 'local', href: '/dashboard/local', title: 'Local Intel' },

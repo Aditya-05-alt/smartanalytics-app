@@ -5,6 +5,7 @@ export const REPORT_OPTIONS = [
   { key: 'compare', label: 'Compare', href: '/dashboard/compare' },
   { key: 'inventory', label: 'Inventory report', href: '/dashboard/inventory' },
   { key: 'traffic', label: 'Traffic', href: '/dashboard/traffic' },
+  { key: 'event-tracking', label: 'Event Tracking', href: '/dashboard/event-tracking' },
   // { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
   // { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },
   // { key: 'local', label: 'Local Intel', href: '/dashboard/local' },
