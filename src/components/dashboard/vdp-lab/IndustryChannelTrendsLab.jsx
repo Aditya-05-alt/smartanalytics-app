@@ -34,6 +34,7 @@ import {
 import { isAllDealerClient } from '@/lib/dashboard/allDealers';
 import { readStoredOverviewDateRange } from '@/lib/dashboard/dashboardPrefs';
 import { resolveDashboardDateRange } from '@/lib/dashboard/resolveDateRange';
+import { periodMonthLabel } from '@/lib/overview/comparePeriod';
 import { VDP_CHANNEL_FILTER_OPTIONS, selectedChannels } from '@/lib/vdp/vdpFilterParams';
 import {
   buildPortfolioTotalsRow,
@@ -223,6 +224,8 @@ export default function IndustryChannelTrendsLab() {
     () => readStoredOverviewDateRange() || 'current_month'
   );
   const [periodMode, setPeriodMode] = useState('yoy');
+  /** YoY only: user-picked prior range (earlier years); null = same dates one year back. */
+  const [yoyRange, setYoyRange] = useState(null);
   const [seeded, setSeeded] = useState(false);
 
   const [matrixRows, setMatrixRows] = useState([]);
@@ -254,9 +257,35 @@ export default function IndustryChannelTrendsLab() {
     () => resolveDashboardDateRange(dateRange),
     [dateRange]
   );
-  const comparePeriod = useMemo(
+  const defaultComparePeriod = useMemo(
     () => industryCompareRanges(from, to, periodMode),
     [from, to, periodMode]
+  );
+  const comparePeriod = useMemo(() => {
+    if (periodMode !== 'yoy' || !yoyRange) return defaultComparePeriod;
+    const picked = resolveDashboardDateRange(yoyRange);
+    if (!picked?.from || !picked?.to) return defaultComparePeriod;
+    return {
+      ...defaultComparePeriod,
+      priorFrom: picked.from,
+      priorTo: picked.to,
+      priorLabel: periodMonthLabel(picked.from, picked.to),
+    };
+  }, [defaultComparePeriod, periodMode, yoyRange]);
+
+  // A new main range or switching to MoM drops the custom prior-year range.
+  useEffect(() => {
+    setYoyRange(null);
+  }, [from, to, periodMode]);
+
+  const yoyPickerValue = useMemo(
+    () =>
+      yoyRange ?? {
+        start: defaultComparePeriod.priorFrom,
+        end: defaultComparePeriod.priorTo,
+        preset: 'custom',
+      },
+    [yoyRange, defaultComparePeriod]
   );
 
   const categoryActive = compareCategories.length > 0;
@@ -698,6 +727,16 @@ export default function IndustryChannelTrendsLab() {
                 onChange={setPeriodMode}
               />
             </div>
+            {periodMode === 'yoy' && (
+              <div className="vdp-lab-ict-period-switch">
+                <span className="dealer-compare-side-title">Compare range</span>
+                <CalendarRangePicker
+                  value={yoyPickerValue}
+                  onChange={setYoyRange}
+                  previousYearsOnly
+                />
+              </div>
+            )}
           </div>
         </div>
         <div className="dealer-compare-dealers-summary">

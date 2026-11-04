@@ -93,10 +93,10 @@ async function loadVdpLogicRow(supabase, clientId, customerName, ga4PropertyId) 
 async function loadConnerSource(supabase, clientId) {
   const { data: rows, error } = await supabase
     .from('smart_conner_config')
-    .select('customer_name, hoot_url')
+    .select('customer_name, wheeler_url')
     .eq('ga4_customer_id', clientId)
     .eq('is_active', true)
-    .not('hoot_url', 'is', null)
+    .not('wheeler_url', 'is', null)
     .limit(1);
 
   if (error) {
@@ -104,7 +104,7 @@ async function loadConnerSource(supabase, clientId) {
   }
   const row = rows?.[0];
   const customerName = row?.customer_name?.trim() || null;
-  if (!hasText(row?.hoot_url) || !customerName) {
+  if (!hasText(row?.wheeler_url) || !customerName) {
     return { isConner: false, connerInventoryCount: 0 };
   }
 
@@ -123,7 +123,7 @@ async function loadConnerSource(supabase, clientId) {
  * Pick Step 3 RPC for one dealer.
  *
  * Config tables:
- * - smart_conner_config (hoot_url = Scout RV / ScoutX feed) — Conner dealers
+ * - smart_conner_config (wheeler_url = Scout RV / ScoutX feed) — Conner dealers
  * - smart_vdp_logic (hoot_link, scrap_link) — Admin → VDP Logics
  * - smart_hoot_config (customer_name, hoot_url, ga4_customer_id)
  * Inventory tables:

@@ -38,16 +38,16 @@ export async function loadScrapInventoryByCustomerId(supabase) {
 export async function loadConnerDealerIds(supabase) {
   const { data, error } = await supabase
     .from('smart_conner_config')
-    .select('ga4_customer_id, hoot_url')
+    .select('ga4_customer_id, wheeler_url')
     .eq('is_active', true)
-    .not('hoot_url', 'is', null);
+    .not('wheeler_url', 'is', null);
 
   if (error) {
     throw new Error(error.message);
   }
   return new Set(
     (data || [])
-      .filter((row) => String(row.hoot_url ?? '').trim() !== '')
+      .filter((row) => String(row.wheeler_url ?? '').trim() !== '')
       .map((row) => String(row.ga4_customer_id ?? '').trim())
       .filter(Boolean)
   );

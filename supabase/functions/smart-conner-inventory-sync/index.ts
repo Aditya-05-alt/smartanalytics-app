@@ -20,7 +20,7 @@ type ConnerDealer = {
   customer_name: string;
   ga4_customer_id: string;
   website_platform: string | null;
-  feed_url: string;
+  wheeler_url: string;
 };
 
 type DealerResult = {
@@ -155,10 +155,12 @@ async function loadDealer(
     if ((count ?? 0) > 0) return { ...base, status: "skipped", reason: `already loaded for ${today}` };
   }
 
-  const csv = parseCsv(await fetchFeed(dealer.feed_url));
+  const csv = parseCsv(await fetchFeed(dealer.wheeler_url));
   if (csv.length < 2) return { ...base, status: "error", reason: "feed has no data rows" };
 
   const header = csv[0].map((h) => h.trim());
+  // ScoutX "meta.csv" feeds use Meta catalog columns instead of the Google vehicle-ads ones.
+  const isMeta = header.includes("vehicle_id") && !header.includes("id");
   const fallbackLocation = await lastKnownLocation(supabase, dealer.customer_name);
   const platform = dealer.website_platform ?? null;
 
@@ -170,27 +172,29 @@ async function loadDealer(
     if (cells.length !== header.length) continue;
     const rec: Record<string, string> = {};
     header.forEach((h, idx) => (rec[h] = cells[idx]));
-    if (!nonEmpty(rec.id)) continue;
+    if (!nonEmpty(isMeta ? rec.vehicle_id : rec.id)) continue;
 
     const vin = nonEmpty(rec.vin);
-    const url = nonEmpty(rec.link);
+    const rawLink = isMeta ? rec.url : rec.link;
+    const url = nonEmpty(rawLink);
     const common = {
-      sk: await md5Hex(`${rec.vin ?? ""}|${rec.link ?? ""}`),
+      sk: await md5Hex(`${rec.vin ?? ""}|${rawLink ?? ""}`),
       vin,
       url,
       advertiser: dealer.customer_name,
-      make: nonEmpty(String(rec.brand ?? "").replace(/[®™]/g, "")),
+      make: nonEmpty(String((isMeta ? rec.make : rec.brand) ?? "").replace(/[®™]/g, "")),
       model: nonEmpty(rec.model),
       year: nonEmpty(rec.year),
-      price: numeric(rec.price),
-      condition: initcap(nonEmpty(rec.condition)),
+      // meta.csv: price = regular price, sale_price = selling price (msrp > price like the other feeds).
+      price: isMeta ? numeric(rec.sale_price) ?? numeric(rec.price) : numeric(rec.price),
+      condition: initcap(nonEmpty(isMeta ? rec.state_of_vehicle : rec.condition)),
       raw_data: rec,
       customer_name: dealer.customer_name,
       location: nonEmpty(rec.custom_label_0) ?? fallbackLocation,
-      msrp: numeric(rec.vehicle_msrp),
+      msrp: isMeta ? numeric(rec.price) : numeric(rec.vehicle_msrp),
       type_: nonEmpty(rec.custom_label_1),
       trim: nonEmpty(rec.trim),
-      stock_number: nonEmpty(rec.id),
+      stock_number: isMeta ? nonEmpty(rec.stock_number) ?? nonEmpty(rec.vehicle_id) : nonEmpty(rec.id),
       website_platform: platform,
     };
     inv.push({ ...common, first_seen: nowIso, last_seen: nowIso });
@@ -205,7 +209,7 @@ async function loadDealer(
 }
 
 /**
- * Daily Conner inventory load: downloads each active Conner feed (smart_conner_config.hoot_url)
+ * Daily Conner inventory load: downloads each active Conner feed (smart_conner_config.wheeler_url)
  * and appends that day's snapshot to smart_conner_inventory + smart_conner_inventory_live.
  *
  * Body (optional): client_id / client_ids to limit dealers; force:true to load again

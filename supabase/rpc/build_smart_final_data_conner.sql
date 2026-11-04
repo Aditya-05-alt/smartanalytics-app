@@ -57,7 +57,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.smart_conner_config c
     WHERE btrim(c.ga4_customer_id::text) = v_client
-      AND NULLIF(btrim(c.hoot_url), '') IS NOT NULL
+      AND NULLIF(btrim(c.wheeler_url), '') IS NOT NULL
   ) THEN
     RAISE EXCEPTION 'build_smart_final_data_conner: no Conner feed configured for %', v_client;
   END IF;
@@ -68,7 +68,7 @@ BEGIN
   JOIN public.smart_conner_config c
     ON LOWER(TRIM(c.customer_name)) = LOWER(TRIM(i.customer_name))
   WHERE btrim(c.ga4_customer_id::text) = v_client
-    AND NULLIF(btrim(c.hoot_url), '') IS NOT NULL;
+    AND NULLIF(btrim(c.wheeler_url), '') IS NOT NULL;
 
   IF v_first IS NULL THEN
     RAISE EXCEPTION 'build_smart_final_data_conner: no Conner inventory loaded for %', v_client;
@@ -92,12 +92,12 @@ BEGIN
       h.ga4_property_id,
       h.customer_name,
       h.hoot_id,
-      h.hoot_url,
+      h.wheeler_url AS hoot_url,
       h.website_platform,
       NULLIF(TRIM(h.inv_type_raw_key), '') AS inv_type_raw_key
     FROM public.smart_conner_config h
     WHERE btrim(h.ga4_customer_id::text) = v_client
-      AND NULLIF(btrim(h.hoot_url), '') IS NOT NULL
+      AND NULLIF(btrim(h.wheeler_url), '') IS NOT NULL
     ORDER BY
       btrim(h.ga4_customer_id::text),
       COALESCE(NULLIF(btrim(h.ga4_property_id), ''), '__legacy__'),

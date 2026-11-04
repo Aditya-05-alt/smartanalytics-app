@@ -76,7 +76,14 @@ function yearPresets(today) {
   return years;
 }
 
-function presetsFor(today) {
+function presetsFor(today, previousYearsOnly = false) {
+  if (previousYearsOnly) {
+    // Compare → YoY: only earlier years; the current year is already in the main date range.
+    return [
+      ...yearPresets(today).filter((p) => p.id !== `year_${today.getFullYear()}`),
+      { id: 'custom', label: 'Custom', from: null, to: null },
+    ];
+  }
   const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
   const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
   const lastYear = today.getFullYear() - 1;
@@ -175,7 +182,7 @@ export function rangePickerValueFromISO(from, to) {
   return { start: from, end: to, preset };
 }
 
-export default function CalendarRangePicker({ value, onChange }) {
+export default function CalendarRangePicker({ value, onChange, previousYearsOnly = false }) {
   const [open, setOpen] = useState(false);
   const [popPos, setPopPos] = useState({ top: 0, left: 0 });
   const triggerRef = useRef(null);
@@ -222,7 +229,9 @@ export default function CalendarRangePicker({ value, onChange }) {
     return t;
   }, []);
 
-  const presets = useMemo(() => presetsFor(today), [today]);
+  const presets = useMemo(() => presetsFor(today, previousYearsOnly), [today, previousYearsOnly]);
+  // Calendar days from this year onward can't be picked in previous-years-only mode.
+  const disableFromYear = previousYearsOnly ? today.getFullYear() : null;
 
   const incoming = useMemo(() => {
     if (typeof value === 'string') {
@@ -349,6 +358,7 @@ export default function CalendarRangePicker({ value, onChange }) {
                 onCellClick={handleCellClick}
                 onPrev={() => setLeftMonth(addMonths(leftMonth, -1))}
                 onNext={() => setLeftMonth(addMonths(leftMonth, 1))}
+                disableFromYear={disableFromYear}
                 hideRightArrow
               />
               <CalendarMonth
@@ -360,6 +370,7 @@ export default function CalendarRangePicker({ value, onChange }) {
                 onCellClick={handleCellClick}
                 onPrev={() => setLeftMonth(addMonths(leftMonth, -1))}
                 onNext={() => setLeftMonth(addMonths(leftMonth, 1))}
+                disableFromYear={disableFromYear}
                 hideLeftArrow
               />
             </div>
@@ -416,6 +427,7 @@ function CalendarMonth({
   onNext,
   hideLeftArrow,
   hideRightArrow,
+  disableFromYear = null,
 }) {
   return (
     <div className="cdr-cal">
@@ -452,6 +464,7 @@ function CalendarMonth({
           const isEnd    = sameYMD(d, parseISO(end));
           const inRng    = !outside && inISORange(d, start, end);
           const isToday  = sameYMD(d, today);
+          const blocked  = disableFromYear != null && d.getFullYear() >= disableFromYear;
           const cls = [
             'cdr-cell',
             outside ? 'out' : '',
@@ -459,6 +472,7 @@ function CalendarMonth({
             isStart ? 'start' : '',
             isEnd ? 'end' : '',
             isToday ? 'today' : '',
+            blocked ? 'out' : '',
           ].filter(Boolean).join(' ');
           return (
             <button
@@ -466,7 +480,8 @@ function CalendarMonth({
               type="button"
               className={cls}
               onClick={() => onCellClick(d)}
-              tabIndex={outside ? -1 : 0}
+              disabled={blocked}
+              tabIndex={outside || blocked ? -1 : 0}
             >
               {d.getDate()}
             </button>

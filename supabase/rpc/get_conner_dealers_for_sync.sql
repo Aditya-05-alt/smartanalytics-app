@@ -9,7 +9,7 @@ RETURNS TABLE(
   customer_name    text,
   ga4_customer_id  text,
   website_platform text,
-  feed_url         text
+  wheeler_url      text
 )
 LANGUAGE sql
 STABLE
@@ -21,11 +21,11 @@ AS $function$
     c.customer_name,
     btrim(c.ga4_customer_id::text),
     c.website_platform,
-    c.hoot_url
+    c.wheeler_url
   FROM public.smart_conner_config c
   WHERE c.is_active IS TRUE
     AND NULLIF(btrim(c.ga4_customer_id::text), '') IS NOT NULL
-    AND NULLIF(btrim(c.hoot_url), '') IS NOT NULL
+    AND NULLIF(btrim(c.wheeler_url), '') IS NOT NULL
     AND (p_client_id IS NULL OR btrim(c.ga4_customer_id::text) = btrim(p_client_id))
   ORDER BY btrim(c.ga4_customer_id::text), c.id DESC;
 $function$;
