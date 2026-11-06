@@ -12,7 +12,7 @@ export const REPORT_OPTIONS = [
 ];
 
 /** Not included in Admin / All reports. Only an explicit grant shows these. */
-export const EXPLICIT_REPORT_KEYS = new Set(['traffic', 'all-dealers']);
+export const EXPLICIT_REPORT_KEYS = new Set(['traffic', 'all-dealers', 'event-tracking']);
 
 export const DEFAULT_ACCESS = Object.freeze({
   role: 'admin',

@@ -182,7 +182,14 @@ export function rangePickerValueFromISO(from, to) {
   return { start: from, end: to, preset };
 }
 
-export default function CalendarRangePicker({ value, onChange, previousYearsOnly = false }) {
+/** `minDate` / `maxDate` (YYYY-MM-DD, optional) limit selectable days and the presets shown. */
+export default function CalendarRangePicker({
+  value,
+  onChange,
+  previousYearsOnly = false,
+  minDate = null,
+  maxDate = null,
+}) {
   const [open, setOpen] = useState(false);
   const [popPos, setPopPos] = useState({ top: 0, left: 0 });
   const triggerRef = useRef(null);
@@ -229,7 +236,15 @@ export default function CalendarRangePicker({ value, onChange, previousYearsOnly
     return t;
   }, []);
 
-  const presets = useMemo(() => presetsFor(today, previousYearsOnly), [today, previousYearsOnly]);
+  const presets = useMemo(
+    () =>
+      presetsFor(today, previousYearsOnly).filter(
+        (p) =>
+          p.id === 'custom' ||
+          ((!minDate || p.from >= minDate) && (!maxDate || p.to <= maxDate))
+      ),
+    [today, previousYearsOnly, minDate, maxDate]
+  );
   // Calendar days from this year onward can't be picked in previous-years-only mode.
   const disableFromYear = previousYearsOnly ? today.getFullYear() : null;
 
@@ -262,6 +277,8 @@ export default function CalendarRangePicker({ value, onChange, previousYearsOnly
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rightMonth = useMemo(() => addMonths(leftMonth, 1), [leftMonth]);
+  const canGoPrev = !minDate || ymd(leftMonth) > minDate.slice(0, 8) + '01';
+  const canGoNext = !maxDate || ymd(addMonths(rightMonth, 1)) <= maxDate;
   const leftCells  = useMemo(() => buildMonthGrid(leftMonth),  [leftMonth]);
   const rightCells = useMemo(() => buildMonthGrid(rightMonth), [rightMonth]);
 
@@ -359,6 +376,9 @@ export default function CalendarRangePicker({ value, onChange, previousYearsOnly
                 onPrev={() => setLeftMonth(addMonths(leftMonth, -1))}
                 onNext={() => setLeftMonth(addMonths(leftMonth, 1))}
                 disableFromYear={disableFromYear}
+                minDate={minDate}
+                maxDate={maxDate}
+                hideLeftArrow={!canGoPrev}
                 hideRightArrow
               />
               <CalendarMonth
@@ -371,7 +391,10 @@ export default function CalendarRangePicker({ value, onChange, previousYearsOnly
                 onPrev={() => setLeftMonth(addMonths(leftMonth, -1))}
                 onNext={() => setLeftMonth(addMonths(leftMonth, 1))}
                 disableFromYear={disableFromYear}
+                minDate={minDate}
+                maxDate={maxDate}
                 hideLeftArrow
+                hideRightArrow={!canGoNext}
               />
             </div>
           </div>
@@ -428,6 +451,8 @@ function CalendarMonth({
   hideLeftArrow,
   hideRightArrow,
   disableFromYear = null,
+  minDate = null,
+  maxDate = null,
 }) {
   return (
     <div className="cdr-cal">
@@ -464,7 +489,10 @@ function CalendarMonth({
           const isEnd    = sameYMD(d, parseISO(end));
           const inRng    = !outside && inISORange(d, start, end);
           const isToday  = sameYMD(d, today);
-          const blocked  = disableFromYear != null && d.getFullYear() >= disableFromYear;
+          const blocked  =
+            (disableFromYear != null && d.getFullYear() >= disableFromYear) ||
+            (minDate != null && ymd(d) < minDate) ||
+            (maxDate != null && ymd(d) > maxDate);
           const cls = [
             'cdr-cell',
             outside ? 'out' : '',

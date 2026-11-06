@@ -1,32 +1,38 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import CalendarRangePicker, { resolveRangePickerValue } from '../CalendarRangePicker';
 import styles from './EventTracking.module.css';
 
-const CHANNELS = [
-  'Organic Search',
-  'Paid Search',
-  'Direct',
-  'Paid Social',
-  'Paid Video',
-  'Cross-network',
-  'Organic Social',
-  'Organic Video',
-  'Referral',
-  'Email',
-  'Affiliates',
-  'Paid Other',
-  'AI Assistant',
-  'Unassigned',
-  'Display',
-  'SMS',
-  'Audio',
+/** Combined channel groups (same set and colors as VDP Analysis); anything else is Other. */
+const CHANNEL_GROUPS = [
+  { name: 'Paid Search', color: '#2F6FB1' },
+  { name: 'Organic Search', color: '#5FA01F' },
+  { name: 'Paid Social', color: '#D9822B' },
+  { name: 'Direct', color: '#6B7280' },
+  { name: 'Cross-network', color: '#8A5CB8' },
+  { name: 'Organic Social', color: '#E8B04A' },
+  { name: 'Referral', color: '#2E9C9C' },
+  { name: 'Other', color: '#B8BEC9' },
 ];
+const CHANNELS = CHANNEL_GROUPS.map((group) => group.name);
+const CHANNEL_COLORS = Object.fromEntries(CHANNEL_GROUPS.map((group) => [group.name, group.color]));
 
-const DEALER_NAMES = [
-  'Sky River RV',
-  "Gerzeny's RV",
-  'A&L RV Sales',
+function channelGroup(channel) {
+  return CHANNELS.includes(channel) ? channel : 'Other';
+}
+
+/** First day with Event Tracking data; the picker runs from here to today. */
+const MIN_DATE = '2026-10-01';
+/** The dealer table scrolls after this many rows. */
+const DEALER_ROWS_SHOWN = 15;
+const DEALER_COLUMNS = [
+  { key: 'name', label: 'Dealer' },
+  { key: 'users', label: 'Users' },
+  { key: 'views', label: 'VDP views' },
+  { key: 'events', label: 'Form events' },
+  { key: 'vdpPerEvent', label: 'VDP / Event' },
+  { key: 'eventPct', label: 'Event %' },
 ];
 
 const EVENT_TYPES = [
@@ -39,46 +45,66 @@ const EVENT_TYPES = [
   'parts_submit',
   'service_submit',
 ];
-const ZERO_SERIES = [0, 0, 0];
-const ZERO_DEALERS = DEALER_NAMES.map((name) => ({
-  name,
-  rows: CHANNELS.map((channelName) => ({
-    name: channelName,
-    users: [...ZERO_SERIES],
-    views: [...ZERO_SERIES],
-    events: [...ZERO_SERIES],
-  })),
-  totalUsers: [...ZERO_SERIES],
-  eventsByChannel: Object.fromEntries(
-    CHANNELS.map((channelName) => [
-      channelName,
-      Object.fromEntries(EVENT_TYPES.map((eventType) => [eventType, [...ZERO_SERIES]])),
-    ])
-  ),
-}));
+const MISSING_USERS_LISTED = 5;
 
-function dateOnly(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function isoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
 }
 
-function getLastMonthDateRange(now = new Date()) {
-  const lastMonthFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthTo = new Date(now.getFullYear(), now.getMonth(), 0);
+/** "October 2026" for a whole calendar month, otherwise "Oct 1 – Nov 5, 2026". */
+function rangeLabelOf(from, to) {
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  const monthEnd = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+  if (start.getDate() === 1 && isoDate(monthEnd) === to) {
+    return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(start);
+  }
+  const short = (date, withYear) =>
+    date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      ...(withYear ? { year: 'numeric' } : {}),
+    });
+  if (from === to) return short(start, true);
+  return `${short(start, start.getFullYear() !== end.getFullYear())} – ${short(end, true)}`;
+}
 
-  const from = dateOnly(lastMonthFrom);
-  const to = dateOnly(lastMonthTo);
+/** API dealer -> combined channel groups in the [value, 0, 0] series shape used below. */
+function toDealerData(apiDealer) {
+  const usersByGroup = {};
+  const viewsByGroup = {};
+  for (const row of apiDealer.rows || []) {
+    const group = channelGroup(row.name);
+    usersByGroup[group] = (usersByGroup[group] || 0) + (Number(row.users) || 0);
+    viewsByGroup[group] = (viewsByGroup[group] || 0) + (Number(row.views) || 0);
+  }
+  const eventsByChannel = Object.fromEntries(
+    CHANNELS.map((group) => [
+      group,
+      Object.fromEntries(EVENT_TYPES.map((type) => [type, [0, 0, 0]])),
+    ])
+  );
+  for (const [channel, counts] of Object.entries(apiDealer.eventsByChannel || {})) {
+    const group = eventsByChannel[channelGroup(channel)];
+    for (const type of EVENT_TYPES) group[type][0] += Number(counts?.[type]) || 0;
+  }
 
-  // The aggregation RPC has three period slots; place the selected month in its first slot.
+  const rows = CHANNELS.map((group) => ({
+    name: group,
+    users: [usersByGroup[group] || 0, 0, 0],
+    views: [viewsByGroup[group] || 0, 0, 0],
+    events: [EVENT_TYPES.reduce((sum, type) => sum + eventsByChannel[group][type][0], 0), 0, 0],
+  }));
+
   return {
-    currentFrom: from,
-    currentTo: to,
-    previousFrom: from,
-    previousTo: to,
-    averageFrom: from,
-    averageTo: to,
+    name: apiDealer.name,
+    rows,
+    eventsByChannel,
+    eventTotals: Object.fromEntries(
+      EVENT_TYPES.map((type) => [type, [Number(apiDealer.eventTotals?.[type]) || 0, 0, 0]])
+    ),
   };
 }
 
@@ -155,189 +181,108 @@ function EventCell({ values, onClick }) {
 }
 
 export default function EventTracking() {
-  const now = new Date();
-  const lastMonthLabel = new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const maxDate = useMemo(() => isoDate(new Date()), []);
+  // Default: the last 5 complete days, which the daily crons pre-load (forms, users, VDP).
+  const [range, setRange] = useState(() => {
+    const day = (offset) => {
+      const date = new Date();
+      date.setDate(date.getDate() - offset);
+      return isoDate(date);
+    };
+    return { preset: 'custom', start: day(5), end: day(1) };
+  });
+  const resolvedRange = resolveRangePickerValue(range);
+  const from = resolvedRange?.start && resolvedRange.start > MIN_DATE ? resolvedRange.start : MIN_DATE;
+  const to = resolvedRange?.end && resolvedRange.end < maxDate ? resolvedRange.end : maxDate;
+  const rangeLabel = rangeLabelOf(from, to);
+  const [dealerSort, setDealerSort] = useState({ key: 'events', dir: 'desc' });
+  const dealerScrollRef = useRef(null);
+  const [dealerScrollHeight, setDealerScrollHeight] = useState(null);
   const [dealerName, setDealerName] = useState('');
   const [channelName, setChannelName] = useState('');
   const [eventType, setEventType] = useState('');
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsChannel, setDetailsChannel] = useState('');
-  const [baseDealerData, setDealerData] = useState(ZERO_DEALERS);
+  const [dealerData, setDealerData] = useState([]);
   const [dealerTableMetrics, setDealerTableMetrics] = useState({});
-  const [availableDealerNames, setAvailableDealerNames] = useState(DEALER_NAMES);
   const [dataLoading, setDataLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState({ percent: 0, step: '' });
   const [dataError, setDataError] = useState('');
-  const [channelRowsByDealer, setChannelRowsByDealer] = useState({});
-  const [channelsLoading, setChannelsLoading] = useState(true);
-  const [channelsError, setChannelsError] = useState('');
   const [usersMissingFor, setUsersMissingFor] = useState([]);
-  const [eventsByDealer, setEventsByDealer] = useState({});
-  const [eventsLoading, setEventsLoading] = useState(true);
-  const [eventsError, setEventsError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    const query = new URLSearchParams(getLastMonthDateRange());
-
-    async function loadEvents() {
-      try {
-        const response = await fetch(`/api/dashboard/event-tracking/events?${query}`, {
-          credentials: 'same-origin',
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(result.error || `Events request failed (${response.status})`);
-        }
-        const byDealer = Object.fromEntries(
-          (Array.isArray(result.dealers) ? result.dealers : []).map((dealer) => [
-            dealer.name,
-            dealer,
-          ])
-        );
-        if (!cancelled) setEventsByDealer(byDealer);
-      } catch (error) {
-        if (!cancelled) setEventsError(error?.message || 'Failed to load form events');
-      } finally {
-        if (!cancelled) setEventsLoading(false);
+    setDataLoading(true);
+    setDataError('');
+    const report = (percent, step) => {
+      if (!cancelled) setLoadProgress({ percent: Math.round(percent), step });
+    };
+    const fetchJson = async (url, init) => {
+      const response = await fetch(url, { credentials: 'same-origin', ...init });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `Event Tracking request failed (${response.status})`);
       }
-    }
-
-    async function loadChannels() {
+      return result;
+    };
+    (async () => {
       try {
-        const response = await fetch(`/api/dashboard/event-tracking/channels?${query}`, {
-          credentials: 'same-origin',
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(result.error || `Channel request failed (${response.status})`);
-        }
-        const byDealer = Object.fromEntries(
-          (Array.isArray(result.dealers) ? result.dealers : []).map((dealer) => [
-            dealer.name,
-            dealer.rows || [],
-          ])
+        const query = new URLSearchParams({ from, to });
+
+        // Progress: users check 0-5%, GA4 users per chunk 5-85%, dashboard data to 100%.
+        report(0, 'Checking GA4 users…');
+        const { missing = [], chunkSize = 10 } = await fetchJson(
+          `/api/dashboard/event-tracking/users?${query}`
         );
-        if (!cancelled) setChannelRowsByDealer(byDealer);
-      } catch (error) {
-        if (!cancelled) setChannelsError(error?.message || 'Failed to load channel metrics');
-      } finally {
-        if (!cancelled) setChannelsLoading(false);
-      }
-    }
-
-    async function loadMetrics() {
-      try {
-        const response = await fetch(`/api/dashboard/event-tracking?${query}`, {
-          credentials: 'same-origin',
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(result.error || `Event Tracking request failed (${response.status})`);
+        report(5, 'Checking GA4 users…');
+        if (missing.length) {
+          const chunks = [];
+          for (let i = 0; i < missing.length; i += chunkSize) {
+            chunks.push(missing.slice(i, i + chunkSize));
+          }
+          let done = 0;
+          report(5, `Fetching GA4 users for ${missing.length} dealers…`);
+          await Promise.all(
+            chunks.map(async (clientIds) => {
+              await fetchJson(`/api/dashboard/event-tracking/users?${query}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientIds }),
+              }).catch(() => null);
+              done += 1;
+              report(5 + (80 * done) / chunks.length, `Fetching GA4 users for ${missing.length} dealers…`);
+            })
+          );
         }
+        if (cancelled) return;
 
-        const loadedDealers = Array.isArray(result.dealers) ? result.dealers : [];
-        const tableMetrics = Object.fromEntries(
-          loadedDealers.map((dealer) => [
-            dealer.name,
-            {
-              users: Number(dealer.users) || 0,
-              views: Number(dealer.views) || 0,
-            },
-          ])
+        report(missing.length ? 88 : 30, 'Loading users, VDP views and form events…');
+        const result = await fetchJson(`/api/dashboard/event-tracking?${query}`);
+        report(100, 'Done');
+        const loaded = Array.isArray(result.dealers) ? result.dealers : [];
+        if (cancelled) return;
+        setDealerData(loaded.map(toDealerData));
+        setDealerTableMetrics(
+          Object.fromEntries(
+            loaded.map((dealer) => [
+              dealer.name,
+              { users: Number(dealer.users) || 0, views: Number(dealer.views) || 0 },
+            ])
+          )
         );
-        const allowedNames = Array.isArray(result.availableDealerNames)
-          ? result.availableDealerNames
-          : loadedDealers.map((dealer) => dealer.name);
-        const normalizedDealers = ZERO_DEALERS.filter((dealer) =>
-          allowedNames.includes(dealer.name)
-        ).map((zeroDealer) => {
-          const loaded = loadedDealers.find((dealer) => dealer.name === zeroDealer.name);
-          if (!loaded) return zeroDealer;
-
-          const channelRows = new Map(
-            (loaded.rows || []).map((row) => [row.name, row])
-          );
-          zeroDealer.rows.forEach((row) => {
-            if (!channelRows.has(row.name)) channelRows.set(row.name, row);
-          });
-          return {
-            ...zeroDealer,
-            ...loaded,
-            rows: [...channelRows.values()],
-          };
-        });
-
-        if (!cancelled) {
-          setUsersMissingFor(
-            loadedDealers.filter((dealer) => dealer.usersMissing).map((dealer) => dealer.name)
-          );
-          setAvailableDealerNames(allowedNames);
-          setDealerTableMetrics(tableMetrics);
-          setDealerData(normalizedDealers);
-        }
+        setUsersMissingFor(loaded.filter((dealer) => dealer.usersMissing).map((d) => d.name));
       } catch (error) {
-        if (!cancelled) setDataError(error?.message || 'Failed to load Event Tracking metrics');
+        if (!cancelled) setDataError(error?.message || 'Failed to load Event Tracking data');
       } finally {
         if (!cancelled) setDataLoading(false);
       }
-    }
-
-    loadMetrics();
-    loadChannels();
-    loadEvents();
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [from, to]);
 
-  const dealerData = useMemo(
-    () =>
-      baseDealerData.map((baseDealer) => {
-        let dealer = baseDealer;
-        const loadedRows = channelRowsByDealer[dealer.name];
-        if (loadedRows) {
-          const rowsByName = new Map(dealer.rows.map((row) => [row.name, row]));
-          loadedRows.forEach((row) => rowsByName.set(row.name, row));
-          dealer = { ...dealer, rows: [...rowsByName.values()] };
-        }
-
-        const loadedEvents = eventsByDealer[dealer.name];
-        if (!loadedEvents) return dealer;
-        const channelEventMaps = loadedEvents.eventsByChannel || {};
-        const channelNames = new Set([...CHANNELS, ...Object.keys(channelEventMaps)]);
-        const eventsByChannel = {};
-        channelNames.forEach((channel) => {
-          eventsByChannel[channel] = Object.fromEntries(
-            EVENT_TYPES.map((type) => [type, [channelEventMaps[channel]?.[type] || 0, 0, 0]])
-          );
-        });
-        const rowsByName = new Map(dealer.rows.map((row) => [row.name, row]));
-        channelNames.forEach((channel) => {
-          const total = EVENT_TYPES.reduce(
-            (sum, type) => sum + eventsByChannel[channel][type][0],
-            0
-          );
-          const row = rowsByName.get(channel);
-          if (row) rowsByName.set(channel, { ...row, events: [total, 0, 0] });
-          else if (total > 0) {
-            rowsByName.set(channel, {
-              name: channel,
-              users: [0, 0, 0],
-              views: [0, 0, 0],
-              events: [total, 0, 0],
-            });
-          }
-        });
-        const eventTotals = Object.fromEntries(
-          EVENT_TYPES.map((type) => [type, [loadedEvents.eventTotals?.[type] || 0, 0, 0]])
-        );
-        return { ...dealer, rows: [...rowsByName.values()], eventsByChannel, eventTotals };
-      }),
-    [baseDealerData, channelRowsByDealer, eventsByDealer]
-  );
+  const availableDealerNames = useMemo(() => dealerData.map((dealer) => dealer.name), [dealerData]);
   const selectedDealer = dealerData.find((dealer) => dealer.name === dealerName);
   const dealers = useMemo(
     () => (selectedDealer ? [selectedDealer] : dealerData),
@@ -407,11 +352,7 @@ export default function EventTracking() {
     ? [detailsChannel || channelName]
     : eventChannelNames;
   const detailEvents = sumEventTypes(detailsData);
-  const channelRows = [...visibleRows].sort((a, b) => {
-    const aEvents = sumEventTypes(eventTotalsByChannel[a.name], eventType)[0];
-    const bEvents = sumEventTypes(eventTotalsByChannel[b.name], eventType)[0];
-    return bEvents - aEvents;
-  });
+  const channelRows = visibleRows;
   const dealerRows = useMemo(() => {
     if (dealerName) return [];
     return dealerData.map((dealer) => {
@@ -422,9 +363,49 @@ export default function EventTracking() {
         : dealerEventTotals(dealer);
       const events = sumEventTypes(eventsByType, eventType);
       const users = [metrics.users, 0, 0];
-      return { dealer, users, views, events };
-    }).sort((a, b) => b.events[0] - a.events[0]);
+      return {
+        dealer,
+        users,
+        views,
+        events,
+        sortValues: {
+          name: dealer.name,
+          users: users[0],
+          views: views[0],
+          events: events[0],
+          // No events / no views: the ratio is meaningless, so it sorts last either way.
+          vdpPerEvent: events[0] > 0 ? views[0] / events[0] : null,
+          eventPct: views[0] > 0 ? events[0] / views[0] : null,
+        },
+      };
+    });
   }, [channelName, dealerData, dealerName, dealerTableMetrics, eventType]);
+  const sortedDealerRows = useMemo(() => {
+    const { key, dir } = dealerSort;
+    const sign = dir === 'asc' ? 1 : -1;
+    return [...dealerRows].sort((a, b) => {
+      const av = a.sortValues[key];
+      const bv = b.sortValues[key];
+      if (av == null || bv == null) return av == null ? (bv == null ? 0 : 1) : -1;
+      const diff = key === 'name' ? String(av).localeCompare(String(bv)) : av - bv;
+      return sign * diff || a.dealer.name.localeCompare(b.dealer.name);
+    });
+  }, [dealerRows, dealerSort]);
+  const sortDealersBy = (key) =>
+    setDealerSort((current) =>
+      current.key === key
+        ? { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'name' ? 'asc' : 'desc' }
+    );
+
+  // Cap the dealer table at DEALER_ROWS_SHOWN rows using the rendered header/row heights.
+  useLayoutEffect(() => {
+    const scroller = dealerScrollRef.current;
+    const header = scroller?.querySelector('thead');
+    const row = scroller?.querySelector('tbody tr');
+    if (!header || !row) return;
+    setDealerScrollHeight(header.offsetHeight + row.offsetHeight * DEALER_ROWS_SHOWN + 1);
+  }, [dealerRows.length, dataLoading]);
 
   const openDetails = (channel = '') => {
     setDetailsChannel(channel);
@@ -455,7 +436,28 @@ export default function EventTracking() {
   ];
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} aria-busy={dataLoading}>
+      {dataLoading && (
+        <div className={styles.loadingOverlay} role="status" aria-live="polite">
+          <div className={styles.loadingCard}>
+            <span className={styles.spinner} aria-hidden="true" />
+            <strong>Loading {rangeLabel}… {loadProgress.percent}%</strong>
+            <div
+              className={styles.progressTrack}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={loadProgress.percent}
+            >
+              <div className={styles.progressFill} style={{ width: `${loadProgress.percent}%` }} />
+            </div>
+            <span>{loadProgress.step || 'Starting…'}</span>
+            <span className={styles.loadingHint}>
+              A new date range can take up to ~20 seconds the first time.
+            </span>
+          </div>
+        </div>
+      )}
       <div className={styles.toolbar}>
         <label className={styles.selectWrap}>
           <span className={styles.srOnly}>Dealer</span>
@@ -494,7 +496,12 @@ export default function EventTracking() {
         </label>
         <div className={styles.periods}>
           <span className={styles.periodLabel}>Reporting period</span>
-          <span className={styles.periodPill}>{lastMonthLabel}</span>
+          <CalendarRangePicker
+            value={range}
+            onChange={setRange}
+            minDate={MIN_DATE}
+            maxDate={maxDate}
+          />
         </div>
       </div>
 
@@ -504,9 +511,9 @@ export default function EventTracking() {
           <p>
             Users, VDP views and form events by channel.{' '}
             <span className={styles.sampleLabel}>
-              {dataLoading || channelsLoading || eventsLoading
-                ? 'Loading Users and VDP data…'
-                : `Last month · Users: smart_ga4_page_data · VDP: smart_final_data`}
+              {dataLoading
+                ? 'Loading Event Tracking data…'
+                : `${rangeLabel} · ${dealerData.length} dealers · Users: GA4 total users · VDP: smart_final_data`}
             </span>
           </p>
         </div>
@@ -519,23 +526,15 @@ export default function EventTracking() {
 
       {dataError && (
         <p className={styles.dataError} role="alert">
-          Could not load Users and VDP data: {dataError}
+          Could not load Event Tracking data: {dataError}
         </p>
       )}
-      {usersMissingFor.length > 0 && (
+      {!dataLoading && usersMissingFor.length > 0 && (
         <p className={styles.dataError} role="alert">
-          GA4 total users have not been synced for {usersMissingFor.join(', ')} ({lastMonthLabel}).
-          Run the smart-ga4-total-users function.
-        </p>
-      )}
-      {eventsError && (
-        <p className={styles.dataError} role="alert">
-          Could not load form events: {eventsError}
-        </p>
-      )}
-      {channelsError && (
-        <p className={styles.dataError} role="alert">
-          Could not load channel breakdown: {channelsError}
+          GA4 total users could not be loaded for {usersMissingFor.length} dealer(s) (
+          {usersMissingFor.slice(0, MISSING_USERS_LISTED).join(', ')}
+          {usersMissingFor.length > MISSING_USERS_LISTED ? ', …' : ''}) for {rangeLabel}.
+          Reload the page to retry.
         </p>
       )}
 
@@ -554,7 +553,7 @@ export default function EventTracking() {
             <span className={styles.kpiValue}>
               {metric.formatter(metric.values[0] ?? 0)}
             </span>
-            <span className={styles.kpiHint}>{lastMonthLabel}</span>
+            <span className={styles.kpiHint}>{rangeLabel}</span>
             {metric.clickable && <span className={styles.kpiHint}>See events by type ›</span>}
           </button>
         ))}
@@ -565,7 +564,7 @@ export default function EventTracking() {
           <div className={styles.cardHeader}>
             <div>
               <h2>Form events by type{dealerName ? ` — ${dealerName}` : ''}</h2>
-              <p>{lastMonthLabel}</p>
+              <p>{rangeLabel}</p>
             </div>
             <div className={styles.detailControls}>
               <label className={styles.selectWrap}>
@@ -595,7 +594,7 @@ export default function EventTracking() {
               <thead>
                 <tr>
                   <th>Event</th>
-                  <th>{lastMonthLabel}</th>
+                  <th>{rangeLabel}</th>
                 </tr>
               </thead>
               <tbody>
@@ -619,7 +618,7 @@ export default function EventTracking() {
           </div>
 
           <div className={styles.subsectionHeader}>
-            <h3>Event × channel — {lastMonthLabel}</h3>
+            <h3>Event × channel — {rangeLabel}</h3>
           </div>
           <div className={styles.tableScroll}>
             <table className={`${styles.table} ${styles.matrix}`}>
@@ -653,7 +652,7 @@ export default function EventTracking() {
           {!dealerName && !channelName && (
             <>
               <div className={styles.subsectionHeader}>
-                <h3>Dealer × event — {lastMonthLabel}</h3>
+                <h3>Dealer × event — {rangeLabel}</h3>
                 <span className={styles.badge}>Select a dealer to see its channels</span>
               </div>
               <div className={styles.tableScroll}>
@@ -701,21 +700,48 @@ export default function EventTracking() {
         <section className={`${styles.card} ${styles.dealerCard}`}>
           <div className={styles.cardHeader}>
             <div>
-              <h2>Dealers — {lastMonthLabel}</h2>
-              <p>Select a dealer to see its channels</p>
+              <h2>Dealers — {rangeLabel}</h2>
+              <p>
+                {dealerRows.length} dealers · Click a column to sort · Select a dealer to see its
+                channels
+              </p>
             </div>
-            <span className={styles.badge}>{lastMonthLabel}</span>
+            <span className={styles.badge}>{rangeLabel}</span>
           </div>
-          <div className={styles.tableScroll}>
+          <div
+            ref={dealerScrollRef}
+            className={styles.tableScroll}
+            style={dealerScrollHeight ? { maxHeight: dealerScrollHeight } : undefined}
+          >
             <table className={`${styles.table} ${styles.dealerTable}`}>
               <thead>
                 <tr>
-                  <th>Dealer</th><th>Users</th><th>VDP views</th><th>Form events</th>
-                  <th>VDP / Event</th><th>Event %</th>
+                  {DEALER_COLUMNS.map((column) => {
+                    const active = dealerSort.key === column.key;
+                    return (
+                      <th
+                        key={column.key}
+                        aria-sort={
+                          active ? (dealerSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
+                        }
+                      >
+                        <button
+                          type="button"
+                          className={`${styles.sortButton} ${active ? styles.sortActive : ''}`}
+                          onClick={() => sortDealersBy(column.key)}
+                        >
+                          {column.label}
+                          <span className={styles.sortIcon} aria-hidden="true">
+                            {active ? (dealerSort.dir === 'asc' ? '▲' : '▼') : '↕'}
+                          </span>
+                        </button>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {dealerRows.map(({ dealer, users, views, events }) => (
+                {sortedDealerRows.map(({ dealer, users, views, events }) => (
                   <tr key={dealer.name}>
                     <th scope="row" className={styles.rowLabel}>
                       <button
@@ -760,16 +786,16 @@ export default function EventTracking() {
             <h2>Users, VDP views and events by channel — {dealerName || 'all dealers'}</h2>
             <p>Click a form-event value to see its breakdown</p>
           </div>
-          <span className={styles.badge}>{lastMonthLabel}</span>
+          <span className={styles.badge}>{rangeLabel}</span>
         </div>
         <div className={styles.tableScroll}>
           <table className={`${styles.table} ${styles.channelTable}`}>
             <thead>
               <tr>
                 <th>Channel</th>
-                <GroupHeader label={`Users · ${lastMonthLabel}`} />
-                <GroupHeader label={`VDP views · ${lastMonthLabel}`} />
-                <GroupHeader label={`Form events · ${lastMonthLabel}`} />
+                <GroupHeader label={`Users · ${rangeLabel}`} />
+                <GroupHeader label={`VDP views · ${rangeLabel}`} />
+                <GroupHeader label={`Form events · ${rangeLabel}`} />
                 <GroupHeader label="VDP / Event" highlight />
                 <GroupHeader label="Event %" highlight />
               </tr>
@@ -785,7 +811,14 @@ export default function EventTracking() {
                 );
                 return (
                   <tr key={row.name}>
-                    <th scope="row" className={styles.rowLabel}>{row.name}</th>
+                    <th scope="row" className={styles.rowLabel}>
+                      <span
+                        className={styles.channelSwatch}
+                        style={{ background: CHANNEL_COLORS[row.name] }}
+                        aria-hidden="true"
+                      />
+                      {row.name}
+                    </th>
                     <SeriesCells values={row.users} formatter={formatNumber} />
                     <SeriesCells values={row.views} formatter={formatNumber} />
                     <EventCell
@@ -840,7 +873,7 @@ export default function EventTracking() {
         <p className={styles.notes}>
           <b>VDP / Event</b> = VDP views divided by form events (lower is better).{' '}
           <b>Event %</b> = form events divided by VDP views. Users are GA4 total users
-          for the month (not summed across pages). Form events come from GA4 submit events.
+          for the selected period (not summed across pages or days). Form events come from GA4 submit events.
         </p>
       </section>
 

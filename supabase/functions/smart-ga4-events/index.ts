@@ -15,10 +15,6 @@ const CHUNK_SIZE = 500;
 const GLOBAL_BUDGET_MS = 130_000;
 const PAGE_SIZE = 10_000;
 
-/** Event Tracking dealers: Sky River RV (default), Gerzeny's RV, A&L RV Sales. One dealer per call. */
-const SKY_RIVER_CLIENT_ID = "9842851162";
-const EVENT_TRACKING_CLIENT_IDS = [SKY_RIVER_CLIENT_ID, "1162028739", "2728830488"];
-
 const FORM_EVENTS = [
   "contact_us_submit",
   "check_availability_submit",
@@ -32,13 +28,19 @@ const FORM_EVENTS = [
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const todayUTC = () => new Date().toISOString().split("T")[0];
+const daysAgoUTC = (n: number) => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().split("T")[0];
+};
+const isIsoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + "T00:00:00Z"));
 
-const normalizeDate = (v: unknown, fallback: string): string => {
+function normalizeDate(v: unknown, fallback: string): string {
   const s = (v ?? "").toString().trim().toLowerCase();
   if (!s) return fallback;
   if (s === "today") return todayUTC();
   return s;
-};
+}
 
 function pathFromLocation(loc: string) {
   try {
@@ -48,6 +50,15 @@ function pathFromLocation(loc: string) {
   }
 }
 
+/** GA4 `date` dimension is YYYYMMDD. */
+const isoFromGaDate = (v: string) => `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}`;
+
+/**
+ * GA4 form submit events per dealer -> smart_events_data.
+ * Body: one of client_id | client_ids[] | group_id (smart_ga4_config.sync_group) | all:true,
+ * plus date_from/date_to or days_back (default: last 4 days). list_events:true (single dealer)
+ * returns the property's event names without writing.
+ */
 serve(async (req) => {
   const startTime = Date.now();
   if (req.method === "OPTIONS") {
@@ -80,52 +91,45 @@ serve(async (req) => {
       /* empty body ok */
     }
 
-    const clientId = String(
-      body.target_client_id ?? body.client_id ?? SKY_RIVER_CLIENT_ID
-    );
-    if (!EVENT_TRACKING_CLIENT_IDS.includes(clientId)) {
-      return jsonRes(
-        {
-          error: `smart-ga4-events is limited to Event Tracking dealers (${EVENT_TRACKING_CLIENT_IDS.join(", ")})`,
-        },
-        400
-      );
-    }
-    const dateFrom = normalizeDate(body.date_from ?? body.start_date, "2026-10-01");
+    const daysBack = Number(body.days_back);
+    const dateFrom = Number.isFinite(daysBack) && daysBack > 0
+      ? daysAgoUTC(Math.floor(daysBack))
+      : normalizeDate(body.date_from ?? body.start_date, daysAgoUTC(4));
     const dateTo = normalizeDate(body.date_to ?? body.end_date, todayUTC());
+    if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateFrom > dateTo) {
+      return jsonRes({ error: `Invalid date range: ${dateFrom} → ${dateTo}` }, 400);
+    }
     const listEvents = body.list_events === true;
-    const skipExisting = body.skip_existing === true;
     const eventNames = Array.isArray(body.event_names) && body.event_names.length
-      ? (body.event_names as string[]).map(String)
+      ? (body.event_names as unknown[]).map(String)
       : FORM_EVENTS;
 
-    log(`=== GA4 EVENTS SYNC — ${clientId} ${listEvents ? "(LIST EVENTS, no write)" : ""} ===`);
-    log(`Window: ${dateFrom} → ${dateTo}`);
-
-    const { data: dealer, error: dErr } = await supabase
+    let q = supabase
       .from(CONFIG_TABLE)
       .select("client_id, ga4_property_id, account_name")
       .eq("is_active", true)
-      .eq("client_id", clientId)
-      .maybeSingle();
-    if (dErr) return jsonRes({ error: `Config fetch failed: ${dErr.message}`, log: L }, 500);
-    if (!dealer) return jsonRes({ error: `No active config for ${clientId}`, log: L }, 400);
-
-    const propertyId = String(dealer.ga4_property_id).replace("properties/", "").trim();
-    const accountName = (dealer.account_name as string) || clientId;
-
-    const allDates: string[] = [];
-    {
-      const d = new Date(dateFrom + "T00:00:00Z");
-      const end = new Date(dateTo + "T00:00:00Z");
-      if (isNaN(d.getTime()) || isNaN(end.getTime())) {
-        return jsonRes({ error: `Invalid date range: ${dateFrom} → ${dateTo}`, log: L }, 400);
-      }
-      while (d <= end) {
-        allDates.push(d.toISOString().split("T")[0]);
-        d.setUTCDate(d.getUTCDate() + 1);
-      }
+      .order("account_name", { ascending: true });
+    const singleId = body.client_id ?? body.target_client_id;
+    let mode: string;
+    if (Array.isArray(body.client_ids) && body.client_ids.length) {
+      q = q.in("client_id", (body.client_ids as unknown[]).map(String));
+      mode = `${body.client_ids.length} dealer(s)`;
+    } else if (singleId) {
+      q = q.eq("client_id", String(singleId));
+      mode = `dealer ${singleId}`;
+    } else if (body.group_id != null) {
+      q = q.eq("sync_group", body.group_id);
+      mode = `group ${body.group_id}`;
+    } else if (body.all === true) {
+      mode = "all dealers";
+    } else {
+      return jsonRes({ error: "Pass client_id, client_ids, group_id or all:true" }, 400);
     }
+    const { data: dealers, error: dErr } = await q;
+    if (dErr) return jsonRes({ error: `Config fetch failed: ${dErr.message}` }, 500);
+    if (!dealers?.length) return jsonRes({ success: true, message: `No active dealers for ${mode}` });
+
+    log(`=== GA4 EVENTS SYNC — ${mode} — ${dateFrom} → ${dateTo}${listEvents ? " (LIST EVENTS)" : ""} ===`);
 
     const saEnv = Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
     if (!saEnv) throw new Error("Missing GCP_SERVICE_ACCOUNT_JSON");
@@ -137,71 +141,57 @@ serve(async (req) => {
     });
     const { token: TOKEN } = await authClient.getAccessToken();
     if (!TOKEN) throw new Error("Failed to get GA4 access token");
-    log("Token OK");
 
-    const reportUrl = `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`;
-    const runReport = async (payload: Record<string, unknown>) => {
-      const res = await fetch(reportUrl, {
-        method: "POST",
-        headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`GA4 API ${res.status}: ${await res.text()}`);
+    type GaRow = { dimensionValues?: { value?: string }[]; metricValues?: { value?: string }[] };
+    const runReport = async (propertyId: string, payload: Record<string, unknown>) => {
+      const res = await fetch(
+        `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+        {
+          method: "POST",
+          headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!res.ok) throw new Error(`GA4 API ${res.status}: ${(await res.text()).slice(0, 300)}`);
       return await res.json();
     };
 
-    // Discovery: which events exist on the property in the window (no DB writes).
     if (listEvents) {
-      const r = await runReport({
+      const dealer = dealers[0];
+      const propertyId = String(dealer.ga4_property_id).replace("properties/", "").trim();
+      const r = await runReport(propertyId, {
         dateRanges: [{ startDate: dateFrom, endDate: dateTo }],
         dimensions: [{ name: "eventName" }],
         metrics: [{ name: "eventCount" }],
         orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
         limit: 200,
       });
-      const events = (r.rows || []).map(
-        (row: { dimensionValues?: { value?: string }[]; metricValues?: { value?: string }[] }) => ({
-          event_name: row.dimensionValues?.[0]?.value,
-          event_count: parseInt(row.metricValues?.[0]?.value || "0") || 0,
-        })
-      );
-      return jsonRes({ success: true, window: { from: dateFrom, to: dateTo }, events, log: L });
+      const events = ((r.rows || []) as GaRow[]).map((row) => ({
+        event_name: row.dimensionValues?.[0]?.value,
+        event_count: parseInt(row.metricValues?.[0]?.value || "0") || 0,
+      }));
+      return jsonRes({ success: true, dealer: dealer.account_name, window: { from: dateFrom, to: dateTo }, events, log: L });
     }
 
-    let existingDays = new Set<string>();
-    if (skipExisting) {
-      const { data: existing } = await supabase
-        .from(EVENTS_TABLE)
-        .select("report_date")
-        .eq("client_id", clientId)
-        .gte("report_date", dateFrom)
-        .lte("report_date", dateTo);
-      existingDays = new Set(
-        (existing || []).map((r: { report_date: string }) => String(r.report_date).split("T")[0])
-      );
-    }
-    const pendingDays = allDates.filter((d) => !existingDays.has(d));
-    log(`days=${allDates.length} pending=${pendingDays.length} events=${eventNames.join(",")}`);
-
-    let totalRows = 0;
-    let daysDone = 0;
+    const summary: Record<string, unknown>[] = [];
     let cutoffReached = false;
-    const errors: string[] = [];
-    const perDay: Record<string, number> = {};
 
-    for (const dateStr of pendingDays) {
+    for (const dealer of dealers) {
       if (Date.now() - startTime > GLOBAL_BUDGET_MS) {
         cutoffReached = true;
-        log("⏱️ TIME LIMIT — rerun with skip_existing=true to resume");
+        log(`⏱️ Budget reached before ${dealer.account_name}`);
         break;
       }
+      const clientId = String(dealer.client_id);
+      const propertyId = String(dealer.ga4_property_id).replace("properties/", "").trim();
+      const accountName = (dealer.account_name as string) || clientId;
       try {
-        const dayRows: Record<string, unknown>[] = [];
-        let offset = 0;
-        for (;;) {
-          const r = await runReport({
-            dateRanges: [{ startDate: dateStr, endDate: dateStr }],
+        const rows: Record<string, unknown>[] = [];
+        for (let offset = 0; ; offset += PAGE_SIZE) {
+          const r = await runReport(propertyId, {
+            dateRanges: [{ startDate: dateFrom, endDate: dateTo }],
             dimensions: [
+              { name: "date" },
               { name: "eventName" },
               { name: "pageLocation" },
               { name: "sessionDefaultChannelGroup" },
@@ -211,85 +201,97 @@ serve(async (req) => {
             ],
             metrics: [{ name: "eventCount" }, { name: "totalUsers" }],
             dimensionFilter: {
-              filter: {
-                fieldName: "eventName",
-                inListFilter: { values: eventNames },
-              },
+              filter: { fieldName: "eventName", inListFilter: { values: eventNames } },
             },
             limit: PAGE_SIZE,
             offset,
           });
-          const rows = r.rows || [];
-          for (const row of rows as {
-            dimensionValues?: { value?: string }[];
-            metricValues?: { value?: string }[];
-          }[]) {
+          const page = (r.rows || []) as GaRow[];
+          for (const row of page) {
             const dv = row.dimensionValues;
             const mv = row.metricValues;
-            const loc = dv?.[1]?.value || "";
-            const src = dv?.[3]?.value || "(direct)";
-            const med = dv?.[4]?.value || "(none)";
-            dayRows.push({
+            const loc = dv?.[2]?.value || "";
+            const src = dv?.[4]?.value || "(direct)";
+            const med = dv?.[5]?.value || "(none)";
+            rows.push({
               client_id: clientId,
               ga4_property_id: propertyId,
               account_name: accountName,
-              report_date: dateStr,
-              event_name: dv?.[0]?.value || "",
+              report_date: isoFromGaDate(dv?.[0]?.value || ""),
+              event_name: dv?.[1]?.value || "",
               page_location: loc,
               page_path: pathFromLocation(loc),
-              channel: String(dv?.[2]?.value || "")
+              channel: String(dv?.[3]?.value || "")
                 .toLowerCase()
                 .replace(/ /g, "_")
                 .replace(/\//g, "_"),
               source: src,
               medium: med,
               source_medium: src + " / " + med,
-              session_campaign: dv?.[5]?.value || "(not set)",
+              session_campaign: dv?.[6]?.value || "(not set)",
               event_count: parseInt(mv?.[0]?.value || "0") || 0,
               total_users: parseInt(mv?.[1]?.value || "0") || 0,
             });
           }
-          if (rows.length < PAGE_SIZE) break;
-          offset += PAGE_SIZE;
+          if (page.length < PAGE_SIZE) break;
           await delay(100);
         }
 
-        // Replace the day only after GA4 returned successfully.
+        if (!rows.length) {
+          log(`  · ${accountName}: no form events from GA4 - stored rows kept`);
+          summary.push({ client_id: clientId, account_name: accountName, rows: 0, events: 0 });
+          continue;
+        }
+
+        // Insert the fresh window first, then drop the older rows of that window (lower ids),
+        // so a failed write never leaves the dealer without events.
+        const { data: top, error: topErr } = await supabase
+          .from(EVENTS_TABLE)
+          .select("id")
+          .order("id", { ascending: false })
+          .limit(1);
+        if (topErr) throw new Error(`max id lookup failed: ${topErr.message}`);
+        const maxOldId = Number(top?.[0]?.id ?? 0);
+
+        for (let j = 0; j < rows.length; j += CHUNK_SIZE) {
+          const { error: insErr } = await supabase.from(EVENTS_TABLE).insert(rows.slice(j, j + CHUNK_SIZE));
+          if (insErr) {
+            await supabase
+              .from(EVENTS_TABLE)
+              .delete()
+              .eq("client_id", clientId)
+              .gte("report_date", dateFrom)
+              .lte("report_date", dateTo)
+              .gt("id", maxOldId);
+            throw new Error(`insert failed: ${insErr.message}`);
+          }
+        }
         const { error: delErr } = await supabase
           .from(EVENTS_TABLE)
           .delete()
           .eq("client_id", clientId)
-          .eq("report_date", dateStr);
-        if (delErr) throw new Error(`delete failed: ${delErr.message}`);
+          .gte("report_date", dateFrom)
+          .lte("report_date", dateTo)
+          .lte("id", maxOldId);
+        if (delErr) throw new Error(`old-row delete failed: ${delErr.message}`);
 
-        for (let j = 0; j < dayRows.length; j += CHUNK_SIZE) {
-          const { error: insErr } = await supabase
-            .from(EVENTS_TABLE)
-            .insert(dayRows.slice(j, j + CHUNK_SIZE));
-          if (insErr) throw new Error(`insert failed: ${insErr.message}`);
-        }
-        totalRows += dayRows.length;
-        perDay[dateStr] = dayRows.length;
-        daysDone++;
-        log(`  ✅ ${dateStr}: ${dayRows.length} rows`);
+        const events = rows.reduce((s, r) => s + (Number(r.event_count) || 0), 0);
+        log(`  ✅ ${accountName}: ${rows.length} rows, ${events} events`);
+        summary.push({ client_id: clientId, account_name: accountName, rows: rows.length, events });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        errors.push(`${dateStr}: ${msg}`);
-        log(`  ❌ ${dateStr}: ${msg}`);
-        if (/permission|403|forbidden|access denied/i.test(msg)) break;
+        log(`  ❌ ${accountName}: ${msg}`);
+        summary.push({ client_id: clientId, account_name: accountName, error: msg });
       }
     }
 
+    const failed = summary.filter((s) => s.error).length;
     return jsonRes({
-      success: errors.length === 0,
+      success: failed === 0 && !cutoffReached,
       cutoff_reached: cutoffReached,
+      mode,
       window: { from: dateFrom, to: dateTo },
-      days_total: allDates.length,
-      days_pending: pendingDays.length,
-      days_done: daysDone,
-      rows_inserted: totalRows,
-      rows_per_day: perDay,
-      errors,
+      dealers: summary,
       log: L,
     });
   } catch (err: unknown) {

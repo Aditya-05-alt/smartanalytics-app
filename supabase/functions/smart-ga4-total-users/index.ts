@@ -12,9 +12,7 @@ const corsHeaders = {
 const USERS_TABLE = "smart_events_users";
 const CONFIG_TABLE = "smart_ga4_config";
 const ALL_CHANNELS = "(all)";
-
-/** Event Tracking dealers: Sky River RV, Gerzeny's RV, A&L RV Sales. */
-const EVENT_TRACKING_CLIENT_IDS = ["9842851162", "1162028739", "2728830488"];
+const GLOBAL_BUDGET_MS = 130_000;
 
 const isIsoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + "T00:00:00Z"));
 
@@ -26,7 +24,13 @@ function previousMonth() {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
+/**
+ * GA4 total users per period (overall + per channel group) -> smart_events_users.
+ * Body: one of client_id | client_ids[] | group_id (smart_ga4_config.sync_group) | all:true,
+ * plus date_from/date_to (default: previous calendar month).
+ */
 serve(async (req) => {
+  const startTime = Date.now();
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -62,25 +66,33 @@ serve(async (req) => {
       return jsonRes({ error: `Invalid date range: ${dateFrom} → ${dateTo}` }, 400);
     }
 
-    const requested = Array.isArray(body.client_ids)
-      ? (body.client_ids as unknown[]).map(String)
-      : body.client_id || body.target_client_id
-        ? [String(body.client_id ?? body.target_client_id)]
-        : EVENT_TRACKING_CLIENT_IDS;
-    const clientIds = requested.filter((id) => EVENT_TRACKING_CLIENT_IDS.includes(id));
-    if (!clientIds.length) {
-      return jsonRes({ error: "No Event Tracking dealers requested" }, 400);
-    }
-
-    log(`=== GA4 TOTAL USERS — ${dateFrom} → ${dateTo} — ${clientIds.length} dealer(s) ===`);
-
-    const { data: dealers, error: dErr } = await supabase
+    let q = supabase
       .from(CONFIG_TABLE)
       .select("client_id, ga4_property_id, account_name")
       .eq("is_active", true)
-      .in("client_id", clientIds);
+      .order("account_name", { ascending: true });
+    const singleId = body.client_id ?? body.target_client_id;
+    let mode: string;
+    if (Array.isArray(body.client_ids) && body.client_ids.length) {
+      q = q.in("client_id", (body.client_ids as unknown[]).map(String));
+      mode = `${body.client_ids.length} dealer(s)`;
+    } else if (singleId) {
+      q = q.eq("client_id", String(singleId));
+      mode = `dealer ${singleId}`;
+    } else if (body.group_id != null) {
+      q = q.eq("sync_group", body.group_id);
+      mode = `group ${body.group_id}`;
+    } else if (body.all === true) {
+      mode = "all dealers";
+    } else {
+      return jsonRes({ error: "Pass client_id, client_ids, group_id or all:true" }, 400);
+    }
+
+    log(`=== GA4 TOTAL USERS — ${dateFrom} → ${dateTo} — ${mode} ===`);
+
+    const { data: dealers, error: dErr } = await q;
     if (dErr) return jsonRes({ error: `Config fetch failed: ${dErr.message}`, log: L }, 500);
-    if (!dealers?.length) return jsonRes({ error: "No active configs found", log: L }, 400);
+    if (!dealers?.length) return jsonRes({ success: true, message: `No active dealers for ${mode}`, log: L });
 
     const saEnv = Deno.env.get("GCP_SERVICE_ACCOUNT_JSON");
     if (!saEnv) throw new Error("Missing GCP_SERVICE_ACCOUNT_JSON");
@@ -115,6 +127,11 @@ serve(async (req) => {
 
     const summary: Record<string, unknown>[] = [];
     for (const dealer of dealers) {
+      if (Date.now() - startTime > GLOBAL_BUDGET_MS) {
+        log(`⏱️ Budget reached before ${dealer.account_name}`);
+        summary.push({ client_id: dealer.client_id, account_name: dealer.account_name, error: "budget reached" });
+        continue;
+      }
       const clientId = dealer.client_id as string;
       const propertyId = String(dealer.ga4_property_id).replace("properties/", "").trim();
       const accountName = (dealer.account_name as string) || clientId;
