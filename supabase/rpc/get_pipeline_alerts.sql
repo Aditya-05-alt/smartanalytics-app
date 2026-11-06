@@ -89,6 +89,9 @@ BEGIN
         WHEN g.final_rows = 0 THEN 3
       END AS step,
       CASE
+        WHEN g.completed_at IS NULL AND g.page_rows = 0
+             AND (SELECT gc.last_fetched_at FROM smart_ga4_config gc WHERE gc.client_id = g.cid AND gc.is_active LIMIT 1) >= g.report_date + 1
+          THEN 'ga4_empty'
         WHEN g.completed_at IS NULL AND g.page_rows = 0 THEN 'ga4_not_synced'
         WHEN g.completed_at IS NULL THEN 'ga4_incomplete'
         WHEN g.page_rows = 0 THEN 'ga4_empty'
@@ -97,7 +100,12 @@ BEGIN
         WHEN g.final_rows = 0 THEN 'final_missing'
       END AS code,
       CASE
+        WHEN g.completed_at IS NULL AND g.page_rows = 0
+             AND (SELECT gc.last_fetched_at FROM smart_ga4_config gc WHERE gc.client_id = g.cid AND gc.is_active LIMIT 1) >= g.report_date + 1
+          THEN 'GA4 sync ran but GA4 returned no data for this day - check the website''s GA4 tag'
         WHEN g.completed_at IS NULL AND g.page_rows = 0 THEN 'GA4 sync did not run'
+        WHEN g.completed_at IS NULL AND g.unfiltered_rows = 0 AND g.vdp_rows > 0 AND g.final_rows > 0
+          THEN 'GA4 data loaded and built into Final (' || g.final_rows || ' final rows); waiting for GA4 day-complete marker'
         WHEN g.completed_at IS NULL THEN 'GA4 sync started but never completed (' || g.page_rows || ' rows, no completion marker)'
         WHEN g.page_rows = 0 THEN 'GA4 sync completed with 0 page rows'
         WHEN g.unfiltered_rows > 0 THEN 'Filtration did not finish (' || g.unfiltered_rows || ' of ' || g.page_rows || ' rows unfiltered)'
@@ -111,6 +119,9 @@ BEGIN
       CASE
         WHEN c.step IS NULL THEN 'success'
         WHEN c.report_date > v_settled_through THEN 'pending'
+        -- GA4 writes the day-complete marker ~3 days later; a fully processed day is still settling.
+        WHEN c.code = 'ga4_incomplete' AND c.unfiltered_rows = 0 AND c.vdp_rows > 0 AND c.final_rows > 0
+             AND c.report_date >= v_settled_through - 2 THEN 'pending'
         WHEN c.code IN ('ga4_empty', 'filtration_no_vdp') THEN 'warning'
         ELSE 'error'
       END AS severity

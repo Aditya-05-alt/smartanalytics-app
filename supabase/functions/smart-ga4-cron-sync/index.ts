@@ -5,7 +5,7 @@ import { JWT } from "npm:google-auth-library@9.0.0";
 /**
  * Cron Step 1 - aligned with Admin Panel `syncGa4PageDataForDealer`:
  * - Always uses pageLocation (same GA4 grain as Admin)
- * - Full delete + re-pull for each pending day
+ * - Re-pull each pending day; stored rows are swapped only after a complete, non-empty fetch
  * - Newest days first so settling window never loses to budget timeouts
  * - days_back coerced safely (string/number)
  */
@@ -240,7 +240,7 @@ serve(async (req) => {
     const settlingCutoff = daysAgoUTC(SETTLING_DAYS);
 
     log(
-      `=== GA4 PAGE SYNC V38 (page_path_q_s: Dest Cycle + XGRID + Jay's) - ${modeLabel} ===`,
+      `=== GA4 PAGE SYNC V39 (safe swap; page_path_q_s: Dest Cycle + XGRID + Jay's) - ${modeLabel} ===`,
     );
     log(`Window: ${dateFrom} -> ${dateTo} ${windowMode}`);
     log(
@@ -457,15 +457,27 @@ serve(async (req) => {
             break;
           }
 
-          // Probe GA4 first - do not wipe local day until API responds OK.
+          // Fetch the whole day from GA4 before touching local rows. Existing data is only
+          // replaced by a complete, non-empty fetch: a re-sync that got 0 rows, an API error
+          // or a budget halt used to wipe settled days (and their Final data) permanently.
           let offset = 0;
           let hasMore = true;
           let dayRows = 0;
           let dayHaltedEarly = false;
           let expectedTotal: number | null = null;
           let dayErrorMsg = "";
-          let deletedOld = false;
-          const pendingInserts: Record<string, unknown>[] = [];
+          const fetched: Record<string, unknown>[] = [];
+          // Rows inserted after reading the table's max id get higher ids (sequence), so
+          // ids split this day's old rows from the new ones.
+          let maxOldId: number | null = null;
+          let insertStarted = false;
+          const deleteNewRows = () =>
+            supabase
+              .from(PAGE_TABLE)
+              .delete()
+              .eq("client_id", CLIENT_ID)
+              .eq("report_date", dateStr)
+              .gt("id", maxOldId ?? 0);
 
           try {
             while (hasMore) {
@@ -517,16 +529,6 @@ serve(async (req) => {
                 dayErrorMsg = `GA4 ${res.status}: ${txt.slice(0, 200)}`;
                 dayHaltedEarly = true;
                 break;
-              }
-
-              // First successful page -> safe to replace local day.
-              if (!deletedOld) {
-                await supabase
-                  .from(PAGE_TABLE)
-                  .delete()
-                  .eq("client_id", CLIENT_ID)
-                  .eq("report_date", dateStr);
-                deletedOld = true;
               }
 
               const r2 = await res.json();
@@ -590,18 +592,7 @@ serve(async (req) => {
                 },
               );
 
-              for (let j = 0; j < mapped.length; j += CHUNK_SIZE) {
-                const chunk = mapped.slice(j, j + CHUNK_SIZE);
-                const { inserted, error } = await insertResilient(chunk);
-                if (error) {
-                  dayErrorMsg = `Insert failed: ${error}`;
-                  dayHaltedEarly = true;
-                  break;
-                }
-                dayRows += inserted;
-                pendingInserts.push(...chunk);
-              }
-              if (dayHaltedEarly) break;
+              fetched.push(...mapped);
 
               if (pageRows.length < PAGE_SIZE) {
                 hasMore = false;
@@ -612,9 +603,52 @@ serve(async (req) => {
 
             const naturallyFinished = !hasMore && !dayHaltedEarly;
             const rowCountMatches =
-              expectedTotal === null || dayRows === expectedTotal;
+              expectedTotal === null || fetched.length === expectedTotal;
 
-            if (naturallyFinished && rowCountMatches && dayRows > 0) {
+            if (naturallyFinished && rowCountMatches && fetched.length > 0) {
+              // Table-wide max id: filtering by dealer/day here makes Postgres walk the
+              // whole pkey backwards when the day is empty (statement timeout).
+              const { data: oldTop, error: oldErr } = await supabase
+                .from(PAGE_TABLE)
+                .select("id")
+                .order("id", { ascending: false })
+                .limit(1);
+              if (oldErr) throw new Error(`Old-row lookup failed: ${oldErr.message}`);
+              maxOldId = oldTop?.[0]?.id ?? null;
+
+              insertStarted = true;
+              for (let j = 0; j < fetched.length; j += CHUNK_SIZE) {
+                const { inserted, error } = await insertResilient(
+                  fetched.slice(j, j + CHUNK_SIZE),
+                );
+                if (error) {
+                  dayErrorMsg = `Insert failed: ${error}`;
+                  break;
+                }
+                dayRows += inserted;
+              }
+            }
+
+            if (dayErrorMsg.startsWith("Insert failed")) {
+              await deleteNewRows();
+              log(
+                `   SKIP [${accountName}] ${dateStr}: ${dayErrorMsg} - new rows removed, prior local data kept`,
+              );
+              dealerErrors.push(`${dateStr}: ${dayErrorMsg}`);
+            } else if (naturallyFinished && rowCountMatches && dayRows > 0) {
+              if (maxOldId != null) {
+                const { error: delErr } = await supabase
+                  .from(PAGE_TABLE)
+                  .delete()
+                  .eq("client_id", CLIENT_ID)
+                  .eq("report_date", dateStr)
+                  .lte("id", maxOldId);
+                if (delErr) {
+                  await deleteNewRows();
+                  throw new Error(`Old-row delete failed: ${delErr.message}`);
+                }
+              }
+              insertStarted = false;
               const { error: markErr } = await supabase
                 .from(COMPLETE_TABLE)
                 .upsert(
@@ -635,45 +669,25 @@ serve(async (req) => {
               }
               dealerRows += dayRows;
               dealerDays += 1;
-            } else if (naturallyFinished && dayRows === 0) {
-              // Keep empty day (GA4 may still be settling) - do not mark complete.
-              if (deletedOld) {
-                log(
-                  `   WAIT [${accountName}] ${dateStr}: GA4 returned 0 rows (not settled?) - left empty for retry`,
-                );
-              } else {
-                log(
-                  `   WAIT [${accountName}] ${dateStr}: GA4 returned 0 rows - prior local data kept`,
-                );
-              }
+            } else if (naturallyFinished && fetched.length === 0) {
+              // GA4 may still be settling (or hiccuped) - keep whatever is stored, do not mark complete.
+              log(
+                `   WAIT [${accountName}] ${dateStr}: GA4 returned 0 rows - prior local data kept`,
+              );
               dealerErrors.push(`${dateStr}: 0 rows from GA4 (settling)`);
             } else {
-              // Partial / budget halt after delete -> wipe partial inserts so we don't keep bad mid-day data.
-              if (deletedOld) {
-                await supabase
-                  .from(PAGE_TABLE)
-                  .delete()
-                  .eq("client_id", CLIENT_ID)
-                  .eq("report_date", dateStr);
-              }
               const reason = dayErrorMsg
                 ? dayErrorMsg
                 : !naturallyFinished
                 ? "halted early (budget)"
-                : `row mismatch (${dayRows}/${expectedTotal})`;
+                : `row mismatch (${fetched.length}/${expectedTotal})`;
               log(
-                `   SKIP [${accountName}] ${dateStr}: rolled back partial - ${reason}`,
+                `   SKIP [${accountName}] ${dateStr}: ${reason} - prior local data kept`,
               );
               dealerErrors.push(`${dateStr}: ${reason}`);
             }
           } catch (dayEx: unknown) {
-            if (deletedOld) {
-              await supabase
-                .from(PAGE_TABLE)
-                .delete()
-                .eq("client_id", CLIENT_ID)
-                .eq("report_date", dateStr);
-            }
+            if (insertStarted) await deleteNewRows();
             const msg = dayEx instanceof Error ? dayEx.message : String(dayEx);
             log(`   ERR [${accountName}] ${dateStr}: exception - ${msg}`);
             dealerErrors.push(`${dateStr}: ${msg}`);

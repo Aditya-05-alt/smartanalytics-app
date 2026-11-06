@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PIPELINE_ALERTS_EVENT,
   PIPELINE_STEP_LABELS,
@@ -16,6 +16,10 @@ import {
 const SEVERITY_LABELS = { error: 'Failed', warning: 'Check', pending: 'Settling', success: 'OK' };
 const SEVERITY_RANK = { error: 0, warning: 1, pending: 2, success: 3 };
 const BANNER_DISMISS_KEY = 'pipeline-alerts:banner-dismissed';
+/** Opening the page re-checks failing dealers when the saved check is older than this. */
+const AUTO_RECHECK_AFTER_MS = 15 * 60 * 1000;
+/** Small batches keep each re-check request well under the database statement timeout. */
+const AUTO_RECHECK_BATCH = 5;
 
 function dateRange(from, to) {
   if (!from || !to) return [];
@@ -113,6 +117,33 @@ export default function PipelineAlertsPanel() {
       });
     }
   }, []);
+
+  // Data fixed outside the Pipeline page (SQL, nightly jobs) only clears on a re-check,
+  // so a stale snapshot re-checks its failing dealers once when the page opens.
+  const autoRecheckedRef = useRef(false);
+  useEffect(() => {
+    if (!snapshot || autoRecheckedRef.current) return;
+    autoRecheckedRef.current = true;
+    const lastCheckedAt = Math.max(
+      Date.parse(snapshot.generatedAt || '') || 0,
+      Date.parse(snapshot.lastDealerRecheckAt || '') || 0
+    );
+    if (Date.now() - lastCheckedAt < AUTO_RECHECK_AFTER_MS) return;
+    const failingIds = [
+      ...new Set(
+        (snapshot.alerts || [])
+          .filter((a) => a.severity === 'error' || a.severity === 'warning')
+          .map((a) => a.dealerId)
+          .filter((id) => id != null)
+          .map(String)
+      ),
+    ];
+    (async () => {
+      for (let i = 0; i < failingIds.length; i += AUTO_RECHECK_BATCH) {
+        await recheckDealers(failingIds.slice(i, i + AUTO_RECHECK_BATCH));
+      }
+    })();
+  }, [snapshot, recheckDealers]);
 
   const resolvedRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -304,6 +335,7 @@ export default function PipelineAlertsPanel() {
             {snapshot.settleDays ?? 2} days are not alerted. Runs automatically at 06:30 and 12:30 UTC.
             {snapshot.lastDealerRecheckAt &&
               ` Last dealer re-check ${formatDateTime(snapshot.lastDealerRecheckAt)}.`}
+            {recheckingIds.size > 0 && ` Re-checking ${recheckingIds.size} dealer(s)…`}
           </>
         ) : (
           !loading && 'No check has run yet — click Re-check now.'
