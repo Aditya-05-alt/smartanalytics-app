@@ -262,7 +262,8 @@ export default function TopBar() {
     pathname?.startsWith('/dashboard/compare') ||
     pathname?.startsWith('/dashboard/traffic') ||
     pathname?.startsWith('/dashboard/all-dealers') ||
-    pathname?.startsWith('/dashboard/event-tracking');
+    pathname?.startsWith('/dashboard/event-tracking') ||
+    pathname?.startsWith('/dashboard/vdp-analysis');
 
   return (
     <header className="topbar">

@@ -74,6 +74,13 @@ const ICONS = {
       <path d="M3 12h4l3-8 4 16 3-8h4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  'vdp-analysis': (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 5h18v14H3z" />
+      <path d="M7 15l3-4 3 2 4-5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="17" cy="8" r="1" />
+    </svg>
+  ),
   'all-dealers': (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -99,6 +106,7 @@ const ITEMS = [
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
   { id: 'traffic', href: '/dashboard/traffic', title: 'Traffic' },
   { id: 'event-tracking', href: '/dashboard/event-tracking', title: 'Event Tracking' },
+  { id: 'vdp-analysis', href: '/dashboard/vdp-analysis', title: 'VDP Analysis' },
   // { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
   // { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
   // { id: 'local', href: '/dashboard/local', title: 'Local Intel' },

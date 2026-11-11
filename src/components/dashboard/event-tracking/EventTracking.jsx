@@ -436,29 +436,21 @@ export default function EventTracking() {
   ];
 
   return (
-    <div className={styles.page} aria-busy={dataLoading}>
+    <div className={styles.root} aria-busy={dataLoading}>
       {dataLoading && (
-        <div className={styles.loadingOverlay} role="status" aria-live="polite">
-          <div className={styles.loadingCard}>
-            <span className={styles.spinner} aria-hidden="true" />
-            <strong>Loading {rangeLabel}… {loadProgress.percent}%</strong>
-            <div
-              className={styles.progressTrack}
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={loadProgress.percent}
-            >
-              <div className={styles.progressFill} style={{ width: `${loadProgress.percent}%` }} />
-            </div>
-            <span>{loadProgress.step || 'Starting…'}</span>
-            <span className={styles.loadingHint}>
-              A new date range can take up to ~20 seconds the first time.
-            </span>
+        <div
+          className={`adc-table-overlay ${styles.loadingOverlay}`}
+          role="status"
+          aria-live="polite"
+          aria-label={`Loading ${loadProgress.percent}%${loadProgress.step ? ` · ${loadProgress.step}` : ''}`}
+        >
+          <div className="adc-table-loader dealer-compare-loader">
+            <span className="adc-table-spinner" aria-hidden />
+            <span className="adc-table-loader-text">Loading {loadProgress.percent}%</span>
           </div>
         </div>
       )}
-      <div className={styles.toolbar}>
+      <div className={`filters ${styles.toolbar}`}>
         <label className={styles.selectWrap}>
           <span className={styles.srOnly}>Dealer</span>
           <select
@@ -504,7 +496,13 @@ export default function EventTracking() {
           />
         </div>
       </div>
+      {dataLoading && (
+        <div className="adc-nav-progress" role="progressbar" aria-label="Loading" aria-busy="true">
+          <div className="adc-nav-progress-bar" />
+        </div>
+      )}
 
+      <div className={`content ${styles.page}`}>
       <header className={styles.heading}>
         <div>
           <h1>Event Tracking{dealerName ? ` — ${dealerName}` : ''}</h1>
@@ -539,13 +537,11 @@ export default function EventTracking() {
       )}
 
       <section className={styles.kpis} aria-label="Event tracking summary">
-        {metrics.map((metric, index) => (
+        {metrics.map((metric) => (
           <button
             type="button"
             key={metric.label}
-            className={`${styles.kpi} ${index > 2 ? styles.kpiHighlighted : ''} ${
-              metric.clickable ? styles.kpiClickable : ''
-            }`}
+            className={`${styles.kpi} ${metric.clickable ? styles.kpiClickable : ''}`}
             onClick={metric.clickable ? () => openDetails(channelName) : undefined}
             disabled={!metric.clickable}
           >
@@ -876,7 +872,7 @@ export default function EventTracking() {
           for the selected period (not summed across pages or days). Form events come from GA4 submit events.
         </p>
       </section>
-
+      </div>
     </div>
   );
 }

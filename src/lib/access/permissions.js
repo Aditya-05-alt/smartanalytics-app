@@ -6,13 +6,19 @@ export const REPORT_OPTIONS = [
   { key: 'inventory', label: 'Inventory report', href: '/dashboard/inventory' },
   { key: 'traffic', label: 'Traffic', href: '/dashboard/traffic' },
   { key: 'event-tracking', label: 'Event Tracking', href: '/dashboard/event-tracking' },
+  { key: 'vdp-analysis', label: 'VDP Analysis', href: '/dashboard/vdp-analysis' },
   // { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
   // { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },
   // { key: 'local', label: 'Local Intel', href: '/dashboard/local' },
 ];
 
 /** Not included in Admin / All reports. Only an explicit grant shows these. */
-export const EXPLICIT_REPORT_KEYS = new Set(['traffic', 'all-dealers', 'event-tracking']);
+export const EXPLICIT_REPORT_KEYS = new Set([
+  'traffic',
+  'all-dealers',
+  'event-tracking',
+  'vdp-analysis',
+]);
 
 export const DEFAULT_ACCESS = Object.freeze({
   role: 'admin',
