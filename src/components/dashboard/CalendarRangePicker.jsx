@@ -76,7 +76,42 @@ function yearPresets(today) {
   return years;
 }
 
-function presetsFor(today, previousYearsOnly = false) {
+/** Same calendar day `yearsBack` years earlier (Feb 29 → Feb 28). */
+function shiftYearsISO(iso, yearsBack) {
+  const d = parseISO(iso);
+  if (!d) return null;
+  const year = d.getFullYear() - yearsBack;
+  const lastDay = new Date(year, d.getMonth() + 1, 0).getDate();
+  return ymd(new Date(year, d.getMonth(), Math.min(d.getDate(), lastDay)));
+}
+
+/** Preset id that only exists inside a picker given alignFrom/alignTo (parents receive explicit dates). */
+const LAST_YEAR_ALIGNED = 'last_year_aligned';
+
+/** "Oct 2025" for a whole month, otherwise "Nov 1 – Nov 10, 2025". */
+function shortPeriodLabel(fromISO, toISO) {
+  const a = parseISO(fromISO);
+  const b = parseISO(toISO);
+  if (!a || !b) return '';
+  const wholeMonth =
+    a.getDate() === 1 &&
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    b.getDate() === new Date(b.getFullYear(), b.getMonth() + 1, 0).getDate();
+  return wholeMonth
+    ? a.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+    : formatRangeShort(fromISO, toISO);
+}
+
+/** "Last year" = the selected range one year back (Oct 2026 → Oct 2025). */
+function lastYearAlignedPreset(alignFrom, alignTo) {
+  const from = shiftYearsISO(alignFrom, 1);
+  const to = shiftYearsISO(alignTo, 1);
+  if (!from || !to) return null;
+  return { id: LAST_YEAR_ALIGNED, label: `Last year (${shortPeriodLabel(from, to)})`, from, to };
+}
+
+function presetsFor(today, previousYearsOnly = false, alignFrom = null, alignTo = null) {
   if (previousYearsOnly) {
     // Compare → YoY: only earlier years; the current year is already in the main date range.
     return [
@@ -88,11 +123,14 @@ function presetsFor(today, previousYearsOnly = false) {
   const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
   const lastYear = today.getFullYear() - 1;
   const monthStart = ymd(startOfMonth(today));
+  const lastYearPreset =
+    (alignFrom && alignTo && lastYearAlignedPreset(alignFrom, alignTo)) ||
+    { id: 'last_year', label: `Last year (${lastYear})`, from: `${lastYear}-01-01`, to: `${lastYear}-12-31` };
   return [
     { id: 'all',           label: 'All Data',      from: '2020-01-01',             to: ymd(today) },
     { id: 'current_month', label: 'Current Month', from: monthStart,             to: ymd(today) },
     ...yearPresets(today),
-    { id: 'last_year', label: `Last year (${lastYear})`, from: `${lastYear}-01-01`, to: `${lastYear}-12-31` },
+    lastYearPreset,
     { id: 'today',     label: 'Today',        from: ymd(today),                   to: ymd(today) },
     { id: 'yesterday', label: 'Yesterday',    from: ymd(nDaysAgo(today, 1)),      to: ymd(nDaysAgo(today, 1)) },
     { id: '7d',        label: 'Last 7 Days',  from: ymd(nDaysAgo(today, 6)),      to: ymd(today) },
@@ -182,13 +220,18 @@ export function rangePickerValueFromISO(from, to) {
   return { start: from, end: to, preset };
 }
 
-/** `minDate` / `maxDate` (YYYY-MM-DD, optional) limit selectable days and the presets shown. */
+/**
+ * `minDate` / `maxDate` (YYYY-MM-DD, optional) limit selectable days and the presets shown.
+ * `alignFrom` / `alignTo` (the applied range): the "Last year" preset becomes that range one year back.
+ */
 export default function CalendarRangePicker({
   value,
   onChange,
   previousYearsOnly = false,
   minDate = null,
   maxDate = null,
+  alignFrom = null,
+  alignTo = null,
 }) {
   const [open, setOpen] = useState(false);
   const [popPos, setPopPos] = useState({ top: 0, left: 0 });
@@ -238,12 +281,12 @@ export default function CalendarRangePicker({
 
   const presets = useMemo(
     () =>
-      presetsFor(today, previousYearsOnly).filter(
+      presetsFor(today, previousYearsOnly, alignFrom, alignTo).filter(
         (p) =>
           p.id === 'custom' ||
           ((!minDate || p.from >= minDate) && (!maxDate || p.to <= maxDate))
       ),
-    [today, previousYearsOnly, minDate, maxDate]
+    [today, previousYearsOnly, minDate, maxDate, alignFrom, alignTo]
   );
   // Calendar days from this year onward can't be picked in previous-years-only mode.
   const disableFromYear = previousYearsOnly ? today.getFullYear() : null;
@@ -312,7 +355,7 @@ export default function CalendarRangePicker({
   function applyRange() {
     if (!tempStart || !tempEnd) return;
     const matched = findMatchingPreset(presets, tempStart, tempEnd) || 'custom';
-    if (matched && matched !== 'custom') {
+    if (matched && matched !== 'custom' && matched !== LAST_YEAR_ALIGNED) {
       onChange(matched);
     } else {
       onChange({ preset: 'custom', start: tempStart, end: tempEnd });

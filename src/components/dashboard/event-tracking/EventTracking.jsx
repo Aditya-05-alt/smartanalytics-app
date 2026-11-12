@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import CalendarRangePicker, { resolveRangePickerValue } from '../CalendarRangePicker';
+import FilterDropdown from '../FilterDropdown';
+import { DEALER_CATEGORY_OPTIONS } from '@/lib/dealers/fields';
 import styles from './EventTracking.module.css';
 
 /** Combined channel groups (same set and colors as VDP Analysis); anything else is Other. */
@@ -35,15 +37,21 @@ const DEALER_COLUMNS = [
   { key: 'eventPct', label: 'Event %' },
 ];
 
+/** Common forms (raw GA4 "_submit" events are grouped into these by event_tracking_common_form). */
 const EVENT_TYPES = [
-  'contact_us_submit',
   'check_availability_submit',
-  'trade_value_submit',
-  'financing_submit',
-  'other_form_submit',
+  'contact_us_submit',
   'custom_form_submit',
+  'financing_submit',
+  'lowest_price_submit',
+  'make_offer_submit',
+  'other_form_submit',
   'parts_submit',
+  'quote_request_submit',
+  'request_info_submit',
   'service_submit',
+  'test_drive_submit',
+  'trade_value_submit',
 ];
 const MISSING_USERS_LISTED = 5;
 
@@ -100,6 +108,7 @@ function toDealerData(apiDealer) {
 
   return {
     name: apiDealer.name,
+    category: apiDealer.category || null,
     rows,
     eventsByChannel,
     eventTotals: Object.fromEntries(
@@ -201,6 +210,8 @@ export default function EventTracking() {
   const [dealerName, setDealerName] = useState('');
   const [channelName, setChannelName] = useState('');
   const [eventType, setEventType] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [zeroFormsOnly, setZeroFormsOnly] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsChannel, setDetailsChannel] = useState('');
   const [dealerData, setDealerData] = useState([]);
@@ -282,12 +293,48 @@ export default function EventTracking() {
     };
   }, [from, to]);
 
-  const availableDealerNames = useMemo(() => dealerData.map((dealer) => dealer.name), [dealerData]);
+  const categoryOptions = useMemo(() => {
+    const present = new Set(dealerData.map((dealer) => dealer.category).filter(Boolean));
+    return [
+      { value: 'All', label: 'All Categories' },
+      ...DEALER_CATEGORY_OPTIONS.filter((category) => present.has(category)).map((category) => ({
+        value: category,
+        label: category,
+      })),
+    ];
+  }, [dealerData]);
+  // Form events as the dealer table shows them (respects the channel and form-event filters).
+  const formEventsOf = (dealer) =>
+    sumEventTypes(
+      channelName ? aggregateEvents(dealer.eventsByChannel, channelName) : dealerEventTotals(dealer),
+      eventType
+    )[0];
+  const scopedDealers = useMemo(
+    () =>
+      dealerData.filter(
+        (dealer) =>
+          (!categories.length || categories.includes(dealer.category)) &&
+          (!zeroFormsOnly || formEventsOf(dealer) === 0)
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- formEventsOf only reads channelName/eventType
+    [categories, channelName, dealerData, eventType, zeroFormsOnly]
+  );
+  const availableDealerNames = useMemo(
+    () => scopedDealers.map((dealer) => dealer.name),
+    [scopedDealers]
+  );
   const selectedDealer = dealerData.find((dealer) => dealer.name === dealerName);
   const dealers = useMemo(
-    () => (selectedDealer ? [selectedDealer] : dealerData),
-    [dealerData, selectedDealer]
+    () => (selectedDealer ? [selectedDealer] : scopedDealers),
+    [scopedDealers, selectedDealer]
   );
+
+  // A dealer filtered out by category / zero forms drops back to all dealers.
+  useEffect(() => {
+    if (dealerName && !scopedDealers.some((dealer) => dealer.name === dealerName)) {
+      setDealerName('');
+    }
+  }, [dealerName, scopedDealers]);
   const allRows = useMemo(() => {
     const rowsByChannel = new Map();
     dealers.forEach((dealer) => {
@@ -355,7 +402,7 @@ export default function EventTracking() {
   const channelRows = visibleRows;
   const dealerRows = useMemo(() => {
     if (dealerName) return [];
-    return dealerData.map((dealer) => {
+    return scopedDealers.map((dealer) => {
       const metrics = dealerTableMetrics[dealer.name] || { users: 0, views: 0 };
       const views = [metrics.views, 0, 0];
       const eventsByType = channelName
@@ -379,7 +426,7 @@ export default function EventTracking() {
         },
       };
     });
-  }, [channelName, dealerData, dealerName, dealerTableMetrics, eventType]);
+  }, [channelName, dealerName, dealerTableMetrics, eventType, scopedDealers]);
   const sortedDealerRows = useMemo(() => {
     const { key, dir } = dealerSort;
     const sign = dir === 'asc' ? 1 : -1;
@@ -416,6 +463,14 @@ export default function EventTracking() {
     setChannelName('');
     setDetailsChannel('');
   };
+  const filtersActive =
+    categories.length > 0 || Boolean(dealerName || channelName || eventType) || zeroFormsOnly;
+  const clearFilters = () => {
+    setCategories([]);
+    chooseDealer('');
+    setEventType('');
+    setZeroFormsOnly(false);
+  };
 
   const metrics = [
     { label: 'Users', values: summaryUserValues, formatter: formatNumber },
@@ -450,44 +505,63 @@ export default function EventTracking() {
           </div>
         </div>
       )}
-      <div className={`filters ${styles.toolbar}`}>
-        <label className={styles.selectWrap}>
-          <span className={styles.srOnly}>Dealer</span>
-          <select
-            className={styles.select}
-            value={dealerName}
-            onChange={(event) => chooseDealer(event.target.value)}
+      <div className="filters">
+        <span className="f-label">Filter</span>
+        {filtersActive && (
+          <button
+            type="button"
+            className="filter-clear-all"
+            onClick={clearFilters}
+            aria-label="Clear all filters"
+            title="Clear all filters"
           >
-            <option value="">All Dealers</option>
-            {availableDealerNames.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
+            ×
+          </button>
+        )}
+        <FilterDropdown
+          multi
+          clearable
+          options={categoryOptions}
+          value={categories}
+          onChange={setCategories}
+        />
+        <FilterDropdown
+          clearable
+          options={[
+            { value: 'All', label: 'All Dealers' },
+            ...availableDealerNames.map((name) => ({ value: name, label: name })),
+          ]}
+          value={dealerName || 'All'}
+          onChange={(value) => chooseDealer(value === 'All' ? '' : value)}
+        />
+        <FilterDropdown
+          clearable
+          options={[
+            { value: 'All', label: 'All Channels' },
+            ...CHANNELS.map((name) => ({ value: name, label: name })),
+          ]}
+          value={channelName || 'All'}
+          onChange={(value) => setChannelName(value === 'All' ? '' : value)}
+        />
+        <FilterDropdown
+          clearable
+          options={[
+            { value: 'All', label: 'All Form Events' },
+            ...EVENT_TYPES.map((type) => ({ value: type, label: type })),
+          ]}
+          value={eventType || 'All'}
+          onChange={(value) => setEventType(value === 'All' ? '' : value)}
+        />
+        <label className={`fc ${zeroFormsOnly ? 'on' : ''} ${styles.checkChip}`}>
+          <input
+            type="checkbox"
+            checked={zeroFormsOnly}
+            onChange={(event) => setZeroFormsOnly(event.target.checked)}
+          />
+          Zero forms
         </label>
-        <label className={styles.selectWrap}>
-          <span className={styles.srOnly}>Channel</span>
-          <select
-            className={styles.select}
-            value={channelName}
-            onChange={(event) => setChannelName(event.target.value)}
-          >
-            <option value="">All Channels</option>
-            {CHANNELS.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
-        </label>
-        <label className={styles.selectWrap}>
-          <span className={styles.srOnly}>Form event</span>
-          <select
-            className={styles.select}
-            value={eventType}
-            onChange={(event) => setEventType(event.target.value)}
-          >
-            <option value="">All Form Events</option>
-            {EVENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-          </select>
-        </label>
-        <div className={styles.periods}>
-          <span className={styles.periodLabel}>Reporting period</span>
+        <div className="f-right">
+          <span className="f-label">Date range</span>
           <CalendarRangePicker
             value={range}
             onChange={setRange}
@@ -511,7 +585,7 @@ export default function EventTracking() {
             <span className={styles.sampleLabel}>
               {dataLoading
                 ? 'Loading Event Tracking data…'
-                : `${rangeLabel} · ${dealerData.length} dealers · Users: GA4 total users · VDP: smart_final_data`}
+                : `${rangeLabel} · ${scopedDealers.length} dealers · Users: GA4 total users · VDP: smart_final_data`}
             </span>
           </p>
         </div>
@@ -563,19 +637,15 @@ export default function EventTracking() {
               <p>{rangeLabel}</p>
             </div>
             <div className={styles.detailControls}>
-              <label className={styles.selectWrap}>
-                <span className={styles.srOnly}>Filter event details by channel</span>
-                <select
-                  className={styles.select}
-                  value={detailsChannel}
-                  onChange={(event) => setDetailsChannel(event.target.value)}
-                >
-                  <option value="">All Channels</option>
-                  {eventChannelNames.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              </label>
+              <FilterDropdown
+                clearable
+                options={[
+                  { value: 'All', label: 'All Channels' },
+                  ...eventChannelNames.map((name) => ({ value: name, label: name })),
+                ]}
+                value={detailsChannel || 'All'}
+                onChange={(value) => setDetailsChannel(value === 'All' ? '' : value)}
+              />
               <button
                 type="button"
                 className={styles.closeButton}
@@ -595,7 +665,6 @@ export default function EventTracking() {
               </thead>
               <tbody>
                 {EVENT_TYPES.filter((type) => !eventType || eventType === type)
-                  .sort((a, b) => detailsData[b][0] - detailsData[a][0])
                   .map((type) => {
                     const values = detailsData[type];
                     return (
@@ -662,7 +731,7 @@ export default function EventTracking() {
                     </tr>
                   </thead>
                   <tbody>
-                    {dealerData.map((dealer) => {
+                    {scopedDealers.map((dealer) => {
                       const totals = dealerEventTotals(dealer);
                       return (
                         <tr key={dealer.name}>
@@ -737,6 +806,15 @@ export default function EventTracking() {
                 </tr>
               </thead>
               <tbody>
+                {!dataLoading && sortedDealerRows.length === 0 && (
+                  <tr>
+                    <td colSpan={DEALER_COLUMNS.length} className={styles.emptyCell}>
+                      {zeroFormsOnly
+                        ? 'No dealers with zero form events for these filters.'
+                        : 'No dealers match these filters.'}
+                    </td>
+                  </tr>
+                )}
                 {sortedDealerRows.map(({ dealer, users, views, events }) => (
                   <tr key={dealer.name}>
                     <th scope="row" className={styles.rowLabel}>

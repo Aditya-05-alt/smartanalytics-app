@@ -15,16 +15,31 @@ const CHUNK_SIZE = 500;
 const GLOBAL_BUDGET_MS = 130_000;
 const PAGE_SIZE = 10_000;
 
-const FORM_EVENTS = [
-  "contact_us_submit",
-  "check_availability_submit",
-  "trade_value_submit",
-  "financing_submit",
-  "other_form_submit",
-  "custom_form_submit",
-  "parts_submit",
-  "service_submit",
-];
+/**
+ * Dealer form events carry "_submit" (sometimes with GTM label text after it, e.g.
+ * "quote_request_submit - Unit Detail") or end in "_form" on some sites ("confirm_availability_form").
+ * Names vary per site; the database groups them into common forms. GA4's own "form_submit" fires on
+ * any form, search included, so it is left out.
+ */
+const FORM_EVENTS_FILTER = {
+  orGroup: {
+    expressions: [
+      {
+        andGroup: {
+          expressions: [
+            { filter: { fieldName: "eventName", stringFilter: { matchType: "CONTAINS", value: "_submit" } } },
+            {
+              notExpression: {
+                filter: { fieldName: "eventName", stringFilter: { matchType: "EXACT", value: "form_submit" } },
+              },
+            },
+          ],
+        },
+      },
+      { filter: { fieldName: "eventName", stringFilter: { matchType: "ENDS_WITH", value: "_form" } } },
+    ],
+  },
+};
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const todayUTC = () => new Date().toISOString().split("T")[0];
@@ -100,13 +115,18 @@ serve(async (req) => {
       return jsonRes({ error: `Invalid date range: ${dateFrom} → ${dateTo}` }, 400);
     }
     const listEvents = body.list_events === true;
-    const eventNames = Array.isArray(body.event_names) && body.event_names.length
-      ? (body.event_names as unknown[]).map(String)
-      : FORM_EVENTS;
+    const eventFilter = Array.isArray(body.event_names) && body.event_names.length
+      ? {
+        filter: {
+          fieldName: "eventName",
+          inListFilter: { values: (body.event_names as unknown[]).map(String) },
+        },
+      }
+      : FORM_EVENTS_FILTER;
 
     let q = supabase
       .from(CONFIG_TABLE)
-      .select("client_id, ga4_property_id, account_name")
+      .select("client_id, ga4_property_id, events_property_id, account_name")
       .eq("is_active", true)
       .order("account_name", { ascending: true });
     const singleId = body.client_id ?? body.target_client_id;
@@ -156,9 +176,13 @@ serve(async (req) => {
       return await res.json();
     };
 
+    // Form tracking can live in a different GA4 property than the VDP/page data.
+    const eventsPropertyOf = (dealer: Record<string, unknown>) =>
+      String(dealer.events_property_id || dealer.ga4_property_id).replace("properties/", "").trim();
+
     if (listEvents) {
       const dealer = dealers[0];
-      const propertyId = String(dealer.ga4_property_id).replace("properties/", "").trim();
+      const propertyId = eventsPropertyOf(dealer);
       const r = await runReport(propertyId, {
         dateRanges: [{ startDate: dateFrom, endDate: dateTo }],
         dimensions: [{ name: "eventName" }],
@@ -183,7 +207,9 @@ serve(async (req) => {
         break;
       }
       const clientId = String(dealer.client_id);
-      const propertyId = String(dealer.ga4_property_id).replace("properties/", "").trim();
+      const propertyId = eventsPropertyOf(dealer);
+      // Rows reference smart_ga4_config (client_id, ga4_property_id), even when read from events_property_id.
+      const configPropertyId = String(dealer.ga4_property_id);
       const accountName = (dealer.account_name as string) || clientId;
       try {
         const rows: Record<string, unknown>[] = [];
@@ -200,9 +226,7 @@ serve(async (req) => {
               { name: "sessionCampaignName" },
             ],
             metrics: [{ name: "eventCount" }, { name: "totalUsers" }],
-            dimensionFilter: {
-              filter: { fieldName: "eventName", inListFilter: { values: eventNames } },
-            },
+            dimensionFilter: eventFilter,
             limit: PAGE_SIZE,
             offset,
           });
@@ -215,7 +239,7 @@ serve(async (req) => {
             const med = dv?.[5]?.value || "(none)";
             rows.push({
               client_id: clientId,
-              ga4_property_id: propertyId,
+              ga4_property_id: configPropertyId,
               account_name: accountName,
               report_date: isoFromGaDate(dv?.[0]?.value || ""),
               event_name: dv?.[1]?.value || "",

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { canAccessReport, normalizeAccess } from '@/lib/access/permissions';
 import { loadUserAccessRecord } from '@/lib/access/userAccess';
+import { normalizeDealerCategory } from '@/lib/dealers/fields';
 import { createClient as createAuthClient } from '@/lib/supabase/server';
 
 /** Event Tracking is an explicit grant (smart_user_reports); demo/superadmin sessions don't get it. */
@@ -88,7 +89,7 @@ export async function prepareEventTrackingRequest(request) {
 
   const { data: configs, error } = await supabase
     .from('smart_hoot_config')
-    .select('id, customer_name, ga4_customer_id')
+    .select('id, customer_name, ga4_customer_id, dealer_category')
     .eq('is_active', true);
   if (error) {
     console.error('[event-tracking] dealer lookup failed:', error.message);
@@ -100,7 +101,12 @@ export async function prepareEventTrackingRequest(request) {
     const clientId = String(row.ga4_customer_id || '').trim();
     if (!clientId || !row.customer_name || byClientId.has(clientId)) continue;
     if (authorization.dealerIds && !authorization.dealerIds.has(Number(row.id))) continue;
-    byClientId.set(clientId, { dealerId: Number(row.id), name: row.customer_name.trim(), clientId });
+    byClientId.set(clientId, {
+      dealerId: Number(row.id),
+      name: row.customer_name.trim(),
+      clientId,
+      category: normalizeDealerCategory(row.dealer_category),
+    });
   }
   const dealers = [...byClientId.values()].sort((a, b) => a.name.localeCompare(b.name));
   if (!dealers.length) {

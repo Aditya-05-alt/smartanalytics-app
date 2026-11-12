@@ -81,6 +81,13 @@ const ICONS = {
       <circle cx="17" cy="8" r="1" />
     </svg>
   ),
+  'wheeler-pump': (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 16a9 9 0 0 1 18 0" strokeLinecap="round" />
+      <path d="M12 16l4.5-7" strokeLinecap="round" />
+      <circle cx="12" cy="16" r="1.5" />
+    </svg>
+  ),
   'all-dealers': (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -107,6 +114,7 @@ const ITEMS = [
   { id: 'traffic', href: '/dashboard/traffic', title: 'Traffic' },
   { id: 'event-tracking', href: '/dashboard/event-tracking', title: 'Event Tracking' },
   { id: 'vdp-analysis', href: '/dashboard/vdp-analysis', title: 'VDP Analysis' },
+  { id: 'wheeler-pump', href: '/dashboard/wheeler-pump', title: 'Wheeler Pump' },
   // { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
   // { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
   // { id: 'local', href: '/dashboard/local', title: 'Local Intel' },

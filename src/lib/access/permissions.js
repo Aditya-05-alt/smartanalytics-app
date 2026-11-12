@@ -7,6 +7,7 @@ export const REPORT_OPTIONS = [
   { key: 'traffic', label: 'Traffic', href: '/dashboard/traffic' },
   { key: 'event-tracking', label: 'Event Tracking', href: '/dashboard/event-tracking' },
   { key: 'vdp-analysis', label: 'VDP Analysis', href: '/dashboard/vdp-analysis' },
+  { key: 'wheeler-pump', label: 'Wheeler Pump', href: '/dashboard/wheeler-pump' },
   // { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
   // { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },
   // { key: 'local', label: 'Local Intel', href: '/dashboard/local' },
@@ -18,6 +19,7 @@ export const EXPLICIT_REPORT_KEYS = new Set([
   'all-dealers',
   'event-tracking',
   'vdp-analysis',
+  'wheeler-pump',
 ]);
 
 export const DEFAULT_ACCESS = Object.freeze({

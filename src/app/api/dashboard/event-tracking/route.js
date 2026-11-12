@@ -39,6 +39,7 @@ export async function GET(request) {
         id: dealer.dealerId,
         name: dealer.name,
         clientId: dealer.clientId,
+        category: dealer.category,
         users: 0,
         usersMissing: true,
         views: 0,
