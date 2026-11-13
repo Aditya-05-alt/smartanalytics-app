@@ -264,6 +264,7 @@ export default function TopBar() {
     pathname?.startsWith('/dashboard/all-dealers') ||
     pathname?.startsWith('/dashboard/event-tracking') ||
     pathname?.startsWith('/dashboard/vdp-analysis') ||
+    pathname?.startsWith('/dashboard/vdp-change') ||
     pathname?.startsWith('/dashboard/wheeler-pump');
 
   return (

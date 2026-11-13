@@ -18,7 +18,7 @@ const PAGE_SIZE = 10_000;
 /**
  * Dealer form events carry "_submit" (sometimes with GTM label text after it, e.g.
  * "quote_request_submit - Unit Detail") or end in "_form" on some sites ("confirm_availability_form").
- * Names vary per site; the database groups them into common forms. GA4's own "form_submit" fires on
+ * Names vary per site; the database registers each one to its dealer under a common form. GA4's own "form_submit" fires on
  * any form, search included, so it is left out.
  */
 const FORM_EVENTS_FILTER = {
@@ -299,9 +299,16 @@ serve(async (req) => {
           .lte("id", maxOldId);
         if (delErr) throw new Error(`old-row delete failed: ${delErr.message}`);
 
+        // Register this dealer's forms (smart_event_form_aliases.client_id) and stamp common_form on its rows.
+        const { data: reg, error: regErr } = await supabase.rpc("register_event_tracking_dealer_forms", {
+          p_client_ids: [clientId],
+        });
+        if (regErr) throw new Error(`form register failed: ${regErr.message}`);
+        const forms = Number(reg?.[0]?.registered ?? 0);
+
         const events = rows.reduce((s, r) => s + (Number(r.event_count) || 0), 0);
-        log(`  ✅ ${accountName}: ${rows.length} rows, ${events} events`);
-        summary.push({ client_id: clientId, account_name: accountName, rows: rows.length, events });
+        log(`  ✅ ${accountName}: ${rows.length} rows, ${events} events, ${forms} dealer forms`);
+        summary.push({ client_id: clientId, account_name: accountName, rows: rows.length, events, forms });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         log(`  ❌ ${accountName}: ${msg}`);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import CalendarRangePicker, { resolveRangePickerValue } from '../CalendarRangePicker';
 import FilterDropdown from '../FilterDropdown';
 import { DEALER_CATEGORY_OPTIONS } from '@/lib/dealers/fields';
@@ -114,7 +114,29 @@ function toDealerData(apiDealer) {
     eventTotals: Object.fromEntries(
       EVENT_TYPES.map((type) => [type, [Number(apiDealer.eventTotals?.[type]) || 0, 0, 0]])
     ),
+    forms: (apiDealer.forms || []).map((form) => ({ ...form, group: channelGroup(form.channel) })),
   };
+}
+
+/** type -> [{ form, count, dealers }] for these dealers' own forms, biggest first. */
+function formsByType(dealers, channelName = '') {
+  const byType = {};
+  dealers.forEach((dealer) => {
+    dealer.forms.forEach(({ type, form, group, count }) => {
+      if (channelName && group !== channelName) return;
+      byType[type] ||= new Map();
+      const entry = byType[type].get(form) || { form, count: 0, dealers: new Set() };
+      entry.count += Number(count) || 0;
+      entry.dealers.add(dealer.name);
+      byType[type].set(form, entry);
+    });
+  });
+  return Object.fromEntries(
+    Object.entries(byType).map(([type, forms]) => [
+      type,
+      [...forms.values()].sort((a, b) => b.count - a.count || a.form.localeCompare(b.form)),
+    ])
+  );
 }
 
 function sumSeries(series) {
@@ -399,6 +421,10 @@ export default function EventTracking() {
     ? [detailsChannel || channelName]
     : eventChannelNames;
   const detailEvents = sumEventTypes(detailsData);
+  const detailForms = useMemo(
+    () => formsByType(dealers, detailsChannel || channelName),
+    [channelName, dealers, detailsChannel]
+  );
   const channelRows = visibleRows;
   const dealerRows = useMemo(() => {
     if (dealerName) return [];
@@ -668,10 +694,27 @@ export default function EventTracking() {
                   .map((type) => {
                     const values = detailsData[type];
                     return (
-                      <tr key={type}>
-                        <th scope="row" className={styles.rowLabel}><code>{type}</code></th>
-                        <td className={styles.currentCell}>{formatNumber(values[0])}</td>
-                      </tr>
+                      <Fragment key={type}>
+                        <tr>
+                          <th scope="row" className={styles.rowLabel}><code>{type}</code></th>
+                          <td className={styles.currentCell}>{formatNumber(values[0])}</td>
+                        </tr>
+                        {(detailForms[type] || []).map(({ form, count, dealers: formDealers }) => (
+                          <tr key={form} className={styles.formRow}>
+                            <th scope="row" className={styles.rowLabel}>
+                              <code>{form}</code>
+                              {!dealerName && (
+                                <span className={styles.formDealers}>
+                                  {formDealers.size === 1
+                                    ? [...formDealers][0]
+                                    : `${formDealers.size} dealers`}
+                                </span>
+                              )}
+                            </th>
+                            <td>{formatNumber(count)}</td>
+                          </tr>
+                        ))}
+                      </Fragment>
                     );
                   })}
                 <tr className={styles.totalRow}>
@@ -757,6 +800,8 @@ export default function EventTracking() {
           )}
           <p className={styles.notes}>
             Form events are GA4 submit events (smart_events_data), counted by the session channel.
+            Each form type is the dealer&apos;s own forms listed under it, added together; a form only
+            counts for the dealer it is registered to.
           </p>
         </section>
       )}

@@ -25,7 +25,8 @@ function previousMonth() {
 }
 
 /**
- * GA4 total users per period (overall + per channel group) -> smart_events_users.
+ * GA4 total users, sessions and page views per period (overall + per channel group) -> smart_events_users.
+ * Users are not additive across days or channels, so each exact period is fetched on its own.
  * Body: one of client_id | client_ids[] | group_id (smart_ga4_config.sync_group) | all:true,
  * plus date_from/date_to (default: previous calendar month).
  */
@@ -116,7 +117,7 @@ serve(async (req) => {
           body: JSON.stringify({
             dateRanges: [{ startDate: dateFrom, endDate: dateTo }],
             dimensions,
-            metrics: [{ name: "totalUsers" }],
+            metrics: [{ name: "totalUsers" }, { name: "sessions" }, { name: "screenPageViews" }],
             limit: 100,
           }),
         }
@@ -148,13 +149,22 @@ serve(async (req) => {
           period_from: dateFrom,
           period_to: dateTo,
         };
-        const overall = parseInt(overallRows[0]?.metricValues?.[0]?.value || "0") || 0;
+        const metric = (row: GaRow | undefined, i: number) => parseInt(row?.metricValues?.[i]?.value || "0") || 0;
+        const overall = metric(overallRows[0], 0);
         const rows = [
-          { ...base, channel: ALL_CHANNELS, total_users: overall },
+          {
+            ...base,
+            channel: ALL_CHANNELS,
+            total_users: overall,
+            sessions: metric(overallRows[0], 1),
+            page_views: metric(overallRows[0], 2),
+          },
           ...channelRows.map((row) => ({
             ...base,
             channel: row.dimensionValues?.[0]?.value || "Unassigned",
-            total_users: parseInt(row.metricValues?.[0]?.value || "0") || 0,
+            total_users: metric(row, 0),
+            sessions: metric(row, 1),
+            page_views: metric(row, 2),
           })),
         ];
 

@@ -10,8 +10,7 @@
  *   Scrap → smart_scrap_inventory_daily for TODAY's pull_date (not full history)
  *           fallback: smart_scrap_inventory where last_seen is today (IST)
  *
- * Google SMTP: set SMTP_USER / SMTP_PASS below, OR Edge secrets with the same names
- * (secrets win when in-file pass is empty — safe for deploy).
+ * Google SMTP: Edge secrets SMTP_USER / SMTP_PASS (SMTP_USER falls back to the mailbox below).
  * Recipients: INVENTORY_EMAIL_TO below; secret / DB config / body.to can override.
  * Optional secret INVENTORY_EMAIL_FROM overrides the default From header.
  *
@@ -30,10 +29,10 @@ import nodemailer from "npm:nodemailer@6.9.16";
 
 const REPORT_TIMEZONE = "Asia/Kolkata";
 
-/** Google Workspace / Gmail SMTP — edit here (do not push real passwords to public repos). */
+/** Google Workspace / Gmail SMTP mailbox. */
 const SMTP_USER = "devops@brandmirchi.com";
-/** 16-character app password; spaces stripped. Prefer Edge secret SMTP_PASS when set. */
-const SMTP_PASS = "hrrttkyiuxbexiue";
+/** Keep empty: the app password lives only in the SMTP_PASS Edge secret. */
+const SMTP_PASS = "";
 /** Primary recipient(s) — add as many as you need. */
 const INVENTORY_EMAIL_TO = [
   // "lisa@brandmirchi.com",

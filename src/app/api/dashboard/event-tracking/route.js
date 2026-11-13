@@ -7,7 +7,8 @@ export const maxDuration = 120;
 
 /**
  * Every dealer's Event Tracking data for a date range in one call
- * (get_event_tracking_dashboard): GA4 total users, Final VDP views and form events by channel.
+ * (get_event_tracking_dashboard): GA4 total users, Final VDP views, form events by channel and
+ * the dealer's own forms behind each form type.
  */
 export async function GET(request) {
   const { response, supabase, from, to, dealers } = await prepareEventTrackingRequest(request);
@@ -46,6 +47,8 @@ export async function GET(request) {
         channels: new Map(),
         eventTotals: {},
         eventsByChannel: {},
+        // This dealer's own GA4 forms behind each common form (smart_event_form_aliases dealer rows).
+        forms: [],
       },
     ])
   );
@@ -70,6 +73,8 @@ export async function GET(request) {
       dealer.eventsByChannel[row.channel] ||= {};
       dealer.eventsByChannel[row.channel][row.event_name] =
         (dealer.eventsByChannel[row.channel][row.event_name] || 0) + value;
+    } else if (row.kind === 'form') {
+      dealer.forms.push({ type: row.event_name, form: row.form_name, channel: row.channel, count: value });
     }
   }
 

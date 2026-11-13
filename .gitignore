@@ -98,3 +98,6 @@ test.txt
 
 # Local data exports / one-off sheets (keep out of git)
 /exports/
+
+# Design mockups
+*Mockup*.html
