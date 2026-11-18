@@ -23,10 +23,19 @@ const CONDITION_OPTIONS = [
   { value: 'U', label: 'Used' },
 ];
 
-/** VDP Analysis covers October 2026 for now. */
+/** Earliest month with VDP Analysis tables; latest = UTC today − 2 (same settle as daily sync). */
 const RANGE_MIN = '2026-10-01';
-const RANGE_MAX = '2026-10-31';
-const DEFAULT_RANGE = { preset: 'custom', start: RANGE_MIN, end: RANGE_MAX };
+function settledMaxIso() {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 2);
+  return d.toISOString().slice(0, 10);
+}
+const RANGE_MAX = settledMaxIso();
+const DEFAULT_RANGE = {
+  preset: 'custom',
+  start: `${RANGE_MAX.slice(0, 8)}01`,
+  end: RANGE_MAX,
+};
 const clampDate = (date) => (date < RANGE_MIN ? RANGE_MIN : date > RANGE_MAX ? RANGE_MAX : date);
 
 const INVENTORY_FILTERS = [

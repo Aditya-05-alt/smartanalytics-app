@@ -111,6 +111,8 @@ BEGIN
       WHERE n.client_id = v_id
         AND n.page_path = f.page_path
         AND n.status IN ('matched', 'applied')
+        AND NULLIF(btrim(n.inv_make), '') IS NOT NULL
+        AND lower(btrim(n.inv_make)) NOT IN ('unknown', 'other')
     )
   GROUP BY f.page_path;
 

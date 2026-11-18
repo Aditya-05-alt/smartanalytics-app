@@ -113,11 +113,11 @@ const ICONS = {
 
 const ITEMS = [
   { id: 'overview', href: '/dashboard', title: 'Overview' },
-  { id: 'all-dealers', href: '/dashboard/all-dealers', title: 'All Dealers' },
+  // { id: 'all-dealers', href: '/dashboard/all-dealers', title: 'All Dealers' },
   { id: 'campaigns', href: '/dashboard/campaigns', title: 'Campaigns' },
   { id: 'compare', href: '/dashboard/compare', title: 'Compare' },
   { id: 'inventory', href: '/dashboard/inventory', title: 'Inventory report' },
-  { id: 'traffic', href: '/dashboard/traffic', title: 'Traffic' },
+  // { id: 'traffic', href: '/dashboard/traffic', title: 'Traffic' },
   { id: 'event-tracking', href: '/dashboard/event-tracking', title: 'Event Tracking' },
   { id: 'vdp-analysis', href: '/dashboard/vdp-analysis', title: 'VDP Analysis' },
   { id: 'vdp-change', href: '/dashboard/vdp-change', title: 'VDP Change' },
