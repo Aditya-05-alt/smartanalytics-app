@@ -31,11 +31,8 @@ export default function ReportDateControls({ slug, from, to, months, quick }: Pr
   };
 
   const monthActive = (x: Range) =>
-    sel.from === x.from && sel.to === x.to
-      ? 'true'
-      : sel.from.slice(0, 7) === x.from.slice(0, 7) && sel.to.slice(0, 7) === x.from.slice(0, 7)
-        ? 'true'
-        : undefined;
+    (sel.from === x.from && sel.to === x.to) ||
+    (sel.from.slice(0, 7) === x.from.slice(0, 7) && sel.to.slice(0, 7) === x.from.slice(0, 7));
 
   return (
     <section className="controls" aria-label="Dates">
@@ -45,7 +42,7 @@ export default function ReportDateControls({ slug, from, to, months, quick }: Pr
             key={x.from}
             type="button"
             className="chip"
-            aria-current={monthActive(x)}
+            aria-current={monthActive(x) || undefined}
             onClick={() => go(x.from, x.to)}
           >
             {x.label}
@@ -81,7 +78,7 @@ export default function ReportDateControls({ slug, from, to, months, quick }: Pr
             key={x.label}
             type="button"
             className="chip"
-            aria-pressed={x.from === sel.from && x.to === sel.to ? 'true' : 'false'}
+            aria-pressed={x.from === sel.from && x.to === sel.to}
             onClick={() => go(x.from, x.to)}
           >
             {x.label}
