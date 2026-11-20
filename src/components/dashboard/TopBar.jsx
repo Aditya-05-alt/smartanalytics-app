@@ -15,6 +15,10 @@ import {
   inventoryReportExcludesAllDealers,
   isInventoryReportPath,
 } from '@/lib/inventory/inventoryReport';
+import { canAccessReport } from '@/lib/access/permissions';
+
+/** Reports that use the category / dealer pickers in the top bar. */
+const DEALER_FILTER_REPORTS = ['overview', 'campaigns', 'compare', 'inventory'];
 
 function DealerCategoryFilter() {
   const {
@@ -255,8 +259,9 @@ function UserAccountMenu() {
 
 export default function TopBar() {
   const pathname = usePathname();
+  const { access, accessLoading } = useClient();
   const { pending: navPending } = useNavigationLoading();
-  const hideDealerPicker =
+  const hideByRoute =
     pathname?.startsWith('/dashboard/admin') ||
     pathname?.startsWith('/reports') ||
     pathname?.startsWith('/dashboard/compare') ||
@@ -265,7 +270,14 @@ export default function TopBar() {
     pathname?.startsWith('/dashboard/event-tracking') ||
     pathname?.startsWith('/dashboard/vdp-analysis') ||
     pathname?.startsWith('/dashboard/vdp-change') ||
-    pathname?.startsWith('/dashboard/wheeler-pump');
+    pathname?.startsWith('/dashboard/wheeler-pump') ||
+    pathname?.startsWith('/dashboard/wheeler-reports');
+  // Media Cost-only (and similar) users: no category / All Dealers controls.
+  const hideByAccess =
+    !accessLoading &&
+    access?.role === 'user' &&
+    !DEALER_FILTER_REPORTS.some((key) => canAccessReport(access, key));
+  const hideDealerPicker = hideByRoute || hideByAccess;
 
   return (
     <header className="topbar">

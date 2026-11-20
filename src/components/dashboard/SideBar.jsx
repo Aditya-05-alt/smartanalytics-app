@@ -94,6 +94,15 @@ const ICONS = {
       <circle cx="12" cy="16" r="1.5" />
     </svg>
   ),
+  'wheeler-reports': (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 19V5" strokeLinecap="round" />
+      <path d="M4 19h16" strokeLinecap="round" />
+      <path d="M8 15V9" strokeLinecap="round" />
+      <path d="M12 15V7" strokeLinecap="round" />
+      <path d="M16 15v-4" strokeLinecap="round" />
+    </svg>
+  ),
   'all-dealers': (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -122,6 +131,7 @@ const ITEMS = [
   { id: 'vdp-analysis', href: '/dashboard/vdp-analysis', title: 'VDP Analysis' },
   { id: 'vdp-change', href: '/dashboard/vdp-change', title: 'VDP Change' },
   { id: 'wheeler-pump', href: '/dashboard/wheeler-pump', title: 'Wheeler Pump' },
+  { id: 'wheeler-reports', href: '/dashboard/wheeler-reports', title: 'Media Cost' },
   // { id: 'health', href: '/dashboard/health', title: 'Portfolio Health' },
   // { id: 'attribution', href: '/dashboard/attribution', title: 'Attribution' },
   // { id: 'local', href: '/dashboard/local', title: 'Local Intel' },

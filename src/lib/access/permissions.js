@@ -9,6 +9,7 @@ export const REPORT_OPTIONS = [
   { key: 'vdp-analysis', label: 'VDP Analysis', href: '/dashboard/vdp-analysis' },
   { key: 'vdp-change', label: 'VDP Change', href: '/dashboard/vdp-change' },
   { key: 'wheeler-pump', label: 'Wheeler Pump', href: '/dashboard/wheeler-pump' },
+  { key: 'wheeler-reports', label: 'Media Cost', href: '/dashboard/wheeler-reports' },
   // { key: 'health', label: 'Portfolio Health', href: '/dashboard/health' },
   // { key: 'attribution', label: 'Attribution', href: '/dashboard/attribution' },
   // { key: 'local', label: 'Local Intel', href: '/dashboard/local' },
@@ -22,6 +23,8 @@ export const EXPLICIT_REPORT_KEYS = new Set([
   'vdp-analysis',
   'vdp-change',
   'wheeler-pump',
+  // Media Cost — only accounts with an explicit grant (aditya + media test users).
+  'wheeler-reports',
 ]);
 
 export const DEFAULT_ACCESS = Object.freeze({
