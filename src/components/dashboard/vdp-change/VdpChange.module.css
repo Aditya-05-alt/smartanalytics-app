@@ -25,32 +25,31 @@
 .up { color: var(--green); }
 .down { color: var(--red); }
 
-/* filters: one card, each label above its control (as in the mockup) */
+/* filters: 4 on top, 3 on bottom — content-sized, left-aligned (no stretch).
+   High z-index so date/dealer menus paint above KPIs and cards below. */
 .filterCard {
+  position: relative;
+  z-index: 50;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px 22px;
+  flex-direction: column;
+  gap: 14px;
   padding: 12px 16px;
   border: 1px solid var(--bd);
   border-radius: 12px;
   background: var(--s2);
+  overflow: visible;
 }
-.fld { display: flex; flex-direction: column; gap: 6px; }
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px 22px;
+  overflow: visible;
+}
+.fld { display: flex; flex-direction: column; gap: 6px; width: max-content; max-width: 100%; position: relative; z-index: 1; }
 .fldRow { display: flex; align-items: center; gap: 6px; color: var(--t2); font-size: 12px; }
 .fldEnd { margin-left: auto; }
-.dd {
-  min-height: 30px;
-  padding: 4px 28px 4px 10px;
-  border: 1px solid var(--bd);
-  border-radius: 6px;
-  background: var(--s3);
-  color: var(--t2);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.dd:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.filterCard :global(.dm) { z-index: 60; }
 .seg button { min-height: 30px; }
 .seg {
   display: inline-flex;
@@ -75,7 +74,8 @@
 .seg button:focus-visible,
 .btn:focus-visible,
 .pill:focus-visible,
-.dh:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.dh:focus-visible,
+.close:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 
 .num {
   width: 58px;
@@ -148,7 +148,6 @@
   border-radius: 11px;
   background: var(--s2);
 }
-.kMain { border-color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
 .v { margin: 4px 0 2px; font-size: clamp(18px, 1.7vw, 24px); font-weight: 650; font-variant-numeric: tabular-nums; }
 .d { color: var(--t3); font-size: 11px; }
 
@@ -173,8 +172,9 @@
 .cardHead p { margin: 0; color: var(--t3); font-size: 11px; }
 .cardTools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 /* The dealer dropdown's menu opens past the card edge, so this card can't clip; the table scrolls on its own. */
-.cardMenus { overflow: visible; }
+.cardMenus { overflow: visible; position: relative; z-index: 40; }
 .cardMenus .cardHead { position: relative; z-index: 5; }
+.cardMenus :global(.dm) { z-index: 50; }
 .foot { margin: 0; padding: 0.65rem 1rem; border-top: 1px solid var(--bd); color: var(--t3); font-size: 11px; }
 
 .tw { overflow-x: auto; }
@@ -227,14 +227,20 @@
 
 /* dealer worksheets */
 .listTitle { margin: 0.4rem 0 0; font-size: 15px; font-weight: 650; }
-.dealer { overflow: hidden; border: 1px solid var(--bd); border-radius: 12px; background: var(--s2); }
+.dealer { overflow: visible; border: 1px solid var(--bd); border-radius: 12px; background: var(--s2); }
+.dhRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
 .dh {
   display: grid;
   grid-template-columns: minmax(190px, 1.3fr) minmax(140px, 0.9fr) repeat(3, minmax(150px, 1fr)) 28px;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  padding: 12px 18px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 10px 12px 18px;
   border: 0;
   background: none;
   color: inherit;
@@ -243,6 +249,24 @@
   cursor: pointer;
 }
 .dh:hover { background: color-mix(in srgb, var(--s3) 60%, var(--s2)); }
+.close {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: 10px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--red);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.close:hover { background: color-mix(in srgb, var(--red) 16%, transparent); }
 
 .nm { color: var(--t); font-size: 14px; font-weight: 600; }
 .inv { margin-top: 2px; color: var(--t3); font-size: 11px; font-weight: 400; }
@@ -275,6 +299,29 @@
   cursor: pointer;
 }
 .pill[aria-pressed='true'] { border-color: var(--acc); background: var(--acc); color: var(--accent-fg, #14171c); font-weight: 600; }
+.customPick {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: -4px 0 12px;
+}
+.customPick :global(.dm) { z-index: 40; }
+.customPickLab {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.customHint {
+  margin: 0;
+  padding: 10px 2px 4px;
+  font-size: 13px;
+  color: var(--t3);
+}
 
 .wst { width: 100%; border-collapse: collapse; color: var(--t2); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .wst th {

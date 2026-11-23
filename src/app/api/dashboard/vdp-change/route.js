@@ -43,11 +43,14 @@ export async function GET(request) {
       dealer.stock[row.period] = row.stock == null ? null : Number(row.stock);
       continue;
     }
+    const hasTraffic = row.users != null || row.sessions != null || row.page_views != null;
+    const prev = dealer[row.period][row.grp];
     dealer[row.period][row.grp] = {
-      users: Number(row.users) || 0,
-      sessions: Number(row.sessions) || 0,
-      pageViews: Number(row.page_views) || 0,
-      vdp: Number(row.vdp) || 0,
+      users: hasTraffic ? Number(row.users) || 0 : (prev?.users || 0),
+      sessions: hasTraffic ? Number(row.sessions) || 0 : (prev?.sessions || 0),
+      pageViews: hasTraffic ? Number(row.page_views) || 0 : (prev?.pageViews || 0),
+      vdp: row.vdp != null ? Number(row.vdp) || 0 : (prev?.vdp || 0),
+      hasTraffic: Boolean(prev?.hasTraffic) || hasTraffic,
     };
   }
 

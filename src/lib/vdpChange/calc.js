@@ -57,11 +57,47 @@ export function worksheet(a, b, rate, estimates) {
   return x;
 }
 
-/** One dealer's worksheets: per channel (CW) and all channels (W). Null when GA4 traffic is missing. */
+/** VDP-only worksheet when GA4 traffic for this exact range is still loading. */
+function vdpOnlySheet(a, b) {
+  const v0 = Math.round(a.vdp || 0);
+  const v1 = Math.round(b.vdp || 0);
+  const diff = v1 - v0;
+  return {
+    u0: null,
+    u1: null,
+    v0,
+    v1,
+    spu0: null,
+    spu1: null,
+    s0: null,
+    s1: null,
+    pps0: null,
+    pps1: null,
+    pv0: null,
+    pv1: null,
+    rate: null,
+    r0: null,
+    r1: null,
+    e0: null,
+    e1: null,
+    ePct: null,
+    diff,
+    diffPct: v0 > 0 ? (diff / v0) * 100 : null,
+    traffic: null,
+    trafficPct: null,
+    real: null,
+    realPct: null,
+  };
+}
+
+/**
+ * One dealer's worksheets: per channel (CW) and all channels (W).
+ * When GA4 traffic for the exact date range is missing, still returns VDP change
+ * (traffic / real are null) so the page can paint in seconds while traffic syncs.
+ */
 export function dealerChange(dealer, rates) {
   const prevAll = dealer.prev['(all)'];
   const curAll = dealer.cur['(all)'];
-  if (!prevAll || !curAll) return null;
   const CW = {};
   let e0 = 0;
   let e1 = 0;
@@ -70,15 +106,71 @@ export function dealerChange(dealer, rates) {
   for (const { key } of CHANNELS) {
     const a = dealer.prev[key] || EMPTY;
     const b = dealer.cur[key] || EMPTY;
+    v0 += a.vdp || 0;
+    v1 += b.vdp || 0;
+  }
+  const hasTraffic = Boolean(prevAll?.hasTraffic && curAll?.hasTraffic);
+  if (!hasTraffic) {
+    if (!(v0 > 0 || v1 > 0)) return null;
+    for (const { key } of CHANNELS) {
+      CW[key] = vdpOnlySheet(dealer.prev[key] || EMPTY, dealer.cur[key] || EMPTY);
+    }
+    return {
+      ...dealer,
+      W: vdpOnlySheet({ vdp: v0 }, { vdp: v1 }),
+      CW,
+      V0: v0,
+      V1: v1,
+      inv0: dealer.stock.prev,
+      inv1: dealer.stock.cur,
+      trafficPending: true,
+    };
+  }
+  for (const { key } of CHANNELS) {
+    const a = dealer.prev[key] || EMPTY;
+    const b = dealer.cur[key] || EMPTY;
     const w = worksheet(a, b, rates[key] ?? 0);
     CW[key] = w;
     e0 += w.e0;
     e1 += w.e1;
-    v0 += a.vdp;
-    v1 += b.vdp;
   }
   const W = worksheet({ ...prevAll, vdp: v0 }, { ...curAll, vdp: v1 }, null, [e0, e1]);
-  return { ...dealer, W, CW, V0: v0, V1: v1, inv0: dealer.stock.prev, inv1: dealer.stock.cur };
+  return { ...dealer, W, CW, V0: v0, V1: v1, inv0: dealer.stock.prev, inv1: dealer.stock.cur, trafficPending: false };
+}
+
+/**
+ * Worksheet for one or more named channels (custom multi-select).
+ * Same maths as the dealer total: sum traffic, blend estimates per channel rate.
+ */
+export function worksheetForChannels(dealer, rates, keys) {
+  const list = (keys || []).filter((k) => CHANNELS.some((c) => c.key === k));
+  if (!list.length) return null;
+  if (list.length === 1) {
+    const key = list[0];
+    const a = dealer.prev?.[key] || EMPTY;
+    const b = dealer.cur?.[key] || EMPTY;
+    return worksheet(a, b, rates?.[key] ?? 0);
+  }
+  const aSum = { users: 0, sessions: 0, pageViews: 0, vdp: 0 };
+  const bSum = { users: 0, sessions: 0, pageViews: 0, vdp: 0 };
+  let e0 = 0;
+  let e1 = 0;
+  for (const key of list) {
+    const a = dealer.prev?.[key] || EMPTY;
+    const b = dealer.cur?.[key] || EMPTY;
+    const w = worksheet(a, b, rates?.[key] ?? 0);
+    e0 += w.e0;
+    e1 += w.e1;
+    aSum.users += a.users;
+    aSum.sessions += a.sessions;
+    aSum.pageViews += a.pageViews;
+    aSum.vdp += a.vdp;
+    bSum.users += b.users;
+    bSum.sessions += b.sessions;
+    bSum.pageViews += b.pageViews;
+    bSum.vdp += b.vdp;
+  }
+  return worksheet(aSum, bSum, null, [e0, e1]);
 }
 
 export const pctChange = (a, b) => (a > 0 ? (b / a - 1) * 100 : null);

@@ -4067,7 +4067,7 @@ button.adc-dealer-link {
   border-radius: 12px;
   box-shadow: var(--shadow-pop);
   padding: 14px;
-  z-index: 1000;
+  z-index: 5000;
   width: 680px;
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 24px);
