@@ -27,6 +27,8 @@ export type Lead = {
   campaign: string;
   lead_type: string;
   form: string;
+  /** Display name from Scout export; email/phone are never stored. */
+  contact_name?: string;
 };
 
 export type Platform = 'google' | 'meta';

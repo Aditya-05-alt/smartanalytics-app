@@ -1,12 +1,13 @@
 // Turns a website lead export (Scout CSV) into lead rows.
-// Names, emails and phone numbers are never stored: they only feed a one-way hash.
+// Email and phone are never stored: they only feed a one-way person hash.
+// Contact name is kept for the report leads drill-down.
 import Papa from 'papaparse';
 import { createHash } from 'node:crypto';
 import { dateInZone } from './dates';
 import type { Lead, Store } from './types';
 
 export type LeadImportResult = {
-  leads: (Lead & { created_at_utc: string | null; person_hash: string })[];
+  leads: (Lead & { created_at_utc: string | null; person_hash: string; contact_name: string })[];
   skippedOutsideDates: number;
   unknownLocations: Record<string, number>;
   badRows: number;
@@ -55,6 +56,10 @@ export function parseLeadExport(
     if (s === 'google' && m === 'organic' && (detail[2] || '').startsWith('google_my_business')) campaign = detail[2];
 
     const who = (col(row, 'Email') || col(row, 'Phone') || col(row, 'Visitor ID') || id).toLowerCase();
+    const first = col(row, 'First Name', 'FirstName', 'first_name');
+    const last = col(row, 'Last Name', 'LastName', 'last_name');
+    const full = col(row, 'Name', 'Full Name', 'Contact Name', 'contact_name');
+    const contact_name = (full || [first, last].filter(Boolean).join(' ')).trim();
     out.leads.push({
       external_id: id,
       store_id: storeId,
@@ -65,6 +70,7 @@ export function parseLeadExport(
       campaign,
       lead_type: col(row, 'Lead Type'),
       form: col(row, 'Form Name', 'Form'),
+      contact_name,
       person_hash: createHash('sha256').update(who).digest('hex').slice(0, 16),
     });
   }

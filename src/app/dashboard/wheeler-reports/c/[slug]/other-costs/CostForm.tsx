@@ -1,10 +1,14 @@
 'use client';
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useFreezeNav } from '@/components/dashboard/wheeler-reports/FreezeContext';
 import { addCosts, addHead } from './actions';
 
 const usd = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
 export default function CostForm({ slug, month, stores, heads }: { slug: string; month: string; stores: { id: string; name: string }[]; heads: string[] }) {
+  const router = useRouter();
+  const { invalidate } = useFreezeNav();
   const [store, setStore] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -17,6 +21,12 @@ export default function CostForm({ slug, month, stores, heads }: { slug: string;
   const toggle = (h: string) => setPicked((p) => (p.includes(h) ? p.filter((x) => x !== h) : [...p, h]));
   const total = picked.reduce((a, h) => a + (parseFloat(amounts[h]) || 0), 0);
 
+  const refreshCosts = () => {
+    // Drop frozen Other costs + Report panels so the new rows appear immediately.
+    invalidate(['other-costs', 'report']);
+    router.refresh();
+  };
+
   const submit = () => {
     if (!store) return setMsg({ ok: false, text: 'Choose a store location.' });
     if (!picked.length) return setMsg({ ok: false, text: 'Pick at least one cost head.' });
@@ -26,7 +36,12 @@ export default function CostForm({ slug, month, stores, heads }: { slug: string;
     start(async () => {
       const r = await addCosts(slug, { month, storeId: store, items });
       setMsg({ ok: r.ok, text: r.ok ? `${r.message} ${items.map((i) => `${i.head} ${usd(i.amount)}`).join(', ')}.` : r.message });
-      if (r.ok) { setPicked([]); setAmounts({}); setStore(''); }
+      if (r.ok) {
+        setPicked([]);
+        setAmounts({});
+        setStore('');
+        refreshCosts();
+      }
     });
   };
   const addNew = () => {
@@ -37,7 +52,13 @@ export default function CostForm({ slug, month, stores, heads }: { slug: string;
     if (!existing) setExtra((e) => [...e, name]);
     setPicked((p) => (p.includes(name) ? p : [...p, name]));
     setNewHead('');
-    if (!existing) start(async () => { const r = await addHead(slug, name); setMsg({ ok: r.ok, text: r.message }); });
+    if (!existing) {
+      start(async () => {
+        const r = await addHead(slug, name);
+        setMsg({ ok: r.ok, text: r.message });
+        if (r.ok) refreshCosts();
+      });
+    }
   };
 
   return (

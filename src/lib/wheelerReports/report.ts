@@ -228,20 +228,28 @@ export function buildReport(input: ReportInput) {
 
   // ----- Other costs -----------------------------------------------------------
   const otherRows = input.other
-    .map((c) => ({ ...c, part: overlapDays(c.month, monthEnd(c.month), from, to) / daysIncl(c.month, monthEnd(c.month)) }))
+    .map((c) => {
+      const month = String(c.month).slice(0, 10);
+      return {
+        ...c,
+        month,
+        part: overlapDays(month, monthEnd(month), from, to) / daysIncl(month, monthEnd(month)),
+      };
+    })
     .filter((c) => c.part > 0);
-  const otherStoreNames = [...new Set(otherRows.map((c) => (c.store_id ? nameOf(c.store_id) : ALL + ' (shared)')))]
-    .sort((a, b) => storeLabels.indexOf(a) - storeLabels.indexOf(b));
-  const otherByStore = [
-    ...otherStoreNames.map((s) => {
-      const cs = otherRows.filter((c) => (c.store_id ? nameOf(c.store_id) : ALL + ' (shared)') === s);
-      return { store: s, entries: cs.length, amount: sum(cs, (c) => c.amount * c.part) };
-    }),
-    { store: ALL, entries: otherRows.length, amount: sum(otherRows, (c) => c.amount * c.part) },
-  ];
   const otherTotal = sum(otherRows, (c) => c.amount * c.part);
+  // Empty arrays (not a zero total row) so the report UI can show the empty message.
+  const otherByStore = !otherRows.length ? [] : [
+    ...[...new Set(otherRows.map((c) => (c.store_id ? nameOf(c.store_id) : ALL + ' (shared)')))]
+      .sort((a, b) => storeLabels.indexOf(a) - storeLabels.indexOf(b))
+      .map((s) => {
+        const cs = otherRows.filter((c) => (c.store_id ? nameOf(c.store_id) : ALL + ' (shared)') === s);
+        return { store: s, entries: cs.length, amount: sum(cs, (c) => c.amount * c.part) };
+      }),
+    { store: ALL, entries: otherRows.length, amount: otherTotal },
+  ];
   const heads = [...new Set(otherRows.map((c) => c.head))];
-  const otherByHead = [
+  const otherByHead = !otherRows.length ? [] : [
     ...heads.map((h) => {
       const cs = otherRows.filter((c) => c.head === h);
       const amount = sum(cs, (c) => c.amount * c.part);

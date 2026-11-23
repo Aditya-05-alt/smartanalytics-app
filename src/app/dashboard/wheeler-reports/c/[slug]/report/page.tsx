@@ -1,22 +1,31 @@
 import { Suspense } from 'react';
 import ReportDateControls from '@/components/dashboard/wheeler-reports/ReportDateControls';
 import { requireClient } from '@/lib/wheelerReports/auth';
+import { loadStores } from '@/lib/wheelerReports/data';
+import { parseLocationParam } from '@/lib/wheelerReports/filterByLocation';
 import { addDays, isISODate, monthEnd, monthName, monthStart, rangeLabel, todayInZone } from '@/lib/wheelerReports/dates';
+import { userClient } from '@/lib/wheelerReports/supabase/server';
 import ReportBody, { ReportBodyFallback } from './ReportBody';
 
-type SP = Promise<{ from?: string; to?: string }>;
+type SP = Promise<{ from?: string; to?: string; location?: string }>;
 
 export default async function ReportPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: SP }) {
   const { slug } = await params;
   const sp = await searchParams;
   const { client } = await requireClient(slug);
 
-  // Shell uses calendar today — no DB wait — so the screen paints immediately.
+  const sb = await userClient();
+  const stores = await loadStores(sb, client.id);
+  const locations = stores.map((s) => ({ id: s.id, name: s.name }));
+
   const latest = todayInZone(client.timezone);
-  const defaultMonth = `${latest.slice(0, 4)}-10-01`;
-  let from = isISODate(sp.from) ? sp.from : monthStart(defaultMonth);
-  let to = isISODate(sp.to) ? sp.to : monthEnd(defaultMonth);
+  const defaultMonth = monthStart(latest);
+  const defaultTo = monthEnd(defaultMonth) <= latest ? monthEnd(defaultMonth) : latest;
+  let from = isISODate(sp.from) ? sp.from : defaultMonth;
+  let to = isISODate(sp.to) ? sp.to : defaultTo;
   if (from > to) [from, to] = [to, from];
+
+  const locationsSelected = parseLocationParam(sp.location, locations.map((l) => l.name));
 
   const months: { label: string; from: string; to: string }[] = [];
   let m = monthStart(latest);
@@ -44,6 +53,13 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     { label: 'Last 7 days', from: addDays(mTo, -6) < mFrom ? mFrom : addDays(mTo, -6), to: mTo },
   ];
 
+  const locationBadge =
+    locationsSelected.length === 0
+      ? 'All locations'
+      : locationsSelected.length === 1
+        ? locationsSelected[0]
+        : `${locationsSelected.length} locations`;
+
   return (
     <main className="wrap">
       <header className="head">
@@ -51,13 +67,25 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
           <h1>{client.name} | Monthly Marketing Report</h1>
           <p className="sub">Google Ads, Meta Ads and website leads · Prepared by Wheeler</p>
         </div>
-        <span className="badge">{rangeLabel(from, to)}</span>
+        <div className="wr-head-badges">
+          <span className="badge">{rangeLabel(from, to)}</span>
+          <span className="badge">{locationBadge}</span>
+        </div>
       </header>
 
-      <ReportDateControls slug={slug} from={from} to={to} months={months} quick={quick} />
+      <ReportDateControls
+        slug={slug}
+        from={from}
+        to={to}
+        locationsSelected={locationsSelected}
+        locations={locations}
+        months={months}
+        quick={quick}
+        maxDate={latest}
+      />
 
-      <Suspense key={`${from}_${to}`} fallback={<ReportBodyFallback />}>
-        <ReportBody clientId={client.id} from={from} to={to} />
+      <Suspense key={`${from}_${to}_${locationsSelected.join('|') || 'all'}`} fallback={<ReportBodyFallback />}>
+        <ReportBody clientId={client.id} slug={slug} from={from} to={to} locations={locationsSelected} />
       </Suspense>
     </main>
   );

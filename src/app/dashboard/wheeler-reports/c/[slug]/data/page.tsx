@@ -72,7 +72,7 @@ export default async function DataPage({ params, searchParams }: { params: Promi
                 <label className="field"><span>Keep from (optional)</span><input type="date" name="from" /></label>
                 <label className="field"><span>Keep to (optional)</span><input type="date" name="to" /></label>
               </ActionForm>
-              <p className="note">Leads are matched by Lead ID, so uploading an overlapping export again updates leads instead of adding duplicates. Names, emails and phones are not stored.</p>
+              <p className="note">Leads are matched by Lead ID, so uploading an overlapping export again updates leads instead of adding duplicates. Contact name is stored for the report leads list; emails and phones are not.</p>
             </div>
           </Card>
 

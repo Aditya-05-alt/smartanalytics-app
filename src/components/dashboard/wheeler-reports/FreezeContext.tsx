@@ -21,13 +21,15 @@ type NavApi = {
   navigate: (href: string) => void;
   /** Full client switch with freeze loader. */
   navigateDealer: (href: string) => void;
+  /** Drop cached tab UI so the next paint / refresh shows fresh server data. */
+  invalidate: (tabs?: Tab[]) => void;
 };
 
-const Ctx = createContext<NavApi | null>(null);
+export const FreezeNavContext = createContext<NavApi | null>(null);
 const DEALER_SWITCH_KEY = 'wr-dealer-switching';
 
 export function useFreezeNav() {
-  const ctx = useContext(Ctx);
+  const ctx = useContext(FreezeNavContext);
   if (!ctx) throw new Error('useFreezeNav must be used inside FreezeProvider');
   return ctx;
 }
@@ -129,9 +131,18 @@ export function FreezeProvider({
     [router],
   );
 
+  const invalidate = useCallback((tabs?: Tab[]) => {
+    if (!tabs?.length) {
+      cacheRef.current = {};
+    } else {
+      for (const t of tabs) delete cacheRef.current[t];
+    }
+    bump((n) => n + 1);
+  }, []);
+
   const value = useMemo(
-    () => ({ tab, navigate, navigateDealer }),
-    [tab, navigate, navigateDealer],
+    () => ({ tab, navigate, navigateDealer, invalidate }),
+    [tab, navigate, navigateDealer, invalidate],
   );
   const cached = cacheRef.current;
   const keys = Object.keys(cached) as Tab[];
@@ -139,7 +150,7 @@ export function FreezeProvider({
   const waiting = Boolean(show && !cached[show]);
 
   return (
-    <Ctx.Provider value={value}>
+    <FreezeNavContext.Provider value={value}>
       {header}
       <div className="wr-body">
         <FreezeScreen active={dealerLoading || waiting} />
@@ -155,6 +166,6 @@ export function FreezeProvider({
         ))}
         {show && !cached[show] && pathTab === show && !isRouteLoading(children) ? children : null}
       </div>
-    </Ctx.Provider>
+    </FreezeNavContext.Provider>
   );
 }

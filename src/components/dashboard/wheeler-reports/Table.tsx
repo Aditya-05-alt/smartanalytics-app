@@ -1,7 +1,13 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 // A plain report table: one body row per record, the last record as the total row.
-type Col<R> = { key: string; label: string; fmt?: (v: R[keyof R], row: R) => string; bold?: boolean; left?: boolean };
+type Col<R> = {
+  key: string;
+  label: string;
+  fmt?: (v: R[keyof R], row: R) => ReactNode;
+  bold?: boolean;
+  left?: boolean;
+};
 
 export default function Table<R extends Record<string, unknown>>({
   cols, rows, total, sharedLabel, empty = 'No data for these dates.', bodyScrollRows,
@@ -17,7 +23,8 @@ export default function Table<R extends Record<string, unknown>>({
   if (!rows.length && !total) return <p className="empty">{empty}</p>;
   const cell = (r: R, c: Col<R>) => {
     const v = r[c.key as keyof R];
-    return c.fmt ? c.fmt(v, r) : v == null ? '–' : String(v);
+    if (c.fmt) return c.fmt(v, r);
+    return v == null ? '–' : String(v);
   };
   const scroll = bodyScrollRows != null && bodyScrollRows > 0 && rows.length > bodyScrollRows;
   return (

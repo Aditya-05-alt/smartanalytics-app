@@ -83,6 +83,7 @@ create table if not exists public.wheeler_reports_leads (
   campaign      text not null default '',
   lead_type     text not null default '',
   form          text not null default '',
+  contact_name  text not null default '',
   person_hash   text,
   imported_at   timestamptz not null default now(),
   unique (client_id, external_id)

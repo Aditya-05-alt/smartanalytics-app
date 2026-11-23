@@ -1,33 +1,85 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import CalendarRangePicker, {
+  rangePickerValueFromISO,
+  resolveRangePickerValue,
+} from '@/components/dashboard/CalendarRangePicker';
 import { useFreezeNav } from './FreezeContext';
+import LocationMultiSelect from './LocationMultiSelect';
+import { serializeLocations } from '@/lib/wheelerReports/filterByLocation';
 
 type Range = { label: string; from: string; to: string };
+type Location = { id: string; name: string };
 
 type Props = {
   slug: string;
   from: string;
   to: string;
+  /** Selected store names; empty = all locations. */
+  locationsSelected: string[];
+  locations: Location[];
   months: Range[];
   quick: Range[];
+  /** Latest selectable day (client timezone today). */
+  maxDate?: string;
 };
 
-export default function ReportDateControls({ slug, from, to, months, quick }: Props) {
+export default function ReportDateControls({
+  slug, from, to, locationsSelected, locations, months, quick, maxDate,
+}: Props) {
+  const router = useRouter();
   const { navigate } = useFreezeNav();
-  // Optimistic selection so chips update on click, not after the 4s data wait.
-  const [sel, setSel] = useState({ from, to });
+  const [pending, startTransition] = useTransition();
+  const [sel, setSel] = useState({ from, to, locations: locationsSelected });
   useEffect(() => {
-    setSel({ from, to });
-  }, [from, to]);
+    setSel({ from, to, locations: locationsSelected });
+  }, [from, to, locationsSelected]);
 
-  const href = (f: string, t: string) =>
-    `/dashboard/wheeler-reports/c/${slug}/report?from=${encodeURIComponent(f)}&to=${encodeURIComponent(t)}`;
+  const pickerValue = useMemo(
+    () => rangePickerValueFromISO(sel.from, sel.to) || { start: sel.from, end: sel.to, preset: 'custom' },
+    [sel.from, sel.to],
+  );
 
-  const go = (f: string, t: string) => {
-    if (f === sel.from && t === sel.to) return;
-    setSel({ from: f, to: t });
-    navigate(href(f, t));
+  const reportHref = (f: string, t: string, locs: string[]) => {
+    const q = new URLSearchParams({ from: f, to: t });
+    const loc = serializeLocations(locs);
+    if (loc) q.set('location', loc);
+    return `/dashboard/wheeler-reports/c/${slug}/report?${q}`;
+  };
+
+  useEffect(() => {
+    const focus = [
+      ...months.map((x) => reportHref(x.from, x.to, sel.locations)),
+      ...quick.map((x) => reportHref(x.from, x.to, sel.locations)),
+      reportHref(sel.from, sel.to, []),
+    ];
+    for (const h of focus) router.prefetch(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, sel.from, sel.to, sel.locations, months, quick, router]);
+
+  const sameLocs = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    const sb = new Set(b);
+    return a.every((x) => sb.has(x));
+  };
+
+  const go = (f: string, t: string, locs = sel.locations) => {
+    if (f === sel.from && t === sel.to && sameLocs(locs, sel.locations)) return;
+    setSel({ from: f, to: t, locations: locs });
+    startTransition(() => {
+      navigate(reportHref(f, t, locs));
+    });
+  };
+
+  const onRangeChange = (next: string | { start: string; end: string; preset?: string }) => {
+    const resolved = resolveRangePickerValue(next);
+    if (!resolved?.start || !resolved?.end) return;
+    let f = resolved.start;
+    let t = resolved.end;
+    if (f > t) [f, t] = [t, f];
+    go(f, t, sel.locations);
   };
 
   const monthActive = (x: Range) =>
@@ -35,7 +87,7 @@ export default function ReportDateControls({ slug, from, to, months, quick }: Pr
     (sel.from.slice(0, 7) === x.from.slice(0, 7) && sel.to.slice(0, 7) === x.from.slice(0, 7));
 
   return (
-    <section className="controls" aria-label="Dates">
+    <section className={'controls' + (pending ? ' is-pending' : '')} aria-label="Report filters" aria-busy={pending || undefined}>
       <div className="chips" role="group" aria-label="Month">
         {months.map((x) => (
           <button
@@ -49,29 +101,24 @@ export default function ReportDateControls({ slug, from, to, months, quick }: Pr
           </button>
         ))}
       </div>
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const fd = new FormData(e.currentTarget);
-          const f = String(fd.get('from') || '');
-          const t = String(fd.get('to') || '');
-          if (!f || !t) return;
-          go(f, t);
-        }}
-      >
-        <label className="field">
-          <span>From</span>
-          <input type="date" name="from" defaultValue={sel.from} key={`from-${sel.from}`} />
-        </label>
-        <label className="field">
-          <span>To</span>
-          <input type="date" name="to" defaultValue={sel.to} key={`to-${sel.to}`} />
-        </label>
-        <button className="btn ghost" type="submit">
-          Show
-        </button>
-      </form>
+      <div className="row wr-filter-row">
+        <div className="field wr-date-field">
+          <span>Date range</span>
+          <CalendarRangePicker
+            value={pickerValue}
+            onChange={onRangeChange}
+            maxDate={maxDate || undefined}
+          />
+        </div>
+        <div className="field wr-location-field">
+          <span>Location</span>
+          <LocationMultiSelect
+            locations={locations}
+            value={Array.isArray(sel.locations) ? sel.locations : []}
+            onChange={(next) => go(sel.from, sel.to, next)}
+          />
+        </div>
+      </div>
       <div className="chips" role="group" aria-label="Quick ranges">
         {quick.map((x) => (
           <button

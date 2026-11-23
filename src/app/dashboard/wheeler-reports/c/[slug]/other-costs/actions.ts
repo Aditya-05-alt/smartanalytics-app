@@ -23,6 +23,8 @@ export async function addCosts(slug: string, input: z.infer<typeof AddSchema>): 
   const { error } = await sb.from('wheeler_reports_other_costs').insert(rows);
   if (error) return { ok: false, message: "Couldn't save: " + error.message };
   revalidatePath(`/dashboard/wheeler-reports/c/${slug}`, 'layout');
+  revalidatePath(`/dashboard/wheeler-reports/c/${slug}/other-costs`);
+  revalidatePath(`/dashboard/wheeler-reports/c/${slug}/report`);
   return { ok: true, message: `Saved ${rows.length} cost${rows.length > 1 ? 's' : ''}.` };
 }
 
@@ -32,6 +34,8 @@ export async function deleteCost(slug: string, id: string): Promise<{ ok: boolea
   const { error, count } = await sb.from('wheeler_reports_other_costs').delete({ count: 'exact' }).eq('id', id).eq('client_id', client.id);
   if (error || !count) return { ok: false, message: "Couldn't delete that cost." };
   revalidatePath(`/dashboard/wheeler-reports/c/${slug}`, 'layout');
+  revalidatePath(`/dashboard/wheeler-reports/c/${slug}/other-costs`);
+  revalidatePath(`/dashboard/wheeler-reports/c/${slug}/report`);
   return { ok: true, message: 'Deleted.' };
 }
 
@@ -42,6 +46,7 @@ export async function addHead(slug: string, name: string): Promise<{ ok: boolean
   const sb = await userClient();
   const { error } = await sb.from('wheeler_reports_cost_heads').insert({ client_id: client.id, name: clean });
   if (error && !/duplicate/i.test(error.message)) return { ok: false, message: "Couldn't add it: " + error.message };
+  revalidatePath(`/dashboard/wheeler-reports/c/${slug}`, 'layout');
   revalidatePath(`/dashboard/wheeler-reports/c/${slug}/other-costs`);
   return { ok: true, message: `Added ${clean} to the list.` };
 }
