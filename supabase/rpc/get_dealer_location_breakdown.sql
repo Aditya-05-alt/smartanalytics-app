@@ -1,6 +1,6 @@
 -- Thin wrapper over get_location_breakdown.
 -- If dealer has exactly ONE row in smart_dealer_locations, rename blank/Other/Unknown → that name.
--- Forwards p_channels so channel filter matches other inventory breakdowns.
+-- Forwards p_channels / p_sources so traffic filters match other inventory breakdowns.
 -- Always keeps the same view total as get_location_breakdown (no dropped buckets).
 
 DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
@@ -11,6 +11,9 @@ DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
 );
 DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
   text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
+);
+DROP FUNCTION IF EXISTS public.get_dealer_location_breakdown(
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text, text[]
 );
 
 CREATE OR REPLACE FUNCTION public.get_dealer_location_breakdown(
@@ -25,7 +28,8 @@ CREATE OR REPLACE FUNCTION public.get_dealer_location_breakdown(
   p_years integer[] DEFAULT NULL,
   p_condition text DEFAULT 'BOTH',
   p_channels text[] DEFAULT NULL,
-  p_ga4_property_id text DEFAULT NULL
+  p_ga4_property_id text DEFAULT NULL,
+  p_sources text[] DEFAULT NULL
 )
 RETURNS TABLE (
   location_bucket text,
@@ -56,7 +60,7 @@ BEGIN
     SELECT * FROM public.get_location_breakdown(
       p_client_id, p_from, p_to, p_limit,
       p_types, p_makes, p_models, p_locations, p_years, p_condition,
-      p_channels, p_ga4_property_id
+      p_channels, p_ga4_property_id, p_sources
     );
     RETURN;
   END IF;
@@ -74,7 +78,7 @@ BEGIN
     FROM public.get_location_breakdown(
       p_client_id, p_from, p_to, p_limit,
       p_types, p_makes, p_models, p_locations, p_years, p_condition,
-      p_channels, p_ga4_property_id
+      p_channels, p_ga4_property_id, p_sources
     ) lb
   ),
   agg AS (
@@ -106,9 +110,9 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_dealer_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text, text[]
 ) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_dealer_location_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text, text[]
 ) TO anon, authenticated, service_role;

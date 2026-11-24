@@ -3,6 +3,11 @@ import {
   CHANNEL_GROUP_DEFS,
   normalizeChannelKey,
 } from '@/lib/ga4/channelGroups';
+import {
+  expandSourcesForRpc,
+  normalizeSourceKey,
+  sourceDisplayLabel,
+} from '@/lib/ga4/sourceGroups';
 
 /** Paid Search / Cross-network / Display stay separate filter options (not bundled). */
 export const VDP_PAID_SEARCH_FILTER_CHANNELS = [
@@ -148,7 +153,28 @@ export const DEFAULT_VDP_FILTERS = {
   location: [],
   /** Empty array = all channels; otherwise selected filter labels (may be bundles). */
   channel: [],
+  /** Empty array = all sources; otherwise selected normalized GA4 source keys. */
+  source: [],
 };
+
+/** Normalize source filter to string[] of canonical source keys (empty = All). */
+export function selectedSources(value) {
+  if (value == null || value === 'All' || value === '') return [];
+  if (Array.isArray(value)) {
+    return [
+      ...new Set(
+        value
+          .map((v) => normalizeSourceKey(v))
+          .filter((v) => v && v !== 'All')
+      ),
+    ];
+  }
+  const one = normalizeSourceKey(value);
+  if (!one || one === 'All') return [];
+  return [one];
+}
+
+export { sourceDisplayLabel, normalizeSourceKey };
 
 /** Normalize a multi-select filter to string[] (empty = All). Accepts legacy 'All' / single string. */
 export function selectedFilterValues(value) {
@@ -223,6 +249,7 @@ export function normalizeVdpFilters(input) {
     type: selectedFilterValues(merged.type),
     location: selectedLocations(merged.location),
     channel: migrateLegacyChannelFilterLabels(selectedChannels(merged.channel)),
+    source: selectedSources(merged.source),
   };
 }
 
@@ -244,7 +271,7 @@ export function conditionSelectionToRpc(condition) {
   return 'BOTH';
 }
 
-/** Any non-default VDP inventory / channel filter selected. */
+/** Any non-default VDP inventory / channel / source filter selected. */
 export function vdpFiltersActive(vdpFilters, tab) {
   if (tab !== 'vdp') return false;
   const f = normalizeVdpFilters(vdpFilters);
@@ -255,7 +282,8 @@ export function vdpFiltersActive(vdpFilters, tab) {
     hasMultiSelection(f.model) ||
     hasMultiSelection(f.type) ||
     f.location.length > 0 ||
-    f.channel.length > 0
+    f.channel.length > 0 ||
+    f.source.length > 0
   );
 }
 
@@ -322,6 +350,9 @@ export function vdpFiltersToRpcParams(vdpFilters, tab) {
   const channels = expandChannelsForRpc(f.channel);
   if (channels?.length) params.p_channels = channels;
 
+  const sources = expandSourcesForRpc(f.source);
+  if (sources?.length) params.p_sources = sources;
+
   return params;
 }
 
@@ -365,6 +396,14 @@ export function vdpFilterCacheSuffix(vdpFilters, tab) {
         .join('~')}`
     );
   }
+  if (f.source.length > 0) {
+    parts.push(
+      `src${[...f.source]
+        .sort()
+        .map((s) => slugPart(s))
+        .join('~')}`
+    );
+  }
   return parts.length ? `|ms1-${parts.join('-')}` : '';
 }
 
@@ -388,6 +427,9 @@ export function appendInvParamsToSearchParams(searchParams, inv) {
   }
   if (inv.p_channels?.length) {
     searchParams.set('channels', inv.p_channels.join('|'));
+  }
+  if (inv.p_sources?.length) {
+    searchParams.set('sources', inv.p_sources.join('|'));
   }
 }
 
@@ -441,6 +483,13 @@ export function parseVdpFiltersFromSearchParams(searchParams) {
     filters.channel = collapseChannelsToFilterLabels(expanded);
   }
 
+  const sourcesRaw = searchParams.get('sources')?.trim();
+  if (sourcesRaw) {
+    filters.source = sourcesRaw.includes('|')
+      ? sourcesRaw.split('|').map((s) => s.trim()).filter(Boolean)
+      : [sourcesRaw];
+  }
+
   return normalizeVdpFilters(filters);
 }
 
@@ -452,6 +501,7 @@ export function parseInvRpcFromSearchParams(searchParams) {
   const locations = searchParams.get('locations')?.trim();
   const condition = searchParams.get('condition')?.trim()?.toUpperCase();
   const channels = searchParams.get('channels')?.trim();
+  const sources = searchParams.get('sources')?.trim();
 
   // Location names contain commas ("Jackson, TN"). Prefer | delimiter;
   // if no | present, treat the whole string as one location.
@@ -463,7 +513,7 @@ export function parseInvRpcFromSearchParams(searchParams) {
     return [raw.trim()];
   };
 
-  const parseChannels = (raw) => {
+  const parsePipeList = (raw) => {
     if (!raw) return undefined;
     return raw
       .split('|')
@@ -480,6 +530,7 @@ export function parseInvRpcFromSearchParams(searchParams) {
     ...(types ? { p_types: types.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
     ...(parseLocations(locations) ? { p_locations: parseLocations(locations) } : {}),
     ...(condition && condition !== 'BOTH' ? { p_condition: condition } : { p_condition: 'BOTH' }),
-    ...(parseChannels(channels) ? { p_channels: parseChannels(channels) } : {}),
+    ...(parsePipeList(channels) ? { p_channels: parsePipeList(channels) } : {}),
+    ...(parsePipeList(sources) ? { p_sources: parsePipeList(sources) } : {}),
   };
 }

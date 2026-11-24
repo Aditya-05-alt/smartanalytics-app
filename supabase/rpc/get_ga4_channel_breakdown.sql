@@ -11,6 +11,9 @@ DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
 DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
   text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
 );
+DROP FUNCTION IF EXISTS public.get_ga4_channel_breakdown(
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text, text[]
+);
 
 CREATE OR REPLACE FUNCTION public.get_ga4_channel_breakdown(
   p_client_id   text,
@@ -25,7 +28,8 @@ CREATE OR REPLACE FUNCTION public.get_ga4_channel_breakdown(
   p_models      text[]    DEFAULT NULL,
   p_years       integer[] DEFAULT NULL,
   p_locations   text[]    DEFAULT NULL,
-  p_ga4_property_id text DEFAULT NULL
+  p_ga4_property_id text DEFAULT NULL,
+  p_sources     text[]    DEFAULT NULL
 )
 RETURNS TABLE (
   channel_bucket text,
@@ -59,7 +63,8 @@ BEGIN
   v_scale_to_final :=
     v_page_type = 'VDP'
     AND v_filter_active
-    AND (p_channels IS NULL OR COALESCE(array_length(p_channels, 1), 0) = 0);
+    AND (p_channels IS NULL OR COALESCE(array_length(p_channels, 1), 0) = 0)
+    AND (p_sources IS NULL OR COALESCE(array_length(p_sources, 1), 0) = 0);
 
   -- Fast path: no inventory filters — aggregate smart_ga4_page_data only.
   IF NOT v_filter_active THEN
@@ -81,6 +86,8 @@ BEGIN
         )
         AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
              OR public.vdp_channel_matches(p.channel, p_channels))
+        AND (p_sources IS NULL OR array_length(p_sources, 1) = 0
+             OR public.vdp_source_matches(p.source, p_sources))
     ),
     mapped AS (
       SELECT
@@ -198,6 +205,8 @@ BEGIN
       )
       AND (p_channels IS NULL OR array_length(p_channels, 1) = 0
            OR public.vdp_channel_matches(p.channel, p_channels))
+      AND (p_sources IS NULL OR array_length(p_sources, 1) = 0
+           OR public.vdp_source_matches(p.source, p_sources))
   ),
   combined AS (
     -- Non-VDP pages (ALL/OTHER tabs): keep unfiltered GA4 rows.
@@ -316,14 +325,14 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text, text[]
 ) IS
   'Channel breakdown. Unfiltered = GA4. Filtered VDP = GA4 channel mix scaled to Final KPI total.';
 
 REVOKE ALL ON FUNCTION public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text, text[]
 ) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_ga4_channel_breakdown(
-  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text
+  text, date, date, text, text[], text[], text[], text, text[], text[], integer[], text[], text, text[]
 ) TO anon, authenticated, service_role;

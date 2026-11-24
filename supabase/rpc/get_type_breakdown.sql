@@ -6,6 +6,7 @@ DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date, int);
 DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date, int, text[], text[], text[], text[], integer[], text);
 DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date, int, text[], text[], text[], text[], integer[], text, text[]);
 DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text);
+DROP FUNCTION IF EXISTS public.get_type_breakdown(text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text, text[]);
 
 CREATE OR REPLACE FUNCTION public.get_type_breakdown(
   p_client_id text,
@@ -19,7 +20,8 @@ CREATE OR REPLACE FUNCTION public.get_type_breakdown(
   p_years integer[] DEFAULT NULL,
   p_condition text DEFAULT 'BOTH',
   p_channels text[] DEFAULT NULL,
-  p_ga4_property_id text DEFAULT NULL
+  p_ga4_property_id text DEFAULT NULL,
+  p_sources text[] DEFAULT NULL
 )
 RETURNS TABLE (
   type_bucket text,
@@ -47,12 +49,13 @@ AS $$
      AND f.report_date = p.report_date
      AND f.page_path = p.page_path
      AND public.ga4_property_scope_matches(f.ga4_property_id, p.ga4_property_id)
-    WHERE COALESCE(array_length(p_channels, 1), 0) > 0
+    WHERE (COALESCE(array_length(p_channels, 1), 0) > 0 OR COALESCE(array_length(p_sources, 1), 0) > 0)
       AND p.client_id::text = trim(p_client_id)
       AND public.ga4_property_scope_matches(p.ga4_property_id, p_ga4_property_id)
       AND p.report_date BETWEEN p_from AND p_to
       AND p.vdp_conditions IS TRUE
-      AND public.vdp_channel_matches(p.channel, p_channels)
+      AND (COALESCE(array_length(p_channels, 1), 0) = 0 OR public.vdp_channel_matches(p.channel, p_channels))
+      AND (COALESCE(array_length(p_sources, 1), 0) = 0 OR public.vdp_source_matches(p.source, p_sources))
       AND (
         COALESCE(array_length(p_types, 1), 0) = 0
         OR EXISTS (
@@ -90,6 +93,7 @@ AS $$
       COALESCE(s.views, 0)::bigint AS views
     FROM public.smart_final_data s
     WHERE COALESCE(array_length(p_channels, 1), 0) = 0
+      AND COALESCE(array_length(p_sources, 1), 0) = 0
       AND s.client_id::text = trim(p_client_id)
       AND public.ga4_property_scope_matches(s.ga4_property_id, p_ga4_property_id)
       AND s.report_date BETWEEN p_from AND p_to
@@ -153,7 +157,7 @@ AS $$
   kpi AS (
     SELECT public.get_vdp_views_total(
       trim(p_client_id), p_from, p_to,
-      p_types, p_makes, p_models, p_locations, p_years, p_condition, p_channels
+      p_types, p_makes, p_models, p_locations, p_years, p_condition, p_channels, p_sources
     ) AS target
   ),
   arrays AS (
@@ -175,8 +179,8 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION public.get_type_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text, text[]
 ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_type_breakdown(
-  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text
+  text, date, date, int, text[], text[], text[], text[], integer[], text, text[], text, text[]
 ) TO anon, authenticated, service_role;

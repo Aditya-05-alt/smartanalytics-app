@@ -10,6 +10,7 @@ function invFiltersActive(invParams = {}) {
       invParams.p_locations?.length ||
       invParams.p_years?.length ||
       invParams.p_channels?.length ||
+      invParams.p_sources?.length ||
       (invParams.p_condition && invParams.p_condition !== 'BOTH')
   );
 }
@@ -85,6 +86,7 @@ export function buildVdpKpiRpcParams(clientId, from, to, invParams = {}, ga4Prop
     p_years: invParams.p_years ?? null,
     p_condition: invParams.p_condition ?? 'BOTH',
     p_channels: invParams.p_channels ?? null,
+    p_sources: invParams.p_sources ?? null,
     ...(ga4PropertyId ? { p_ga4_property_id: String(ga4PropertyId).trim() } : {}),
   };
 }

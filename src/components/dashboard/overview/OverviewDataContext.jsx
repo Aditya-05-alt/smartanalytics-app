@@ -11,7 +11,11 @@ import {
 } from 'react';
 import { fetchOverviewBundle } from '@/lib/api/overviewFetch';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
-import { fetchVdpDailyFiltered, fetchVdpFilterOptions } from '@/lib/api/dashboardApi';
+import {
+  fetchVdpDailyFiltered,
+  fetchVdpFilterOptions,
+  fetchVdpSourceOptions,
+} from '@/lib/api/dashboardApi';
 import { beginPriorityRequest } from '@/lib/api/requestPriority';
 import {
   DEFAULT_VDP_FILTERS,
@@ -67,6 +71,7 @@ const EMPTY_VDP_FILTER_OPTIONS = {
   locations: ['All'],
   types: ['All'],
   channels: ['All'],
+  sources: ['All'],
 };
 
 function asSelectedList(value) {
@@ -105,6 +110,16 @@ function pruneInvalidFilterSelections(filters, options) {
   // Channel is multi-select (bundle labels + solos).
   const chList = options.channels || ['All'];
   next.channel = asSelectedList(next.channel).filter((c) => chList.includes(c));
+
+  // Source is multi-select (normalized GA4 source keys). Skip prune until options loaded.
+  const srcList = (options.sources || [])
+    .map((v) => String(v).toLowerCase())
+    .filter((v) => v && v !== 'all');
+  if (srcList.length > 0) {
+    next.source = asSelectedList(next.source)
+      .map((s) => String(s).toLowerCase())
+      .filter((s) => srcList.includes(s));
+  }
   return next;
 }
 
@@ -553,20 +568,30 @@ export function OverviewProvider({ children }) {
     }
 
     let cancelled = false;
-    fetchVdpFilterOptions({
-      clientId: clientKey,
-      ga4PropertyId,
-      from,
-      to,
-      vdpFilters,
-      tab: 'vdp',
-      onCancelCheck: () => cancelled,
-    })
-      .then((options) => {
+    Promise.all([
+      fetchVdpFilterOptions({
+        clientId: clientKey,
+        ga4PropertyId,
+        from,
+        to,
+        vdpFilters,
+        tab: 'vdp',
+        onCancelCheck: () => cancelled,
+      }),
+      fetchVdpSourceOptions({
+        clientId: clientKey,
+        ga4PropertyId,
+        from,
+        to,
+        onCancelCheck: () => cancelled,
+      }).catch(() => ['All']),
+    ])
+      .then(([options, sources]) => {
         if (cancelled || !options) return;
         const withChannels = {
           ...options,
           channels: VDP_CHANNEL_FILTER_OPTIONS,
+          sources: Array.isArray(sources) && sources.length ? sources : ['All'],
         };
         setVdpFilterOptions(withChannels);
         setVdpFilters((current) => {

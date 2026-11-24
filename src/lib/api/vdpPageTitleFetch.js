@@ -95,7 +95,9 @@ export async function fetchVdpPageTitleChunked({
   if (!supabase) throw new Error('Supabase is not configured.');
   if (onCancelCheck?.()) return null;
 
-  const extraParams = withPropertyRpcParams(vdpRpcExtraParams(vdpFilters, tab), ga4PropertyId);
+  // Page-title RPCs do not accept p_sources yet — omit to avoid PostgREST signature miss.
+  const { p_sources: _omitSources, ...invParams } = vdpRpcExtraParams(vdpFilters, tab);
+  const extraParams = withPropertyRpcParams(invParams, ga4PropertyId);
 
   try {
     const raw = await rpcByDateChunksProgressive(supabase, CHUNK_RPC, {

@@ -28,6 +28,7 @@ export async function GET(request) {
       inv.p_types?.length ||
       inv.p_locations?.length ||
       inv.p_channels?.length ||
+      inv.p_sources?.length ||
       (inv.p_condition && inv.p_condition !== 'BOTH')
   );
 

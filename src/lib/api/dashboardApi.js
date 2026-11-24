@@ -4,6 +4,7 @@ import { sanitizeVdpLocationOptions } from '@/lib/vdp/locationFilterOptions';
 import { fetchChannelBreakdownBundle } from '@/lib/api/channelBreakdownFetch';
 import { fetchTopCampaignsBundle } from '@/lib/api/topCampaignsFetch';
 import { fetchInventoryBreakdownChunked } from '@/lib/api/inventoryBreakdownFetch';
+import { fetchSourceBreakdownChunked } from '@/lib/api/sourceBreakdownFetch';
 import { rpcByDateChunks } from '@/lib/api/chunkedRpc';
 import { fetchVdpKpiFiltered } from '@/lib/api/vdpKpiFetch';
 import { fetchVdpPageTitleChunked } from '@/lib/api/vdpPageTitleFetch';
@@ -457,6 +458,69 @@ export async function fetchTypeBreakdown({
     onProgress,
     rpcName: 'get_type_breakdown',
     bucketKey: 'type_bucket',
+  });
+}
+
+/** Distinct GA4 sources for the Overview Source filter (normalized keys). */
+export async function fetchVdpSourceOptions({
+  clientId,
+  from,
+  to,
+  ga4PropertyId,
+  onCancelCheck,
+}) {
+  if (!clientId || !from || !to) return ['All'];
+  if (onCancelCheck?.()) return null;
+
+  const supabase = createClient();
+  if (!supabase) return ['All'];
+
+  const { data, error } = await supabase.rpc(
+    'get_vdp_source_options',
+    withPropertyRpcParams(
+      {
+        p_client_id: String(clientId).trim(),
+        p_from: toDateOnly(from),
+        p_to: toDateOnly(to),
+      },
+      ga4PropertyId
+    )
+  );
+
+  if (onCancelCheck?.()) return null;
+  if (error) {
+    if (isMissingRpcError(error)) return ['All'];
+    throw new Error(error.message || 'Failed to load source options.');
+  }
+
+  const sources = (Array.isArray(data) ? data : [])
+    .map((row) => String(row?.source ?? '').trim().toLowerCase())
+    .filter(Boolean);
+
+  return ['All', ...sources];
+}
+
+/** Source breakdown from smart_ga4_page_data (VDP tab only). */
+export async function fetchSourceBreakdown({
+  clientId,
+  from,
+  to,
+  vdpFilters,
+  tab = 'vdp',
+  ga4PropertyId,
+  onCancelCheck,
+  onProgress,
+}) {
+  if (onCancelCheck?.()) return null;
+  return fetchSourceBreakdownChunked({
+    clientId,
+    from,
+    to,
+    vdpFilters,
+    tab,
+    ga4PropertyId,
+    onCancelCheck,
+    onProgress,
   });
 }
 

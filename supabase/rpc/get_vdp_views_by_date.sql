@@ -1,8 +1,9 @@
--- Fast VDP daily series (same channel strategy as get_vdp_views_total).
+-- Fast VDP daily series (same channel/source strategy as get_vdp_views_total).
 
 DROP FUNCTION IF EXISTS public.get_vdp_views_by_date(text, date, date);
 DROP FUNCTION IF EXISTS public.get_vdp_views_by_date(text, date, date, text[], text[], text[], text[], integer[], text);
 DROP FUNCTION IF EXISTS public.get_vdp_views_by_date(text, date, date, text[], text[], text[], text[], integer[], text, text[]);
+DROP FUNCTION IF EXISTS public.get_vdp_views_by_date(text, date, date, text[], text[], text[], text[], integer[], text, text[], text[]);
 
 CREATE OR REPLACE FUNCTION public.get_vdp_views_by_date(
   p_client_id text,
@@ -14,7 +15,8 @@ CREATE OR REPLACE FUNCTION public.get_vdp_views_by_date(
   p_locations text[] DEFAULT NULL,
   p_years integer[] DEFAULT NULL,
   p_condition text DEFAULT 'BOTH',
-  p_channels text[] DEFAULT NULL
+  p_channels text[] DEFAULT NULL,
+  p_sources text[] DEFAULT NULL
 )
 RETURNS TABLE (
   report_date date,
@@ -30,6 +32,7 @@ DECLARE
   v_client text := trim(p_client_id);
   v_condition text := UPPER(COALESCE(p_condition, 'BOTH'));
   v_inv boolean;
+  v_traffic boolean;
 BEGIN
   v_inv :=
        COALESCE(array_length(p_types, 1), 0) > 0
@@ -39,17 +42,24 @@ BEGIN
     OR COALESCE(array_length(p_years, 1), 0) > 0
     OR v_condition <> 'BOTH';
 
-  IF COALESCE(array_length(p_channels, 1), 0) > 0 THEN
+  v_traffic :=
+       COALESCE(array_length(p_channels, 1), 0) > 0
+    OR COALESCE(array_length(p_sources, 1), 0) > 0;
+
+  IF v_traffic THEN
     IF NOT v_inv THEN
       RETURN QUERY
       SELECT
         p.report_date,
         COALESCE(SUM(COALESCE(p.views, 0)), 0)::bigint AS views
       FROM public.smart_ga4_page_data p
-      WHERE p.client_id::text = v_client
+      WHERE p.client_id = v_client
         AND p.report_date BETWEEN p_from AND p_to
         AND p.vdp_conditions IS TRUE
-        AND public.vdp_channel_matches(p.channel, p_channels)
+        AND (COALESCE(array_length(p_channels, 1), 0) = 0
+             OR public.vdp_channel_matches(p.channel, p_channels))
+        AND (COALESCE(array_length(p_sources, 1), 0) = 0
+             OR public.vdp_source_matches(p.source, p_sources))
       GROUP BY p.report_date
       ORDER BY p.report_date;
     ELSE
@@ -58,10 +68,13 @@ BEGIN
         p.report_date,
         COALESCE(SUM(COALESCE(p.views, 0)), 0)::bigint AS views
       FROM public.smart_ga4_page_data p
-      WHERE p.client_id::text = v_client
+      WHERE p.client_id = v_client
         AND p.report_date BETWEEN p_from AND p_to
         AND p.vdp_conditions IS TRUE
-        AND public.vdp_channel_matches(p.channel, p_channels)
+        AND (COALESCE(array_length(p_channels, 1), 0) = 0
+             OR public.vdp_channel_matches(p.channel, p_channels))
+        AND (COALESCE(array_length(p_sources, 1), 0) = 0
+             OR public.vdp_source_matches(p.source, p_sources))
         AND EXISTS (
           SELECT 1
           FROM public.smart_final_data f
@@ -97,7 +110,7 @@ BEGIN
       p.report_date,
       COALESCE(SUM(COALESCE(p.views, 0)), 0)::bigint AS views
     FROM public.smart_ga4_page_data p
-    WHERE p.client_id::text = v_client
+    WHERE p.client_id = v_client
       AND p.report_date BETWEEN p_from AND p_to
       AND p.vdp_conditions IS TRUE
     GROUP BY p.report_date
@@ -134,8 +147,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_vdp_views_by_date(
-  text, date, date, text[], text[], text[], text[], integer[], text, text[]
+  text, date, date, text[], text[], text[], text[], integer[], text, text[], text[]
 ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_vdp_views_by_date(
-  text, date, date, text[], text[], text[], text[], integer[], text, text[]
+  text, date, date, text[], text[], text[], text[], integer[], text, text[], text[]
 ) TO anon, authenticated, service_role;

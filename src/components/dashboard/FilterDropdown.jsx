@@ -58,7 +58,10 @@ export default function FilterDropdown({
       const allOpt = options.find((o) => o.value === defaultAll);
       return allOpt?.label || 'All';
     }
-    if (selectedList.length === 1) return selectedList[0];
+    if (selectedList.length === 1) {
+      const opt = options.find((o) => o.value === selectedList[0]);
+      return opt?.label ?? selectedList[0];
+    }
     const allOpt = options.find((o) => o.value === defaultAll);
     const allLabel = allOpt?.label || '';
     const afterAll = allLabel.match(/^All\s+(.+)$/i)?.[1];

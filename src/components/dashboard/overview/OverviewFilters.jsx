@@ -7,7 +7,20 @@ import AllExportButton from './AllExportButton';
 import AllDealerExportButton from './AllDealerExportButton';
 import { useClient } from '../ClientContext';
 import { useOverview } from './OverviewDataContext';
-import { vdpFiltersActive, VDP_CHANNEL_FILTER_OPTIONS } from '@/lib/vdp/vdpFilterParams';
+import {
+  vdpFiltersActive,
+  VDP_CHANNEL_FILTER_OPTIONS,
+  sourceDisplayLabel,
+} from '@/lib/vdp/vdpFilterParams';
+
+function toSourceOpts(values) {
+  const list = values || ['All'];
+  const rest = list
+    .filter((v) => v && v !== 'All')
+    .map((v) => ({ value: v, label: sourceDisplayLabel(v) }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  return [{ value: 'All', label: 'All Sources' }, ...rest];
+}
 
 const CONDITION_OPTIONS = [
   { value: 'All', label: 'All Conditions' },
@@ -156,6 +169,13 @@ export default function OverviewFilters() {
             options={toOpts(VDP_CHANNEL_FILTER_OPTIONS, 'All Channels')}
             value={asMulti(vdpFilters.channel)}
             onChange={(v) => setVdpFilter('channel', v)}
+          />
+          <FilterDropdown
+            multi
+            clearable
+            options={toSourceOpts(vdpFilterOptions.sources || ['All'])}
+            value={asMulti(vdpFilters.source)}
+            onChange={(v) => setVdpFilter('source', v)}
           />
           {config.showLoc !== false && (
             <FilterDropdown

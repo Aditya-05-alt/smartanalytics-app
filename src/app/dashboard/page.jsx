@@ -6,6 +6,7 @@ import KpiRow from '@/components/dashboard/overview/KpiRow';
 import ChannelDonut from '@/components/dashboard/overview/ChannelDonut';
 import LocationBreakdown from '@/components/dashboard/LocationBreakdown';
 import MakeBreakdown from '@/components/dashboard/MakeBreakdown';
+import SourceBreakdown from '@/components/dashboard/SourceBreakdown';
 import TypeBreakdown from '@/components/dashboard/TypeBreakdown';
 import ModelBreakdown from '@/components/dashboard/ModelBreakdown';
 import YearBreakdown from '@/components/dashboard/YearBreakdown';
@@ -133,6 +134,13 @@ function DealerOverviewBody() {
                 </div>
               </div>
             )}
+            <div className="dashboard-full-row">
+              <SourceBreakdown
+                clientId={clientKey}
+                from={from}
+                to={to}
+              />
+            </div>
             <div className="dashboard-full-row">
               <TypeBreakdown
                 clientId={clientKey}
