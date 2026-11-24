@@ -339,8 +339,17 @@
 .sectionTitle { margin: 8px 0 4px; color: var(--fg); font-size: 12px; font-weight: 700; }
 .addClient { max-width: 560px; }
 
-/* upload: "quarterly or rolling 12 months?" prompt */
-.periodOptions { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+/* upload: "what data / period?" analysis prompt */
+.analysisSheet { max-width: 560px; max-height: min(88vh, 820px); overflow: auto; }
+.promptSection {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.periodOptions { display: flex; flex-direction: column; gap: 8px; margin: 0 0 4px; }
 .periodOption {
   display: flex;
   align-items: flex-start;

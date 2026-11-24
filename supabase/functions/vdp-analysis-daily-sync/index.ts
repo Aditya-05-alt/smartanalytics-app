@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import nodemailer from "npm:nodemailer@6.9.16";
 
 /**
  * VDP Analysis daily sync.
@@ -9,6 +10,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.3";
  * Defaults (daily cron):
  *   - settle = UTC today − 2 (GA4 / Final not final for the last two days)
  *   - refresh only the last 5 settled days (never wider unless explicitly asked)
+ *
+ * On the final chain segment (no continue), emails aditya@brandmirchi.com once per through-date.
  *
  * Body:
  *   through, date_from, date_to, fill_month, month,
@@ -26,6 +29,11 @@ const SETTLE_DAYS = 2;
 const DAILY_DAYS = 5;
 const BUDGET_MS = 130_000;
 const DEALER_RESERVE_MS = 20_000;
+
+const SMTP_USER = "devops@brandmirchi.com";
+const SMTP_HOST = "smtp.gmail.com";
+const SMTP_PORT = 587;
+const COMPLETE_RECIPIENTS = ["aditya@brandmirchi.com"];
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d));
@@ -72,6 +80,128 @@ function chunkWindows(from: string, to: string, size: number, label: string): Wi
     cursor = addDays(chunkTo, 1);
   }
   return out;
+}
+
+function dayLabel(isoDate: string) {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+async function sendCompleteEmail(opts: {
+  supabase: ReturnType<typeof createClient>;
+  through: string;
+  windows: Window[];
+  dealersTotal: number;
+  refreshed: number;
+  errors: string[];
+  ms: number;
+}): Promise<{ emailed: boolean; reason?: string }> {
+  const { supabase, through, windows, dealersTotal, refreshed, errors, ms } = opts;
+
+  const { data: claim, error: claimErr } = await supabase
+    .from("smart_vdp_analysis_complete_email_log")
+    .upsert({ through_date: through }, { onConflict: "through_date", ignoreDuplicates: true })
+    .select("through_date");
+  if (claimErr) throw claimErr;
+  if (!claim?.length) return { emailed: false, reason: "already sent" };
+
+  try {
+    const pass = (Deno.env.get("SMTP_PASS") ?? "").replace(/\s+/g, "").trim();
+    if (!pass) throw new Error("Missing SMTP_PASS Edge secret");
+    const user = Deno.env.get("SMTP_USER")?.trim() || SMTP_USER;
+
+    const windowLabel = windows.map((w) => `${w.from} → ${w.to}`).join(", ") || "—";
+    const ok = errors.length === 0;
+    const subject = ok
+      ? `VDP Analysis complete — through ${dayLabel(through)}`
+      : `VDP Analysis finished with errors — through ${dayLabel(through)}`;
+
+    const errBlock = errors.length
+      ? `<p style="margin:16px 0 0;font-size:13px;color:#b91c1c;"><b>${errors.length} error(s):</b><br>${
+        errors.slice(0, 12).map((e) => escapeHtml(e)).join("<br>")
+      }${errors.length > 12 ? "<br>…" : ""}</p>`
+      : "";
+
+    const html = `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;"><tr><td align="center">
+<table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+  <tr><td style="padding:24px 28px;background:#0f172a;color:#fff;">
+    <div style="font-size:13px;opacity:.75;letter-spacing:.04em;">SMART ANALYTICS · VDP ANALYSIS</div>
+    <div style="font-size:22px;font-weight:700;margin-top:6px;">Daily sync complete</div>
+    <div style="font-size:13px;margin-top:8px;opacity:.85;">Settled through ${escapeHtml(dayLabel(through))}</div>
+  </td></tr>
+  <tr><td style="padding:24px 28px;font-size:14px;line-height:1.55;">
+    <p style="margin:0 0 12px;">VDP Analysis daily refresh finished.</p>
+    <ul style="margin:0;padding-left:18px;color:#334155;">
+      <li>Through date: <b>${escapeHtml(through)}</b></li>
+      <li>Windows: ${escapeHtml(windowLabel)}</li>
+      <li>Dealers in this run: <b>${dealersTotal}</b></li>
+      <li>Refresh calls: <b>${refreshed}</b></li>
+      <li>Errors: <b style="color:${ok ? "#15803d" : "#b91c1c"};">${errors.length}</b></li>
+      <li>Runtime: ${Math.round(ms / 1000)}s</li>
+    </ul>
+    ${errBlock}
+  </td></tr>
+  <tr><td style="padding:16px 28px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:12px;color:#94a3b8;">
+    Automated notice after vdp-analysis-daily-sync · Smart Analytics
+  </td></tr>
+</table></td></tr></table></body></html>`;
+
+    const text = [
+      `VDP Analysis daily sync complete`,
+      `Through: ${through} (${dayLabel(through)})`,
+      `Windows: ${windowLabel}`,
+      `Dealers: ${dealersTotal}`,
+      `Refresh calls: ${refreshed}`,
+      `Errors: ${errors.length}`,
+      `Runtime: ${Math.round(ms / 1000)}s`,
+      ...(errors.length ? ["", "Errors:", ...errors.slice(0, 20)] : []),
+    ].join("\n");
+
+    const transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: false,
+      auth: { user, pass },
+    });
+    await transporter.sendMail({
+      from: `Smart Analytics <${user}>`,
+      to: COMPLETE_RECIPIENTS.join(", "),
+      subject,
+      html,
+      text,
+    });
+
+    await supabase
+      .from("smart_vdp_analysis_complete_email_log")
+      .update({
+        sent_at: new Date().toISOString(),
+        recipients: COMPLETE_RECIPIENTS,
+        dealers: dealersTotal,
+        refreshed,
+        errors: errors.length,
+      })
+      .eq("through_date", through);
+
+    return { emailed: true };
+  } catch (err) {
+    await supabase
+      .from("smart_vdp_analysis_complete_email_log")
+      .delete()
+      .eq("through_date", through)
+      .is("sent_at", null);
+    throw err;
+  }
 }
 
 serve(async (req) => {
@@ -243,6 +373,36 @@ serve(async (req) => {
       push(`continue scheduled after_client_id=${lastDone}`);
     }
 
+    let email: { emailed: boolean; reason?: string } | null = null;
+    if (!continued) {
+      try {
+        // Full active-dealer count (this segment may only have the tail of a chain).
+        const { count: activeDealerCount } = await supabase
+          .from("smart_hoot_config")
+          .select("ga4_customer_id", { count: "exact", head: true })
+          .eq("is_active", true)
+          .not("ga4_customer_id", "is", null);
+        email = await sendCompleteEmail({
+          supabase,
+          through,
+          windows: uniqueWindows,
+          dealersTotal: activeDealerCount ?? dealers.length,
+          refreshed: results.length,
+          errors,
+          ms: Date.now() - started,
+        });
+        push(
+          email.emailed
+            ? `complete email sent to ${COMPLETE_RECIPIENTS.join(", ")}`
+            : `complete email skipped: ${email.reason || "unknown"}`,
+        );
+      } catch (mailErr) {
+        const msg = mailErr instanceof Error ? mailErr.message : String(mailErr);
+        push(`complete email failed: ${msg}`);
+        console.error("[vdp-analysis-daily-sync] email", msg);
+      }
+    }
+
     return json({
       ok: errors.length === 0,
       through,
@@ -252,6 +412,7 @@ serve(async (req) => {
       refreshed: results.length,
       last_client_id: lastDone || null,
       continued,
+      email,
       errors,
       ms: Date.now() - started,
       log,

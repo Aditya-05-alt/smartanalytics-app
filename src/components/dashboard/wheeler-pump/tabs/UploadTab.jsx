@@ -55,15 +55,61 @@ function applyPeriodChoice(r, choice, fileName, warn) {
   return { ...r, periodType: 'r12', periodEnd: choice.end, periodStart: mkey(mv(choice.end) - 11) };
 }
 
-/** Asked before Claude reads the PDFs: are these quarterly or rolling 12-month reports? */
-function PeriodPrompt({ files, onConfirm, onCancel }) {
+const DATA_KINDS = [
+  {
+    id: 'oem_pdf',
+    title: 'OEM PDF / scan',
+    text: 'Polaris, Honda, Yamaha, Suzuki, BRP, Kawasaki PDFs or photos of printed reports.',
+  },
+  {
+    id: 'excel_csv',
+    title: 'Excel or CSV',
+    text: 'Structured tables (.xlsx, .xls, .xlsm, .csv, .tsv) — pump tracker or any tabular export.',
+  },
+  {
+    id: 'gsheet',
+    title: 'Google Sheets export',
+    text: 'Download the sheet as Excel or CSV first, then upload that file here.',
+  },
+  {
+    id: 'unstructured',
+    title: 'Other / unstructured',
+    text: 'Notes, mixed docs, screenshots, or anything without a clean table. Claude will still try to pull usable numbers.',
+  },
+  {
+    id: 'mixed',
+    title: 'Mixed batch',
+    text: 'Several formats in one drop. Claude reads each file on its own.',
+  },
+];
+
+/** Asked before Claude reads anything: what data is this, and what period does it cover? */
+function AnalysisDataPrompt({ files, onConfirm, onCancel }) {
   const { ends, quarters } = periodChoices();
-  const [type, setType] = useState('q');
+  const [dataKind, setDataKind] = useState(() => {
+    const exts = files.map(extOf);
+    const hasPdf = exts.some((e) => PDF_EXT.includes(e));
+    const hasSheet = exts.some((e) => ['csv', 'xlsx', 'xls', 'xlsm', 'tsv'].includes(e));
+    if (hasPdf && hasSheet) return 'mixed';
+    if (hasSheet) return 'excel_csv';
+    if (hasPdf) return 'oem_pdf';
+    return 'unstructured';
+  });
+  const [type, setType] = useState('auto');
   const [quarter, setQuarter] = useState(quarters[0]);
   const [end, setEnd] = useState(ends[0]);
   const [month, setMonth] = useState(ends[0]);
-  const pdfs = files.filter((f) => PDF_EXT.includes(extOf(f)));
-  const option = (value, title, text, control) => (
+  const names = files.slice(0, 4).map((f) => f.name).join(', ');
+  const kindOption = (value, title, text) => (
+    <label className={cx('periodOption', dataKind === value && 'periodOptionOn')}>
+      <input type="radio" name="wpDataKind" value={value} checked={dataKind === value} onChange={() => setDataKind(value)} />
+      <span className={cx('periodOptionBody')}>
+        <b>{title}</b>
+        <span className={cx('status')}>{text}</span>
+      </span>
+    </label>
+  );
+  const periodOption = (value, title, text, control) => (
     <label className={cx('periodOption', type === value && 'periodOptionOn')}>
       <input type="radio" name="wpPeriodType" value={value} checked={type === value} onChange={() => setType(value)} />
       <span className={cx('periodOptionBody')}>
@@ -73,46 +119,55 @@ function PeriodPrompt({ files, onConfirm, onCancel }) {
       </span>
     </label>
   );
+  const confirm = () => {
+    const period = { q: { type, quarter }, r12: { type, end }, m: { type, month } }[type] ?? { type };
+    onConfirm({ ...period, dataKind });
+  };
   return (
     <div className={cx('overlay')} onClick={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className={cx('sheet')} role="dialog" aria-modal="true" aria-labelledby="wpPeriodTitle">
+      <div className={cx('sheet', 'analysisSheet')} role="dialog" aria-modal="true" aria-labelledby="wpAnalysisTitle">
         <div className={cx('cardhead')}>
           <div>
-            <h3 id="wpPeriodTitle">What period do these reports cover?</h3>
+            <h3 id="wpAnalysisTitle">What data are you including for analysis?</h3>
             <p className={cx('sub')}>
-              {pdfs.length} PDF{pdfs.length === 1 ? '' : 's'}: {pdfs.slice(0, 4).map((f) => f.name).join(', ')}
-              {pdfs.length > 4 ? ` and ${pdfs.length - 4} more` : ''}. Upload one period at a time.
+              Claude can read monthly or quarterly OEM reports, Excel/CSV, Google Sheets exports, and unstructured files.
+              {' '}{files.length} file{files.length === 1 ? '' : 's'}: {names}
+              {files.length > 4 ? ` and ${files.length - 4} more` : ''}.
             </p>
           </div>
           <button className={cx('btn', 'ghost')} type="button" onClick={onCancel}>Cancel</button>
         </div>
+
+        <p className={cx('promptSection')}>1. Data you are uploading</p>
         <div className={cx('periodOptions')}>
-          {option('m', 'Monthly', 'One calendar month, e.g. 9/1/2026 – 9/30/2026. Feeds the monthly views and the month-by-month trend.', (
+          {DATA_KINDS.map((k) => kindOption(k.id, k.title, k.text))}
+        </div>
+
+        <p className={cx('promptSection')}>2. Period these numbers cover</p>
+        <div className={cx('periodOptions')}>
+          {periodOption('m', 'Monthly', 'One calendar month. Feeds monthly views and the month-by-month trend.', (
             <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
               {ends.map((x) => <option key={x} value={x}>{endLabel(x)}</option>)}
             </select>
           ))}
-          {option('q', 'Quarterly', 'One calendar quarter (3 months). Feeds the quarterly views.', (
+          {periodOption('q', 'Quarterly', 'One calendar quarter (3 months). Feeds the quarterly views.', (
             <select value={quarter} onChange={(e) => setQuarter(e.target.value)} aria-label="Quarter">
               {quarters.map((x) => <option key={x}>{x}</option>)}
             </select>
           ))}
-          {option('r12', 'Rolling 12 months', 'A 12-month window, e.g. 10/1/2025 – 9/30/2026. Feeds the rolling 12-month views.', (
+          {periodOption('r12', 'Rolling 12 months', 'A 12-month window. Feeds the Rolling 12 months tab.', (
             <select value={end} onChange={(e) => setEnd(e.target.value)} aria-label="Window ends">
               {ends.map((x) => (
                 <option key={x} value={x}>{`${endLabel(mkey(mv(x) - 11))} – ${endLabel(x)}`}</option>
               ))}
             </select>
           ))}
-          {option('auto', 'Let Claude decide', 'Claude reads the dates printed in each report.', null)}
+          {periodOption('auto', 'Let Claude decide', 'Claude reads dates and structure from each file — best for mixed or unfamiliar layouts.', null)}
         </div>
+
         <div className={cx('actions')}>
-          <button
-            className={cx('btn', 'primary')}
-            type="button"
-            onClick={() => onConfirm({ q: { type, quarter }, r12: { type, end }, m: { type, month } }[type] ?? { type })}
-          >
-            Read {pdfs.length} report{pdfs.length === 1 ? '' : 's'}
+          <button className={cx('btn', 'primary')} type="button" onClick={confirm}>
+            Analyze {files.length} file{files.length === 1 ? '' : 's'}
           </button>
         </div>
       </div>
@@ -219,11 +274,10 @@ export default function UploadTab() {
   const [, force] = useState(0);
   const input = useRef(null);
 
-  /** PDFs need the period answered first; spreadsheets carry their own period columns. */
+  /** Ask what data / period before Claude (or the sheet parser) runs. */
   function pickFiles(files) {
     if (busy || !files.length) return;
-    if (files.some((f) => PDF_EXT.includes(extOf(f)))) setPending(files);
-    else handleFiles(files, null);
+    setPending(files);
     if (input.current) input.current.value = '';
   }
 
@@ -238,7 +292,14 @@ export default function UploadTab() {
         if (PDF_EXT.includes(ext)) {
           setStatus({ msg: `${file.name}: uploading…` });
           const path = await uploadReportFile(client.id, file);
-          setStatus({ msg: `${file.name}: Claude is reading the report (this can take a minute)…` });
+          const kindLabel = {
+            oem_pdf: 'OEM PDF',
+            excel_csv: 'Excel/CSV',
+            gsheet: 'Google Sheets export',
+            unstructured: 'unstructured file',
+            mixed: 'mixed upload',
+          }[choice?.dataKind] || 'report';
+          setStatus({ msg: `${file.name}: Claude is analyzing this ${kindLabel} (this can take a minute)…` });
           const res = await extractReport(client.id, upLoc, path, file.name);
           for (const read of res.results ?? []) {
             const r = applyPeriodChoice(read, choice, file.name, rev.fileWarn);
@@ -528,9 +589,9 @@ export default function UploadTab() {
         </Card>
       )}
 
-      <Card title="Upload new reports" sub="One store at a time. Claude reads each PDF, you review the rows, then they flow into every view.">
+      <Card title="Upload new reports" sub="One store at a time. Tell Claude what you are including — monthly, quarterly, Excel/CSV, Google Sheets, or unstructured — then review and save.">
         <div className={cx('steps')}>
-          <div><b>Upload</b>PDFs for one store, any brands. You&apos;ll be asked if they&apos;re monthly, quarterly or rolling 12 months.</div>
+          <div><b>Upload</b>Any structured or unstructured report for one store. You&apos;ll choose the data type and period before analysis.</div>
           <div><b>Review</b>Check the numbers and anything Claude couldn&apos;t use.</div>
           <div><b>Save</b>Each period becomes a point on the timeline in Overview, Brands and Dealers.</div>
         </div>
@@ -541,8 +602,8 @@ export default function UploadTab() {
             onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); pickFiles([...e.dataTransfer.files]); }}
           >
-            <b>Drop the reports here</b>
-            <span className={cx('status')}>OEM PDFs (Polaris, Honda, Yamaha, Suzuki, BRP, Kawasaki) or a CSV / Excel in the tracker format</span>
+            <b>Drop files for analysis</b>
+            <span className={cx('status')}>OEM PDFs, Excel/CSV, Google Sheets exports, screenshots, or mixed batches — Claude can analyze structured or unstructured data</span>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-end' }}>
               <div className={cx('field')}>
                 <label htmlFor="wpUpLoc">Store these reports are for</label>
@@ -654,7 +715,7 @@ export default function UploadTab() {
 
       {cell && <CellSheet {...cell} onClose={() => setCell(null)} />}
       {pending && (
-        <PeriodPrompt
+        <AnalysisDataPrompt
           files={pending}
           onCancel={() => setPending(null)}
           onConfirm={(choice) => {
