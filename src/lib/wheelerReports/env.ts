@@ -48,4 +48,12 @@ export const env = {
         .map((s) => s.trim())
         .filter(Boolean),
   },
+
+  /** Scout RV website leads API (A&L Media Cost). */
+  scout: {
+    configured: () => !!process.env.SCOUT_RV_API_KEY,
+    apiKey: () => req('SCOUT_RV_API_KEY'),
+    leadsUrl: () =>
+      opt('SCOUT_RV_LEADS_URL', 'https://www.scout-rv.com/api/content-api/v1/leads'),
+  },
 };

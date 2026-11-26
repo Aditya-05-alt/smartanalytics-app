@@ -8,7 +8,8 @@ import { loadStores } from '@/lib/wheelerReports/data';
 import { parseLeadExport } from '@/lib/wheelerReports/leadImport';
 import { parseGoogleReport, readSheet } from '@/lib/wheelerReports/googleReportImport';
 import { logRun, replaceAdStats, syncClient } from '@/lib/wheelerReports/sync';
-import { isISODate, monthEnd } from '@/lib/wheelerReports/dates';
+import { isISODate, monthEnd, todayInZone } from '@/lib/wheelerReports/dates';
+import { SCOUT_AL_SLUG, syncScoutLeadsForClient } from '@/lib/wheelerReports/scoutLeads';
 import type { Platform } from '@/lib/wheelerReports/types';
 
 export type Result = { ok: boolean; message: string } | null;
@@ -111,4 +112,22 @@ export async function syncNow(slug: string, _prev: Result, form: FormData): Prom
   const res = await syncClient(sb, client, platform === 'meta' ? ['meta'] : ['google'], from && to ? { from, to } : undefined);
   revalidatePath(`/dashboard/wheeler-reports/c/${slug}`, 'layout');
   return { ok: res.every((r) => r.ok), message: res.map((r) => `${r.platform === 'google' ? 'Google Ads' : 'Meta Ads'}: ${r.message}`).join(' ') };
+}
+
+/**
+ * Pull website leads from Scout RV API into Media Cost (A&L only).
+ * Upserts by Scout lead id, then removes GA4 synthetic leads in the same dates
+ * so the report shows real website leads instead of event backfill.
+ */
+export async function syncScoutLeads(slug: string, _prev: Result, form: FormData): Promise<Result> {
+  if (slug !== SCOUT_AL_SLUG) {
+    return { ok: false, message: 'Scout API sync is only enabled for A&L RV Sales.' };
+  }
+  const { client, sb } = await setup(slug);
+  const today = todayInZone(client.timezone);
+  const from = optDate(form.get('from')) || `${today.slice(0, 7)}-01`;
+  const to = optDate(form.get('to')) || today;
+  const res = await syncScoutLeadsForClient(sb, client, { from, to });
+  revalidatePath(`/dashboard/wheeler-reports/c/${slug}`, 'layout');
+  return { ok: res.ok, message: res.message };
 }

@@ -5,7 +5,8 @@ import { adminClient } from '@/lib/wheelerReports/supabase/server';
 import { loadStores } from '@/lib/wheelerReports/data';
 import { env } from '@/lib/wheelerReports/env';
 import { addDays, monthEnd, monthName, monthStart, todayInZone } from '@/lib/wheelerReports/dates';
-import { saveMonthly, syncNow, uploadGoogleReport, uploadLeads } from './actions';
+import { SCOUT_AL_SLUG } from '@/lib/wheelerReports/scoutLeads';
+import { saveMonthly, syncNow, syncScoutLeads, uploadGoogleReport, uploadLeads } from './actions';
 
 export default async function DataPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ month?: string }> }) {
   const { slug } = await params;
@@ -33,6 +34,9 @@ export default async function DataPage({ params, searchParams }: { params: Promi
   };
   const googleReady = !!client.google_ads_customer_id && env.google.configured();
   const metaReady = !!client.meta_ad_account_id && env.meta.configured();
+  const scoutReady = slug === SCOUT_AL_SLUG && env.scout.configured();
+  const scoutMonthStart = monthStart(todayInZone(client.timezone));
+  const scoutToday = todayInZone(client.timezone);
 
   return (
     <>
@@ -64,6 +68,24 @@ export default async function DataPage({ params, searchParams }: { params: Promi
               <p className="note">Without dates it syncs the last {env.syncLookbackDays()} days. Synced days replace uploaded or hand-entered figures for the same dates.</p>
             </div>
           </Card>
+
+          {slug === SCOUT_AL_SLUG && (
+            <Card id="scout-api" title="Sync Scout website leads (API)" sub="A&L only · runs with the daily Media Cost cron">
+              <div className="body">
+                <p className="note">
+                  Scout API: {scoutReady
+                    ? <span className="msg-ok">connected · daily cron refreshes the last 14 days</span>
+                    : <span className="msg-warn">SCOUT_RV_API_KEY missing on the server</span>}.
+                  {' '}Pulls real website leads (Google CPC, organic, direct, etc.). Facebook website leads appear when Scout has them; Meta Ads platform leads still come from the Meta sync above.
+                </p>
+                <ActionForm action={syncScoutLeads.bind(null, slug)} submit="Sync Scout leads now">
+                  <label className="field"><span>From</span><input type="date" name="from" defaultValue={scoutMonthStart} required /></label>
+                  <label className="field"><span>To</span><input type="date" name="to" defaultValue={scoutToday} required /></label>
+                </ActionForm>
+                <p className="note">Manual sync for any range. Scheduled job uses the same API. Upserts by Scout Lead ID; GA4 synthetic leads for those dates are removed. Stats API key does not include contact names.</p>
+              </div>
+            </Card>
+          )}
 
           <Card id="leads" title="Upload lead export" sub="Scout website leads, CSV">
             <div className="body">
@@ -121,7 +143,7 @@ export default async function DataPage({ params, searchParams }: { params: Promi
                 <tbody>{runs.map((r, i) => (
                   <tr key={i}>
                     <td>{new Date(r.started_at).toLocaleString('en-US', { timeZone: client.timezone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</td>
-                    <td className="l">{({ google: 'Google Ads sync', meta: 'Meta Ads sync', leads_upload: 'Lead upload', google_upload: 'Google Ads upload' } as Record<string, string>)[r.kind] ?? r.kind}</td>
+                    <td className="l">{({ google: 'Google Ads sync', meta: 'Meta Ads sync', leads_upload: 'Lead upload', google_upload: 'Google Ads upload', scout_leads: 'Scout leads API' } as Record<string, string>)[r.kind] ?? r.kind}</td>
                     <td className={'l ' + (r.status === 'ok' ? 'msg-ok' : r.status === 'error' ? 'msg-err' : '')}>{r.status}</td>
                     <td>{r.rows ?? '–'}</td>
                     <td className="l" style={{ whiteSpace: 'normal', minWidth: '18rem' }}>{r.message}</td>
