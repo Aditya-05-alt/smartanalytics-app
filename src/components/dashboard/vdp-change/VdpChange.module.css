@@ -322,6 +322,59 @@
   font-size: 13px;
   color: var(--t3);
 }
+.customCards {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+/* 1–2 cards: fill the row, no shrink */
+.customCardsFit {
+  overflow: visible;
+}
+.customCardsFit > .metricCard {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+}
+/* 3+ cards: fixed card width + horizontal scroll */
+.customCardsScroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.customCardsScroll > .metricCard {
+  flex: 0 0 min(100%, 420px);
+  width: min(100%, 420px);
+  max-width: 420px;
+  scroll-snap-align: start;
+}
+.metricCard,
+.customTotal {
+  padding: 12px 14px;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  background: var(--s2);
+  min-width: 0;
+}
+.metricCard h4,
+.customTotal h4 {
+  margin: 0 0 10px;
+  color: var(--t);
+  font-size: 13px;
+  font-weight: 700;
+}
+.customTotal {
+  margin-bottom: 4px;
+  background: color-mix(in srgb, var(--vc-amber) 6%, var(--s2));
+  border-color: color-mix(in srgb, var(--vc-amber) 28%, var(--bd));
+}
+.wstSimple th:first-child,
+.wstSimple td.lb { width: 42%; }
 
 .wst { width: 100%; border-collapse: collapse; color: var(--t2); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .wst th {

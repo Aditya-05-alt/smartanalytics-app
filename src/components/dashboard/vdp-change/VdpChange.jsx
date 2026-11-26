@@ -70,6 +70,82 @@ function Seg({ value, options, onChange, label }) {
   );
 }
 
+/** Full worksheet steps without A–M letters or formula column. */
+function StepsBody({ w, lab0, lab1, simple }) {
+  const D = (a, b) => <span className={cx(tone(b - a))}>{sg(b - a)}</span>;
+  const B = (n, d0 = 0, suffix = '') => <b className={cx(tone(n))}>{sg(n, d0)}{n == null ? '' : suffix}</b>;
+  const cols = simple ? 4 : 6;
+  const step = (key, lbl, a, b, diff, cls = '') => (
+    <tr className={cx(cls)} key={key}>
+      {!simple && <td className={cx('no')} />}
+      <td className={cx('lb')}>{lbl}</td>
+      <td>{a}</td>
+      <td>{b}</td>
+      <td>{diff}</td>
+      {!simple && <td className={cx('how')} />}
+    </tr>
+  );
+  const sec = (text) => <tr className={cx('sec')} key={text}><td colSpan={cols}>{text}</td></tr>;
+  return (
+    <tbody>
+      {sec('1 · How much VDP changed')}
+      {step('vdp', 'VDP views', fmt(w.v0), fmt(w.v1), B(w.diff))}
+      {step('vdpPct', 'VDP change %', '', '', B(w.diffPct, 1, '%'))}
+      {sec('2 · How much of that is explained by traffic')}
+      {step('users', 'Users', fmt(w.u0), fmt(w.u1), D(w.u0, w.u1))}
+      {step('spu', '× Sessions per user', r2(w.spu0), r2(w.spu1), '')}
+      {step('sess', '= Sessions', fmt(w.s0), fmt(w.s1), D(w.s0, w.s1))}
+      {step('pps', '× Pages per session', r2(w.pps0), r2(w.pps1), '')}
+      {step('pv', '= Page views', fmt(w.pv0), fmt(w.pv1), D(w.pv0, w.pv1))}
+      {w.rate != null ? (
+        <>
+          {step('rate', '× Standard VDP rate', pc(w.rate), pc(w.rate), '')}
+          {step('est', '= Estimated VDP views', fmt(w.e0), fmt(w.e1), D(w.e0, w.e1))}
+        </>
+      ) : (
+        <>
+          {step('rate', '× Standard VDP rates', `${pc(w.r0)} blended`, `${pc(w.r1)} blended`, '')}
+          {step('est', '= Estimated VDP views', fmt(w.e0), fmt(w.e1), D(w.e0, w.e1))}
+        </>
+      )}
+      {step('ePct', 'Estimated change %', '', '', B(w.ePct, 1, '%'))}
+      {step('traffic', 'VDP change explained by traffic', '', '', B(w.traffic), 'key')}
+      {sec("3 · What's left (the real change)")}
+      {step('real', 'Real change in VDP views', '', '', B(w.real), 'key')}
+      {step('realPct', 'Real change %', '', '', B(w.realPct, 1, '%'), 'key big')}
+    </tbody>
+  );
+}
+
+function MetricCard({ title, w, lab0, lab1 }) {
+  if (!w) {
+    return (
+      <div className={cx('metricCard')}>
+        <h4>{title}</h4>
+        <p className={cx('customHint')}>No data for this channel.</p>
+      </div>
+    );
+  }
+  return (
+    <div className={cx('metricCard')}>
+      <h4>{title}</h4>
+      <div className={cx('tw')}>
+        <table className={cx('wst', 'wstSimple')}>
+          <thead>
+            <tr>
+              <th className={cx('l')}>{title}</th>
+              <th>{lab0}</th>
+              <th>{lab1}</th>
+              <th>Difference</th>
+            </tr>
+          </thead>
+          <StepsBody w={w} lab0={lab0} lab1={lab1} simple />
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function Worksheet({ d, lab0, lab1, sel, customKeys = [], rates = {}, onSelect, onCustomKeys }) {
   const isCustom = sel === 'custom';
   const customList = useMemo(
@@ -77,11 +153,33 @@ function Worksheet({ d, lab0, lab1, sel, customKeys = [], rates = {}, onSelect, 
     [customKeys],
   );
   const ch = !isCustom && sel !== 'all' ? CHANNELS.find((c) => c.key === sel) : null;
-  const customW = useMemo(
-    () => (isCustom ? worksheetForChannels(d, rates, customList) : null),
-    [isCustom, d, rates, customList],
-  );
-  const w = isCustom ? customW : ch ? d.CW[ch.key] : d.W;
+  /** Per-channel sheets for Custom cards; combined total = sum of each card's Real change. */
+  const customSheets = useMemo(() => {
+    if (!isCustom || !customList.length) return [];
+    return customList.map((key) => ({
+      key,
+      w: d.CW?.[key] || worksheetForChannels(d, rates, [key]),
+    }));
+  }, [isCustom, customList, d, rates]);
+  const customSum = useMemo(() => {
+    if (customSheets.length < 2) return null;
+    let real = 0;
+    let v0 = 0;
+    let ok = 0;
+    for (const { w: sheet } of customSheets) {
+      if (!sheet || sheet.real == null) continue;
+      real += sheet.real;
+      v0 += sheet.v0 || 0;
+      ok += 1;
+    }
+    if (!ok) return null;
+    return {
+      real,
+      realPct: v0 > 0 ? (real / v0) * 100 : null,
+      v0,
+    };
+  }, [customSheets]);
+  const w = isCustom ? null : ch ? d.CW[ch.key] : d.W;
   const chName = isCustom
     ? (customList.length ? customList.join(' + ') : 'Custom (pick channels)')
     : ch
@@ -144,6 +242,43 @@ function Worksheet({ d, lab0, lab1, sel, customKeys = [], rates = {}, onSelect, 
       )}
       {isCustom && !customList.length ? (
         <p className={cx('customHint')}>Open the dropdown and select one or more channels to run the worksheet.</p>
+      ) : isCustom ? (
+        !customSheets.length ? (
+          <p className={cx('customHint')}>No worksheet for this selection.</p>
+        ) : (
+          <>
+            <div className={cx('customCards', customSheets.length <= 2 ? 'customCardsFit' : 'customCardsScroll')}>
+              {customSheets.map(({ key, w: sheet }) => (
+                <MetricCard key={key} title={key} w={sheet} lab0={lab0} lab1={lab1} />
+              ))}
+            </div>
+            {customSum && (
+              <div className={cx('customTotal')}>
+                <h4>Combined real change · {customList.join(' + ')}</h4>
+                <table className={cx('wst', 'wstSimple')}>
+                  <tbody>
+                    <tr className={cx('sec')}>
+                      <td colSpan={2}>3 · What&apos;s left (the real change)</td>
+                    </tr>
+                    <tr className={cx('key')}>
+                      <td className={cx('lb')}>Real change in VDP views</td>
+                      <td><b className={cx(tone(customSum.real))}>{sg(customSum.real)}</b></td>
+                    </tr>
+                    <tr className={cx('key', 'big')}>
+                      <td className={cx('lb')}>Real change %</td>
+                      <td><b className={cx(tone(customSum.realPct))}>{sg(customSum.realPct, 1)}%</b></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className={cx('concl')} style={{ marginTop: 10 }}>
+                  <b>Ultimate output:</b> Sum of each channel&apos;s real change is{' '}
+                  <b>{sg(customSum.real)} ({sg(customSum.realPct, 1)}%)</b>
+                  {' '}— the real {customSum.real < 0 ? 'drop' : 'gain'} to find in {look}.
+                </div>
+              </div>
+            )}
+          </>
+        )
       ) : !w ? (
         <p className={cx('customHint')}>No worksheet for this selection.</p>
       ) : (
